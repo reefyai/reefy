@@ -1,0 +1,159 @@
+---
+# VM role - orchestrates all components for Reefy VM deployment
+# This is the main entry point that replaces the original reefy-start-vm.yaml playbook
+
+# =============================================================================
+# Validation
+# =============================================================================
+- name: Validate Tailscale key is provided
+  ansible.builtin.assert:
+    that:
+      - reefy_vm_tskey is defined
+      - reefy_vm_tskey | length > 0
+    fail_msg: >
+      reefy_vm_tskey must be defined (Tailscale authentication key).
+      Provide it via group_vars, host_vars, or -e reefy_vm_tskey=...
+    quiet: true
+  when: reefy_vm_state in ['present', 'started']
+
+# =============================================================================
+# Host Preparation
+# =============================================================================
+- name: Configure storage
+  ansible.builtin.include_role:
+    name: reefy.compute.storage
+  when: reefy_configure_storage | bool
+
+- name: Configure networking
+  ansible.builtin.include_role:
+    name: reefy.compute.networking
+  when: reefy_configure_networking | bool
+
+- name: Configure Docker
+  ansible.builtin.include_role:
+    name: reefy.compute.docker
+  when: reefy_configure_docker | bool
+
+- name: Flush handlers to ensure Docker is restarted before starting VM
+  ansible.builtin.meta: flush_handlers
+
+# =============================================================================
+# VM Name Generation
+# =============================================================================
+- name: Include wordlists for VM naming
+  ansible.builtin.include_vars:
+    file: wordlists.yml
+  when: reefy_vm_name is not defined
+
+- name: Generate human-readable VM name
+  ansible.builtin.set_fact:
+    reefy_vm_name: "reefy-vm-{{ reefy_adverbs | random }}-{{ reefy_adjectives | random }}-{{ reefy_animals | random }}"
+  when: reefy_vm_name is not defined
+
+# =============================================================================
+# Display Configuration
+# =============================================================================
+- name: Display VM configuration
+  ansible.builtin.debug:
+    msg: |
+      VM Configuration:
+        Name:                {{ reefy_vm_name }}
+        State:               {{ reefy_vm_state }}
+        vCPUs:               {{ reefy_vm_vcpu }}
+        Memory:              {{ reefy_vm_mem }}
+        Disk Size:           {{ reefy_vm_image_size }}
+        GPUs:                {{ reefy_vm_attach_gpus }}
+        Confidential:        {{ reefy_vm_confidential_computing }}
+        Data Disk:           {{ reefy_vm_data_disk_name | default('none') }}
+
+# =============================================================================
+# VM Management
+# =============================================================================
+- name: Pull container image
+  community.docker.docker_image:
+    name: "{{ reefy_docker_image }}"
+    source: pull
+    force_source: "{{ reefy_docker_pull == 'always' }}"
+  register: pull_result
+  retries: 6
+  delay: 10
+  until: pull_result is succeeded
+  when: reefy_docker_pull != 'never'
+
+- name: Check if wired bridge (br0) exists
+  ansible.builtin.command:
+    cmd: ip link show {{ reefy_bridge_name }}
+  register: br0_check
+  changed_when: false
+  failed_when: false
+
+- name: Check if NAT bridge (virbr0) exists
+  ansible.builtin.command:
+    cmd: ip link show virbr0
+  register: virbr0_check
+  changed_when: false
+  failed_when: false
+  when: br0_check.rc != 0
+
+- name: Set VM bridge name
+  ansible.builtin.set_fact:
+    reefy_vm_bridge: "{{ reefy_bridge_name if br0_check.rc == 0 else ('virbr0' if virbr0_check.rc | default(1) == 0 else '') }}"
+
+- name: Fail if no bridge available
+  ansible.builtin.fail:
+    msg: "No bridge found (br0 or virbr0). Run the networking role first."
+  when: reefy_vm_bridge | length == 0
+
+- name: Manage VM
+  reefy.compute.qemu_vm:
+    name: "{{ reefy_vm_name }}"
+    state: "{{ reefy_vm_state }}"
+    vcpu: "{{ reefy_vm_vcpu }}"
+    mem: "{{ reefy_vm_mem }}"
+    image_url: "{{ reefy_vm_image_url }}"
+    image_size: "{{ reefy_vm_image_size }}"
+    tskey: "{{ reefy_vm_tskey | default(omit) }}"
+    gpus: "{{ reefy_vm_attach_gpus }}"
+    pcie_devices: "{{ reefy_vm_attach_pcie_devices }}"
+    confidential_computing: "{{ reefy_vm_confidential_computing }}"
+    data_disk_name: "{{ reefy_vm_data_disk_name | default(omit) }}"
+    data_disk_size: "{{ reefy_vm_data_disk_size | default(omit) }}"
+    storage_path: "{{ reefy_storage_mount }}"
+    bridge: "{{ reefy_vm_bridge }}"
+    container_image: "{{ reefy_docker_image }}"
+    persist_boot_image: "{{ reefy_vm_persist_boot_image }}"
+    root_password: "{{ reefy_vm_root_password | default(omit) }}"
+    tailscale_tags: "{{ reefy_vm_tailscale_tags }}"
+    use_standard_qemu: "{{ reefy_vm_use_standard_qemu }}"
+    disable_kvm: "{{ reefy_vm_disable_kvm }}"
+    mem_prealloc: "{{ reefy_vm_mem_prealloc }}"
+    runcmd: "{{ reefy_vm_runcmd }}"
+  register: vm_result
+
+# =============================================================================
+# Output
+# =============================================================================
+- name: Set VM result facts for use by caller
+  ansible.builtin.set_fact:
+    reefy_vm_result: "{{ vm_result }}"
+
+- name: Display VM result
+  ansible.builtin.debug:
+    msg: |
+      ============================================
+      VM {{ 'Created' if vm_result.changed else 'Unchanged' }}
+      ============================================
+        Name:         {{ vm_result.name }}
+        State:        {{ vm_result.state }}
+      {% if vm_result.container_short_id is defined %}
+        Container:    {{ vm_result.container_short_id }}
+      {% endif %}
+      {% if vm_result.gpus_attached | default([]) | length > 0 %}
+        GPUs:         {{ vm_result.gpus_attached | join(', ') }}
+      {% endif %}
+      {% if vm_result.state == 'running' %}
+
+        Connect via Tailscale SSH once VM is ready:
+          ssh {{ vm_result.name }}
+      {% endif %}
+      ============================================

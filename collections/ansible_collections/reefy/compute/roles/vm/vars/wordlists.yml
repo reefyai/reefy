@@ -1,0 +1,40 @@
+---
+# Wordlists for generating human-readable VM names
+
+reefy_adverbs:
+  - swift
+  - gentle
+  - bright
+  - calm
+  - bold
+  - keen
+  - quick
+  - warm
+  - cool
+  - soft
+
+reefy_adjectives:
+  - smart
+  - happy
+  - shy
+  - wild
+  - keen
+  - brave
+  - wise
+  - fair
+  - kind
+  - proud
+
+reefy_animals:
+  - pika
+  - fox
+  - owl
+  - bear
+  - wolf
+  - lynx
+  - hare
+  - deer
+  - hawk
+  - seal
+  - orca
+  - mink

@@ -1,0 +1,13 @@
+config BR2_PACKAGE_REEFY_ANSIBLE_COLLECTIONS
+	bool "reefy-ansible-collections"
+	depends on BR2_PACKAGE_PYTHON_ANSIBLE_CORE
+	help
+	  Pre-install required Ansible collections for Reefy:
+	  - community.general
+	  - community.crypto
+	  - community.docker
+	  - ansible.posix
+	  - geerlingguy.docker (role)
+
+comment "reefy-ansible-collections needs python-ansible-core"
+	depends on !BR2_PACKAGE_PYTHON_ANSIBLE_CORE

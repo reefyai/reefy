@@ -1,0 +1,16 @@
+---
+# Omada role defaults
+
+# Container configuration
+reefy_omada_container_name: omada
+reefy_omada_image: mbentley/omada-controller:latest
+reefy_omada_state: started
+reefy_omada_pull: missing  # Only pull if not present locally
+reefy_omada_recreate: true
+
+# Timezone
+reefy_omada_timezone: "Etc/UTC"
+
+# Storage paths
+reefy_omada_data_path: /mnt/reefy-data/omada/omada-data
+reefy_omada_logs_path: /mnt/reefy-data/omada/omada-logs

@@ -1,0 +1,29 @@
+---
+# Monitoring role defaults
+
+# Container state
+reefy_monitoring_state: started
+
+# Grafana Alloy configuration
+reefy_monitoring_alloy_container_name: grafana-alloy
+reefy_monitoring_alloy_image: grafana/alloy
+reefy_monitoring_alloy_config_path: /etc/config.alloy
+
+# IPMI Exporter configuration
+reefy_monitoring_enable_ipmi: true
+reefy_monitoring_ipmi_container_name: ipmi-exporter
+reefy_monitoring_ipmi_image: prometheuscommunity/ipmi-exporter
+reefy_monitoring_ipmi_device: /dev/ipmi0
+
+# NVIDIA GPU Exporter configuration (DCGM - official NVIDIA exporter)
+reefy_monitoring_enable_nvidia: true
+reefy_monitoring_nvidia_container_name: dcgm-exporter
+reefy_monitoring_nvidia_image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04
+
+# Scrape intervals
+reefy_monitoring_scrape_interval: "60s"
+
+# REQUIRED - Grafana Cloud credentials
+# reefy_monitoring_grafana_url: "https://prometheus-xxx.grafana.net/api/prom/push"
+# reefy_monitoring_grafana_username: "123456"
+# reefy_monitoring_grafana_password: "glc_xxx"

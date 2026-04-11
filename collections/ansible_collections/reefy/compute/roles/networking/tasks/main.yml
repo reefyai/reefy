@@ -1,0 +1,156 @@
+---
+# Networking role - configures bridge networking for Reefy VMs
+# Replaces: scripts/reefy-configure-networking.sh
+#
+# When multiple default routes exist (e.g. wired + WiFi), prefers the
+# first wired interface since WiFi cannot be bridged (802.11).
+
+- name: Get first wired default-route interface for bridge
+  ansible.builtin.shell:
+    cmd: |
+      for iface in $(ip route | grep default | awk '{print $5}'); do
+        [ -d "/sys/class/net/$iface/wireless" ] && continue
+        echo "$iface"
+        exit 0
+      done
+  register: wired_default
+  changed_when: false
+
+- name: Get any default-route interface as fallback
+  ansible.builtin.shell:
+    cmd: ip route | grep default | awk '{print $5}' | head -1
+  register: any_default
+  changed_when: false
+  when: wired_default.stdout | length == 0
+
+- name: Set main interface fact
+  ansible.builtin.set_fact:
+    reefy_main_interface: "{{ wired_default.stdout if wired_default.stdout | length > 0 else any_default.stdout | default('') }}"
+
+- name: Fail if no main interface found
+  ansible.builtin.fail:
+    msg: "No main interface found from default route. Cannot configure bridge networking."
+  when: reefy_main_interface | length == 0
+
+- name: Check if main interface is WiFi
+  ansible.builtin.stat:
+    path: "/sys/class/net/{{ reefy_main_interface }}/wireless"
+  register: wireless_check
+
+- name: Set WiFi fact
+  ansible.builtin.set_fact:
+    reefy_main_is_wifi: "{{ wireless_check.stat.exists }}"
+
+# =============================================================================
+# Common - ensure networkd directory and clean conflicting configs
+# =============================================================================
+
+- name: Display networking configuration
+  ansible.builtin.debug:
+    msg: |
+      Configuring networking:
+        Mode: {{ 'NAT bridge (virbr0)' if reefy_main_is_wifi else 'bridge (' + reefy_bridge_name + ')' }}
+        Main interface: {{ reefy_main_interface }}
+        WiFi: {{ reefy_main_is_wifi }}
+
+- name: Ensure networkd directory exists
+  ansible.builtin.file:
+    path: "{{ reefy_networkd_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Find conflicting networkd configurations
+  ansible.builtin.find:
+    paths: "{{ reefy_networkd_path }}"
+    patterns:
+      - "*-br0.*"
+      - "*-virbr0.*"
+      - "99-wildcard.network"
+      - "30-*.network"
+  register: networkd_files
+
+- name: Remove conflicting networkd configurations
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ networkd_files.files }}"
+  when: networkd_files.files | length > 0
+
+# =============================================================================
+# WiFi path: NAT bridge (virbr0) with DHCPServer + IPMasquerade
+# =============================================================================
+
+- name: Deploy virbr0 netdev configuration
+  ansible.builtin.template:
+    src: 25-virbr0.netdev.j2
+    dest: "{{ reefy_networkd_path }}/25-virbr0.netdev"
+    mode: '0644'
+  notify: Restart systemd-networkd
+  when: reefy_main_is_wifi
+
+- name: Deploy virbr0 network configuration
+  ansible.builtin.template:
+    src: 25-virbr0.network.j2
+    dest: "{{ reefy_networkd_path }}/25-virbr0.network"
+    mode: '0644'
+  notify: Restart systemd-networkd
+  when: reefy_main_is_wifi
+
+- name: Allow virbr0 forwarding in DOCKER-USER chain (outbound)
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    in_interface: virbr0
+    jump: ACCEPT
+    action: insert
+  when: reefy_main_is_wifi
+
+- name: Allow virbr0 forwarding in DOCKER-USER chain (return traffic)
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    out_interface: virbr0
+    ctstate:
+      - RELATED
+      - ESTABLISHED
+    jump: ACCEPT
+    action: insert
+  when: reefy_main_is_wifi
+
+# =============================================================================
+# Wired path: bridge (br0) attached to physical interface
+# =============================================================================
+
+- name: Deploy bridge netdev configuration
+  ansible.builtin.template:
+    src: 25-br0.netdev.j2
+    dest: "{{ reefy_networkd_path }}/25-{{ reefy_bridge_name }}.netdev"
+    mode: '0644'
+  notify: Restart systemd-networkd
+  when: not reefy_main_is_wifi
+
+- name: Deploy bridge network configuration
+  ansible.builtin.template:
+    src: 25-br0.network.j2
+    dest: "{{ reefy_networkd_path }}/25-{{ reefy_bridge_name }}.network"
+    mode: '0644'
+  notify: Restart systemd-networkd
+  when: not reefy_main_is_wifi
+
+- name: Deploy bridge link configuration
+  ansible.builtin.template:
+    src: 25-br0.link.j2
+    dest: "{{ reefy_networkd_path }}/25-{{ reefy_bridge_name }}.link"
+    mode: '0644'
+  notify: Restart systemd-networkd
+  when: not reefy_main_is_wifi
+
+- name: Deploy main interface bridge attachment
+  ansible.builtin.template:
+    src: 30-main-interface.network.j2
+    dest: "{{ reefy_networkd_path }}/30-{{ reefy_main_interface }}-{{ reefy_bridge_name }}.network"
+    mode: '0644'
+  notify: Restart systemd-networkd
+  when: not reefy_main_is_wifi
+
+# Flush handlers to apply network configuration immediately
+- name: Apply network configuration
+  ansible.builtin.meta: flush_handlers

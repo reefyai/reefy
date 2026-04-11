@@ -1,0 +1,204 @@
+#!/bin/sh
+set -euxo pipefail
+
+# Phase 1: Critical path — storage setup.
+# Must complete before Docker, MQTT, and other services can start.
+#
+# A/B partition layout:
+#   p1: ESP "reefy-a" (1 GiB)
+#   p2: ESP "reefy-b" (1 GiB)
+#   p3: Key partition (1 MiB, msftres) — LUKS passphrase  [created during adoption]
+#   p4: Data partition (rest of disk) — LUKS-encrypted f2fs [created during adoption]
+#
+# This script only discovers and mounts existing storage.
+# Partition creation happens in the reconciler during adoption.
+# If no persistent storage exists (fresh USB), tmpfs is used for bootstrap.
+
+REEFY_MNT="/mnt/reefy"
+REEFY_DATA_MNT="/mnt/reefy-data"
+LUKS_NAME="reefy-data"
+LUKS_KEY_SIZE=44
+
+set_hostname() {
+    hostname "$(reefy-default-hostname)"
+}
+
+# Determine active boot slot from UEFI BootCurrent
+get_active_slot() {
+    CURRENT_BOOTNUM=$(efibootmgr 2>/dev/null | grep '^BootCurrent:' | awk '{print $2}')
+    ACTIVE_LABEL=$(efibootmgr 2>/dev/null | grep "^Boot${CURRENT_BOOTNUM}\*" | \
+        sed 's/Boot[0-9A-F]*\* //' | awk '{print $1}')
+
+    if [ "$ACTIVE_LABEL" = "reefy-a" ]; then
+        INACTIVE_LABEL="reefy-b"
+    elif [ "$ACTIVE_LABEL" = "reefy-b" ]; then
+        INACTIVE_LABEL="reefy-a"
+    else
+        # Booted from a UEFI auto-created entry (not reefy-a/reefy-b).
+        # Determine which partition by checking the verbose entry for partition GUID.
+        REEFY_A_DEV=$(blkid -L reefy-a 2>/dev/null) || true
+        REEFY_B_DEV=$(blkid -L reefy-b 2>/dev/null) || true
+        if [ -n "$REEFY_A_DEV" ] || [ -n "$REEFY_B_DEV" ]; then
+            GUID_A=$(blkid -s PARTUUID -o value "$REEFY_A_DEV" 2>/dev/null) || true
+            GUID_B=$(blkid -s PARTUUID -o value "$REEFY_B_DEV" 2>/dev/null) || true
+            ENTRY_DETAIL=$(efibootmgr -v 2>/dev/null | grep "^Boot${CURRENT_BOOTNUM}\*")
+            if [ -n "$GUID_A" ] && echo "$ENTRY_DETAIL" | grep -qi "$GUID_A" 2>/dev/null; then
+                ACTIVE_LABEL="reefy-a"
+                INACTIVE_LABEL="reefy-b"
+                echo "[reefy] Mapped Boot${CURRENT_BOOTNUM} to reefy-a (by partition GUID)"
+            elif [ -n "$GUID_B" ] && echo "$ENTRY_DETAIL" | grep -qi "$GUID_B" 2>/dev/null; then
+                ACTIVE_LABEL="reefy-b"
+                INACTIVE_LABEL="reefy-a"
+                echo "[reefy] Mapped Boot${CURRENT_BOOTNUM} to reefy-b (by partition GUID)"
+            else
+                ACTIVE_LABEL=""
+                INACTIVE_LABEL=""
+            fi
+        else
+            # Legacy single-ESP layout (no A/B partitions)
+            ACTIVE_LABEL=""
+            INACTIVE_LABEL=""
+        fi
+    fi
+}
+
+# Mount the active ESP (the slot we booted from)
+mount_reefy_usb() {
+    get_active_slot
+
+    if [ -n "${ACTIVE_LABEL}" ]; then
+        REEFY_DEV=$(blkid -L "${ACTIVE_LABEL}" 2>/dev/null) || true
+    else
+        # Fallback: try A/B labels, then legacy single-ESP label "reefy"
+        REEFY_DEV=$(blkid -L "reefy-a" 2>/dev/null || blkid -L "reefy-b" 2>/dev/null || blkid -L "reefy" 2>/dev/null) || true
+    fi
+
+    if [ -n "${REEFY_DEV}" ]; then
+        mkdir -p "${REEFY_MNT}" || true
+        mount -o ro "${REEFY_DEV}" "${REEFY_MNT}" || true
+        echo "[reefy] Mounted ${REEFY_DEV} (${ACTIVE_LABEL:-first-boot}) at ${REEFY_MNT}"
+    else
+        echo "[reefy] No device with label reefy-a or reefy-b found."
+    fi
+}
+
+# Ensure UEFI boot entries exist for both A/B partitions (idempotent).
+# Also removes duplicate auto-created entries from UEFI firmware.
+ensure_boot_entries() {
+    reefy-efi fix
+}
+
+# Create/mount encrypted data partition
+# Key = partition 3, Data = partition 4 (A/B layout)
+setup_data_partition() {
+    [ -z "${REEFY_DEV}" ] && return 0
+
+    if mountpoint -q "${REEFY_DATA_MNT}" 2>/dev/null; then
+        echo "[reefy] ${REEFY_DATA_MNT} already mounted"
+        return 0
+    fi
+
+    PARENT_NAME=$(lsblk -no PKNAME "${REEFY_DEV}" 2>/dev/null)
+    [ -z "${PARENT_NAME}" ] && return 0
+    REEFY_DISK="/dev/${PARENT_NAME}"
+    KEY_PART="${REEFY_DISK}3"
+    DATA_PART="${REEFY_DISK}4"
+
+    mkdir -p "${REEFY_DATA_MNT}"
+    modprobe dm_crypt 2>/dev/null || true
+
+    # If LUKS partition exists, try to open and mount
+    if [ -b "${DATA_PART}" ]; then
+        if cryptsetup isLuks "${DATA_PART}" 2>/dev/null; then
+            if cryptsetup luksOpen "${DATA_PART}" "${LUKS_NAME}" \
+                --key-file "${KEY_PART}" --keyfile-size "${LUKS_KEY_SIZE}" 2>/dev/null; then
+                FS_TYPE=$(blkid -o value -s TYPE "/dev/mapper/${LUKS_NAME}" 2>/dev/null)
+                case "${FS_TYPE}" in
+                    f2fs)  MOUNT_OPTS="noatime" ;;
+                    *)     MOUNT_OPTS="noatime,commit=60" ;;
+                esac
+                if mount -o "${MOUNT_OPTS}" "/dev/mapper/${LUKS_NAME}" "${REEFY_DATA_MNT}" 2>/dev/null; then
+                    echo "[reefy] Mounted USB data partition (${FS_TYPE}) at ${REEFY_DATA_MNT}"
+                    return 0
+                fi
+            else
+                echo "[reefy] USB data partition key mismatch, skipping"
+            fi
+        fi
+    fi
+
+    # Fallback: ensure state dir exists on rootfs overlay (already in RAM).
+    # No mount needed — rootfs is writable overlay. Ephemeral until adoption
+    # creates real persistent storage.
+    mkdir -p "${REEFY_DATA_MNT}/state/lan"
+    echo "[reefy] No persistent storage, using rootfs overlay for bootstrap"
+}
+
+STORAGE_VG="reefy"
+STORAGE_LV="data"
+
+# Try to use internal drive as /mnt/reefy-data instead of slow USB.
+# Opens LUKS on all internal drives with our key, activates LVM VG,
+# then mounts the LV directly as /mnt/reefy-data (replacing USB mount).
+# Runs independently — does not require USB p4 to be mounted.
+# If no internal drive found, USB stays mounted (fallback).
+setup_internal_storage() {
+    [ -z "${REEFY_DEV}" ] && return 0
+
+    PARENT_NAME=$(lsblk -no PKNAME "${REEFY_DEV}" 2>/dev/null)
+    [ -z "${PARENT_NAME}" ] && return 0
+    KEY_PART="/dev/${PARENT_NAME}3"
+    [ ! -b "${KEY_PART}" ] && return 0
+
+    modprobe dm_crypt 2>/dev/null || true
+    modprobe dm_mod 2>/dev/null || true
+
+    # Open LUKS on all internal drives with our key
+    for dev in $(lsblk -dpno NAME 2>/dev/null); do
+        [ "${dev}" = "/dev/${PARENT_NAME}" ] && continue
+        cryptsetup isLuks "${dev}" 2>/dev/null || continue
+        luks_name="reefy-$(basename ${dev})"
+        [ -e "/dev/mapper/${luks_name}" ] && continue
+        cryptsetup luksOpen "${dev}" "${luks_name}" \
+            --key-file "${KEY_PART}" --keyfile-size "${LUKS_KEY_SIZE}" 2>/dev/null || continue
+        echo "[reefy] Opened LUKS on ${dev}"
+    done
+
+    # Scan for LVM and activate VG
+    vgscan >/dev/null 2>&1
+    vgs "${STORAGE_VG}" >/dev/null 2>&1 || return 0
+    vgchange -ay "${STORAGE_VG}" >/dev/null 2>&1
+    lv_path="/dev/${STORAGE_VG}/${STORAGE_LV}"
+    [ ! -e "${lv_path}" ] && return 0
+
+    # Mount internal drive as /mnt/reefy-data
+    echo "[reefy] Internal drive found, mounting as ${REEFY_DATA_MNT}..."
+    mkdir -p "${REEFY_DATA_MNT}"
+    mount -o noatime,commit=60 "${lv_path}" "${REEFY_DATA_MNT}" || {
+        echo "[reefy] WARNING: Internal drive mount failed"
+        return 0
+    }
+
+    # Ensure required directories exist (first time on internal drive)
+    mkdir -p "${REEFY_DATA_MNT}/state/lan"
+    mkdir -p "${REEFY_DATA_MNT}/apps"
+    mkdir -p "${REEFY_DATA_MNT}/docker"
+
+    echo "[reefy] Mounted internal drive as ${REEFY_DATA_MNT}"
+}
+
+# Main execution
+# Order matters: try internal drive first (fast), fall back to USB p4 (slow).
+# If neither exists (fresh USB), use tmpfs for bootstrap.
+set_hostname
+mount_reefy_usb
+
+if ! mountpoint -q "${REEFY_MNT}" 2>/dev/null; then
+    echo "[reefy] WARNING: ${REEFY_MNT} not mounted — USB dongle may need re-flashing with A/B image"
+    mkdir -p "${REEFY_DATA_MNT}/state/lan"
+    exit 0
+fi
+
+ensure_boot_entries
+setup_internal_storage
+setup_data_partition

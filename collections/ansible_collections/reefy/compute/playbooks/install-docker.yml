@@ -1,0 +1,31 @@
+---
+# Install Docker with data-root on /mnt/reefy-data (if mounted)
+#
+# Uses the docker_vm role which:
+#   - Installs Docker via geerlingguy.docker
+#   - Configures Docker data-root to /mnt/reefy-data/docker
+#   - Configures containerd root to /mnt/reefy-data/containerd
+#
+# Prerequisites (one time):
+#   ansible-galaxy install -r requirements.yml
+#
+# Usage:
+#   Install Docker:
+#     ansible-playbook -i host, playbooks/install-docker.yml
+
+- name: Install Docker
+  hosts: "{{ target_hosts | default('all') }}"
+  become: true
+  gather_facts: false
+
+  pre_tasks:
+    - name: Wait for host to become reachable
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+        delay: 5
+
+    - name: Gather facts
+      ansible.builtin.setup:
+
+  roles:
+    - role: reefy.compute.docker_vm

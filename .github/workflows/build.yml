@@ -1,4 +1,4 @@
-name: Build sbnb
+name: Build reefy
 
 on:
   push:
@@ -72,14 +72,14 @@ jobs:
           buildroot/output/host
           buildroot/output/staging
           buildroot/output/target
-        key: buildroot-output-v2-${{ hashFiles('configs/sbnb_defconfig', 'board/sbnb/sbnb/kernel-config', 'board/sbnb/sbnb/kernel-config-wifi') }}
+        key: buildroot-output-v2-${{ hashFiles('configs/reefy_defconfig', 'board/reefy/reefy/kernel-config', 'board/reefy/reefy/kernel-config-wifi') }}
         restore-keys: |
           buildroot-output-v2
 
     - name: Configure
       run: |
         cd buildroot
-        make BR2_EXTERNAL=.. sbnb_defconfig
+        make BR2_EXTERNAL=.. reefy_defconfig
 
     - name: Clean config-sensitive packages
       if: steps.output-cache.outputs.cache-hit != 'true'
@@ -96,11 +96,11 @@ jobs:
         cd buildroot
         make -j $(nproc)
     
-    - name: Save sbnb images
+    - name: Save reefy images
       uses: actions/upload-artifact@v4
       with:
-        name: sbnb-images-${{ env.IMAGE_VERSION }}
+        name: reefy-images-${{ env.IMAGE_VERSION }}
         path: |
-          buildroot/output/images/sbnb.raw.zip
-          buildroot/output/images/sbnb.vhd
-          buildroot/output/images/sbnb.efi
+          buildroot/output/images/reefy.raw.zip
+          buildroot/output/images/reefy.vhd
+          buildroot/output/images/reefy.efi

@@ -1,0 +1,12 @@
+---
+# Configuration for confidential computing hosts (AMD SEV-SNP)
+#
+# These settings apply to all hosts in the secure_hosts group
+
+# Enable AMD SEV-SNP confidential computing
+reefy_vm_confidential_computing: true
+
+# Moderate resource allocation
+reefy_vm_vcpu: 8
+reefy_vm_mem: "16G"
+reefy_vm_image_size: "50G"

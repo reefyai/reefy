@@ -1,5 +1,5 @@
 ---
-- name: SBNB MQTT Transport Test
+- name: Reefy MQTT Transport Test
   hosts: localhost
   connection: local
   gather_facts: true
@@ -21,15 +21,15 @@
     - name: Create MQTT test marker
       copy:
         content: |
-          SBNB MQTT Provisioning Test
+          Reefy MQTT Provisioning Test
           Timestamp: {{ ansible_date_time.iso8601 }}
           Hostname: {{ ansible_hostname }}
           Kernel: {{ ansible_kernel }}
-        dest: /tmp/sbnb-mqtt-test.txt
+        dest: /tmp/reefy-mqtt-test.txt
         mode: '0644'
 
     - name: Verify marker file
-      command: cat /tmp/sbnb-mqtt-test.txt
+      command: cat /tmp/reefy-mqtt-test.txt
       register: marker
       changed_when: false
 

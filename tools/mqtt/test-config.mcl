@@ -1,15 +1,15 @@
-# SBNB mgmt Transport Test
+# Reefy mgmt Transport Test
 #
 # Deploys via MQTT, then mgmt daemon continuously monitors for drift.
-# Delete /tmp/sbnb-mgmt-test.txt and watch mgmt recreate it instantly.
+# Delete /tmp/reefy-mgmt-test.txt and watch mgmt recreate it instantly.
 
-file "/tmp/sbnb-mgmt-test.txt" {
-	content => "SBNB mgmt drift monitoring active\nDeployed via MQTT transport\n",
+file "/tmp/reefy-mgmt-test.txt" {
+	content => "Reefy mgmt drift monitoring active\nDeployed via MQTT transport\n",
 	state => $const.res.file.state.exists,
 	mode => "0644",
 }
 
 exec "system-info" {
-	cmd => "uname -a > /tmp/sbnb-mgmt-sysinfo.txt",
+	cmd => "uname -a > /tmp/reefy-mgmt-sysinfo.txt",
 	shell => "/bin/sh",
 }

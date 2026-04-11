@@ -6,13 +6,13 @@
 
 ## Executive Summary
 
-This document describes the architecture for adding MQTT+mTLS as an optional communication channel alongside Tailscale in SBNB. The goal is to provide efficient pull-based configuration management while maintaining backward compatibility with existing Tailscale deployments.
+This document describes the architecture for adding MQTT+mTLS as an optional communication channel alongside Tailscale in Reefy. The goal is to provide efficient pull-based configuration management while maintaining backward compatibility with existing Tailscale deployments.
 
 **Key Principles:**
 - ✅ Non-breaking: Existing Tailscale deployments continue to work
 - ✅ Additive: MQTT is a parallel option, not a replacement
 - ✅ Open source friendly: Base image contains no vendor-specific credentials
-- ✅ Simple UX: Users download pre-configured image from console.sbnb.io
+- ✅ Simple UX: Users download pre-configured image from console.reefy.io
 - ✅ Self-hostable: Users can run their own MQTT broker
 
 ---
@@ -40,7 +40,7 @@ This document describes the architecture for adding MQTT+mTLS as an optional com
     (push-mode)          (pull-mode)
           ↓                    ↓
 ┌──────────────────────────────────────────┐
-│       console.sbnb.io                     │
+│       console.reefy.io                     │
 ├──────────────────────────────────────────┤
 │  SSH via Tailscale (optional)            │
 │  MQTT Broker (mTLS)                      │
@@ -64,44 +64,44 @@ This document describes the architecture for adding MQTT+mTLS as an optional com
 ### 1. User Registration & Download
 
 ```
-1. User registers at console.sbnb.io
+1. User registers at console.reefy.io
    ↓
 2. Console generates customer-specific bootstrap certificate
    ↓
 3. User clicks "Download Image"
    ↓
 4. Console server:
-   - Mounts base sbnb.raw (no credentials)
-   - Injects bootstrap cert to /etc/sbnb/mqtt/
+   - Mounts base reefy.raw (no credentials)
+   - Injects bootstrap cert to /etc/reefy/mqtt/
    - Optionally configures MQTT broker URL
    - Serves modified image
    ↓
-5. User receives sbnb.raw with embedded credentials
+5. User receives reefy.raw with embedded credentials
 ```
 
 ### 2. Device Boot & Registration
 
 ```
-1. User flashes USB: dd if=sbnb.raw of=/dev/sdX
+1. User flashes USB: dd if=reefy.raw of=/dev/sdX
    ↓
 2. User boots metal host from USB
    ↓
-3. Device boots, generates hostname: sbnb-{MAC}
+3. Device boots, generates hostname: reefy-{MAC}
    ↓
 4. Device reads embedded bootstrap certificate
    ↓
-5. Device connects to MQTT broker (console.sbnb.io:8883)
+5. Device connects to MQTT broker (console.reefy.io:8883)
    ↓
 6. Device generates RSA-2048 keypair + CSR (private key stays on device)
    ↓
 7. Device publishes to: devices/bootstrap/{hostname}/register
-   Payload: {"hostname": "sbnb-525400123456", "mac": "...", "csr": "-----BEGIN CERTIFICATE REQUEST-----..."}
+   Payload: {"hostname": "reefy-525400123456", "mac": "...", "csr": "-----BEGIN CERTIFICATE REQUEST-----..."}
    ↓
 8. Admin approves device (signs CSR, assigns UUID)
    ↓
 9. Device receives signed certificate (no private key transmitted)
    ↓
-10. Device appears in dashboard: "New Device - sbnb-525400123456"
+10. Device appears in dashboard: "New Device - reefy-525400123456"
 ```
 
 ### 3. User Configuration
@@ -134,13 +134,13 @@ This document describes the architecture for adding MQTT+mTLS as an optional com
    Payload: {
      "uuid": "550e8400-...",
      "device_cert": "-----BEGIN CERTIFICATE-----...",
-     "bundle_url": "https://console.sbnb.io/api/bundles/customer"
+     "bundle_url": "https://console.reefy.io/api/bundles/customer"
    }
    Note: No private key transmitted — device generated it locally via CSR
    ↓
 3. Device receives signed certificate
    ↓
-4. Device saves UUID + certificate to /mnt/sbnb-data/state/
+4. Device saves UUID + certificate to /mnt/reefy-data/state/
    (private key already saved during CSR generation)
    ↓
 5. Device downloads customer bundle
@@ -162,9 +162,9 @@ This document describes the architecture for adding MQTT+mTLS as an optional com
 **No credentials in base image:**
 
 ```
-board/sbnb/sbnb/rootfs-overlay/
+board/reefy/reefy/rootfs-overlay/
 └── etc/
-    └── sbnb/
+    └── reefy/
         ├── mqtt.conf.example          # Template configuration
         └── mqtt/                       # Empty (credentials injected at download)
 ```
@@ -172,22 +172,22 @@ board/sbnb/sbnb/rootfs-overlay/
 **mqtt.conf.example:**
 ```ini
 # MQTT Broker Configuration
-MQTT_BROKER=console.sbnb.io
+MQTT_BROKER=console.reefy.io
 MQTT_PORT=8883
 
 # Certificate paths
-MQTT_CA_CERT=/etc/sbnb/mqtt/ca.crt
-MQTT_CLIENT_CERT=/etc/sbnb/mqtt/client.crt
-MQTT_CLIENT_KEY=/etc/sbnb/mqtt/client.key
+MQTT_CA_CERT=/etc/reefy/mqtt/ca.crt
+MQTT_CLIENT_CERT=/etc/reefy/mqtt/client.crt
+MQTT_CLIENT_KEY=/etc/reefy/mqtt/client.key
 
 # Device certificate (after provisioning)
-MQTT_DEVICE_CERT=/mnt/sbnb-data/state/device.crt
-MQTT_DEVICE_KEY=/mnt/sbnb-data/state/device.key
+MQTT_DEVICE_CERT=/mnt/reefy-data/state/device.crt
+MQTT_DEVICE_KEY=/mnt/reefy-data/state/device.key
 ```
 
 **Buildroot configuration:**
 ```
-# configs/sbnb_defconfig
+# configs/reefy_defconfig
 BR2_PACKAGE_PYTHON_PAHO_MQTT=y
 ```
 
@@ -196,38 +196,38 @@ BR2_PACKAGE_PYTHON_PAHO_MQTT=y
 **Console server workflow:**
 
 ```python
-@app.route('/download/sbnb.raw')
+@app.route('/download/reefy.raw')
 def download_image(user_id):
     # 1. Mount base image (read-only)
-    mount_image('base-sbnb.raw', '/mnt/base', readonly=True)
+    mount_image('base-reefy.raw', '/mnt/base', readonly=True)
 
     # 2. Create working copy
-    copy('base-sbnb.raw', f'/tmp/sbnb-{user_id}.raw')
+    copy('base-reefy.raw', f'/tmp/reefy-{user_id}.raw')
 
     # 3. Mount working copy (read-write)
-    mount_image(f'/tmp/sbnb-{user_id}.raw', '/mnt/work', readonly=False)
+    mount_image(f'/tmp/reefy-{user_id}.raw', '/mnt/work', readonly=False)
 
     # 4. Get customer credentials
     certs = get_customer_bootstrap_certs(user_id)
 
     # 5. Inject certificates
-    inject_file('/mnt/work/etc/sbnb/mqtt/ca.crt', certs['ca'])
-    inject_file('/mnt/work/etc/sbnb/mqtt/bootstrap.crt', certs['bootstrap_cert'])
-    inject_file('/mnt/work/etc/sbnb/mqtt/bootstrap.key', certs['bootstrap_key'])
+    inject_file('/mnt/work/etc/reefy/mqtt/ca.crt', certs['ca'])
+    inject_file('/mnt/work/etc/reefy/mqtt/bootstrap.crt', certs['bootstrap_cert'])
+    inject_file('/mnt/work/etc/reefy/mqtt/bootstrap.key', certs['bootstrap_key'])
 
     # 6. Optionally inject custom broker URL
     if customer.has_custom_broker:
         config = f"MQTT_BROKER={customer.mqtt_broker}\nMQTT_PORT={customer.mqtt_port}"
-        inject_file('/mnt/work/etc/sbnb/mqtt.conf', config)
+        inject_file('/mnt/work/etc/reefy/mqtt.conf', config)
 
     # 7. Unmount and serve
     unmount('/mnt/work')
-    return send_file(f'/tmp/sbnb-{user_id}.raw')
+    return send_file(f'/tmp/reefy-{user_id}.raw')
 ```
 
 **Injected structure:**
 ```
-/etc/sbnb/mqtt/
+/etc/reefy/mqtt/
 ├── ca.crt              # Broker CA certificate
 ├── bootstrap.crt       # Shared bootstrap cert (customer-specific or global)
 └── bootstrap.key       # Shared bootstrap key
@@ -235,7 +235,7 @@ def download_image(user_id):
 
 ### 3. Boot Sequence
 
-**Modified boot-sbnb.sh:**
+**Modified boot-reefy.sh:**
 
 ```bash
 #!/bin/sh
@@ -244,54 +244,54 @@ def download_image(user_id):
 
 start_mqtt() {
     # Read MQTT configuration
-    MQTT_CONF="/etc/sbnb/mqtt.conf"
-    if [ -f "/mnt/sbnb-data/state/mqtt.conf" ]; then
+    MQTT_CONF="/etc/reefy/mqtt.conf"
+    if [ -f "/mnt/reefy-data/state/mqtt.conf" ]; then
         # Persistent override takes precedence
-        source "/mnt/sbnb-data/state/mqtt.conf"
-        echo "[sbnb] Using persistent MQTT config"
+        source "/mnt/reefy-data/state/mqtt.conf"
+        echo "[reefy] Using persistent MQTT config"
     elif [ -f "${MQTT_CONF}" ]; then
         # Injected config
         source "${MQTT_CONF}"
-        echo "[sbnb] Using injected MQTT config"
+        echo "[reefy] Using injected MQTT config"
     else
         # Defaults
-        MQTT_BROKER="console.sbnb.io"
+        MQTT_BROKER="console.reefy.io"
         MQTT_PORT="8883"
-        echo "[sbnb] Using default MQTT config"
+        echo "[reefy] Using default MQTT config"
     fi
 
-    echo "[sbnb] MQTT broker: ${MQTT_BROKER}:${MQTT_PORT}"
+    echo "[reefy] MQTT broker: ${MQTT_BROKER}:${MQTT_PORT}"
 
     # Determine which certificate to use
-    if [ -f "/mnt/sbnb-data/state/device.crt" ] && [ -f "/mnt/sbnb-data/state/device.key" ]; then
+    if [ -f "/mnt/reefy-data/state/device.crt" ] && [ -f "/mnt/reefy-data/state/device.key" ]; then
         # Device-specific certificate (already provisioned)
-        echo "[sbnb] Using device-specific certificate"
-        export MQTT_CLIENT_CERT="/mnt/sbnb-data/state/device.crt"
-        export MQTT_CLIENT_KEY="/mnt/sbnb-data/state/device.key"
-    elif [ -f "/etc/sbnb/mqtt/bootstrap.crt" ] && [ -f "/etc/sbnb/mqtt/bootstrap.key" ]; then
+        echo "[reefy] Using device-specific certificate"
+        export MQTT_CLIENT_CERT="/mnt/reefy-data/state/device.crt"
+        export MQTT_CLIENT_KEY="/mnt/reefy-data/state/device.key"
+    elif [ -f "/etc/reefy/mqtt/bootstrap.crt" ] && [ -f "/etc/reefy/mqtt/bootstrap.key" ]; then
         # Bootstrap certificate (first boot or re-provisioning)
-        echo "[sbnb] Using bootstrap certificate"
-        export MQTT_CLIENT_CERT="/etc/sbnb/mqtt/bootstrap.crt"
-        export MQTT_CLIENT_KEY="/etc/sbnb/mqtt/bootstrap.key"
+        echo "[reefy] Using bootstrap certificate"
+        export MQTT_CLIENT_CERT="/etc/reefy/mqtt/bootstrap.crt"
+        export MQTT_CLIENT_KEY="/etc/reefy/mqtt/bootstrap.key"
     else
-        echo "[sbnb] No MQTT certificates found, skipping MQTT"
+        echo "[reefy] No MQTT certificates found, skipping MQTT"
         return 0
     fi
 
-    export MQTT_CA_CERT="/etc/sbnb/mqtt/ca.crt"
+    export MQTT_CA_CERT="/etc/reefy/mqtt/ca.crt"
     export MQTT_BROKER
     export MQTT_PORT
 
     # Enable and start MQTT service
-    systemctl enable sbnb-mqtt.service
-    systemctl start sbnb-mqtt.service
+    systemctl enable reefy-mqtt.service
+    systemctl start reefy-mqtt.service
 }
 
 # Main execution
 set_hostname
-mount_sbnb_usb
+mount_reefy_usb
 mount_vmware_shared_folder
-execute_sbnb_cmds
+execute_reefy_cmds
 start_tunnel      # Tailscale (if tunnel-start.sh exists)
 start_mqtt        # MQTT (if certificates exist)
 display_banner
@@ -305,7 +305,7 @@ devices/
 │   └── {hostname}/                       # Per-hostname topics (retained)
 │       ├── register                      # Device publishes registration + CSR
 │       │   └── Payload: {
-│       │         "hostname": "sbnb-{MAC}",
+│       │         "hostname": "reefy-{MAC}",
 │       │         "mac": "...",
 │       │         "timestamp": ...,
 │       │         "csr": "-----BEGIN CERTIFICATE REQUEST-----..."
@@ -340,17 +340,17 @@ devices/
 **Systemd service:**
 
 ```ini
-# /usr/lib/systemd/system/sbnb-mqtt.service
+# /usr/lib/systemd/system/reefy-mqtt.service
 
 [Unit]
-Description=SBNB MQTT Reconciler
+Description=Reefy MQTT Reconciler
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-EnvironmentFile=-/etc/sbnb/mqtt.conf
-ExecStart=/usr/bin/sbnb-mqtt-reconciler
+EnvironmentFile=-/etc/reefy/mqtt.conf
+ExecStart=/usr/bin/reefy-mqtt-reconciler
 Restart=always
 RestartSec=10
 
@@ -363,7 +363,7 @@ WantedBy=multi-user.target
 ```python
 #!/usr/bin/env python3
 """
-SBNB MQTT Reconciler - Pull-based configuration management via MQTT
+Reefy MQTT Reconciler - Pull-based configuration management via MQTT
 """
 
 import json
@@ -376,36 +376,36 @@ import ssl
 class MQTTReconciler:
     def __init__(self):
         # Read configuration
-        self.broker = os.getenv('MQTT_BROKER', 'console.sbnb.io')
+        self.broker = os.getenv('MQTT_BROKER', 'console.reefy.io')
         self.port = int(os.getenv('MQTT_PORT', '8883'))
-        self.hostname = os.uname().nodename  # sbnb-{MAC}
+        self.hostname = os.uname().nodename  # reefy-{MAC}
 
         # Determine certificate type
-        device_cert = '/mnt/sbnb-data/state/device.crt'
-        bootstrap_cert = '/etc/sbnb/mqtt/bootstrap.crt'
+        device_cert = '/mnt/reefy-data/state/device.crt'
+        bootstrap_cert = '/etc/reefy/mqtt/bootstrap.crt'
 
         if os.path.exists(device_cert):
             self.mode = 'device'
             self.device_uuid = self._read_uuid()
             self.client_cert = device_cert
-            self.client_key = '/mnt/sbnb-data/state/device.key'
+            self.client_key = '/mnt/reefy-data/state/device.key'
             print(f"[mqtt] Device mode: UUID={self.device_uuid}")
         elif os.path.exists(bootstrap_cert):
             self.mode = 'bootstrap'
             self.client_cert = bootstrap_cert
-            self.client_key = '/etc/sbnb/mqtt/bootstrap.key'
+            self.client_key = '/etc/reefy/mqtt/bootstrap.key'
             print(f"[mqtt] Bootstrap mode: hostname={self.hostname}")
         else:
             raise FileNotFoundError("No MQTT certificates found")
 
-        self.ca_cert = '/etc/sbnb/mqtt/ca.crt'
+        self.ca_cert = '/etc/reefy/mqtt/ca.crt'
         self.client = mqtt.Client()
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
         self.client.on_disconnect = self.on_disconnect
 
     def _read_uuid(self):
-        with open('/mnt/sbnb-data/state/device-uuid', 'r') as f:
+        with open('/mnt/reefy-data/state/device-uuid', 'r') as f:
             return f.read().strip()
 
     def _get_mac(self):
@@ -488,13 +488,13 @@ class MQTTReconciler:
         print(f"[mqtt] Received provisioning: UUID={uuid}")
 
         # Save to /tmp (will be moved by bootstrap playbook)
-        os.makedirs('/tmp/sbnb-provision', exist_ok=True)
+        os.makedirs('/tmp/reefy-provision', exist_ok=True)
 
-        with open('/tmp/sbnb-provision/device-uuid', 'w') as f:
+        with open('/tmp/reefy-provision/device-uuid', 'w') as f:
             f.write(uuid)
-        with open('/tmp/sbnb-provision/device.crt', 'w') as f:
+        with open('/tmp/reefy-provision/device.crt', 'w') as f:
             f.write(certificate)
-        with open('/tmp/sbnb-provision/device.key', 'w') as f:
+        with open('/tmp/reefy-provision/device.key', 'w') as f:
             f.write(private_key)
 
         # Download and run bootstrap bundle
@@ -518,7 +518,7 @@ class MQTTReconciler:
 
             if result.returncode == 0:
                 print("[mqtt] Bootstrap complete, restarting with device cert")
-                subprocess.run(['systemctl', 'restart', 'sbnb-mqtt.service'])
+                subprocess.run(['systemctl', 'restart', 'reefy-mqtt.service'])
             else:
                 print(f"[mqtt] Bootstrap failed: {result.returncode}")
 
@@ -544,8 +544,8 @@ class MQTTReconciler:
         self._publish_status('applying', f'Downloading bundle {version}')
 
         # Download
-        bundle_path = f'/mnt/sbnb-data/cache/customer-{version}.tar.gz'
-        os.makedirs('/mnt/sbnb-data/cache', exist_ok=True)
+        bundle_path = f'/mnt/reefy-data/cache/customer-{version}.tar.gz'
+        os.makedirs('/mnt/reefy-data/cache', exist_ok=True)
 
         subprocess.run([
             'curl', '-f', '-o', bundle_path,
@@ -554,7 +554,7 @@ class MQTTReconciler:
         ], check=True)
 
         # Extract
-        extract_dir = f'/mnt/sbnb-data/cache/customer-{version}'
+        extract_dir = f'/mnt/reefy-data/cache/customer-{version}'
         os.makedirs(extract_dir, exist_ok=True)
         subprocess.run(['tar', 'xzf', bundle_path, '-C', extract_dir], check=True)
 
@@ -622,7 +622,7 @@ if __name__ == '__main__':
 ```yaml
 # bootstrap.yml (served by console API)
 
-- name: Bootstrap SBNB Device
+- name: Bootstrap Reefy Device
   hosts: localhost
   connection: local
 
@@ -630,35 +630,35 @@ if __name__ == '__main__':
     # ... existing bootstrap tasks ...
 
     - name: Move provisioning files to persistent storage
-      when: lookup('file', '/tmp/sbnb-provision/device-uuid', errors='ignore')
+      when: lookup('file', '/tmp/reefy-provision/device-uuid', errors='ignore')
       block:
         - name: Ensure state directory exists
           file:
-            path: /mnt/sbnb-data/state
+            path: /mnt/reefy-data/state
             state: directory
 
         - name: Move device UUID
           copy:
-            src: /tmp/sbnb-provision/device-uuid
-            dest: /mnt/sbnb-data/state/device-uuid
+            src: /tmp/reefy-provision/device-uuid
+            dest: /mnt/reefy-data/state/device-uuid
             remote_src: yes
 
         - name: Move device certificate
           copy:
-            src: /tmp/sbnb-provision/device.crt
-            dest: /mnt/sbnb-data/state/device.crt
+            src: /tmp/reefy-provision/device.crt
+            dest: /mnt/reefy-data/state/device.crt
             remote_src: yes
 
         - name: Move device private key
           copy:
-            src: /tmp/sbnb-provision/device.key
-            dest: /mnt/sbnb-data/state/device.key
+            src: /tmp/reefy-provision/device.key
+            dest: /mnt/reefy-data/state/device.key
             remote_src: yes
             mode: '0600'
 
         - name: Cleanup temp files
           file:
-            path: /tmp/sbnb-provision
+            path: /tmp/reefy-provision
             state: absent
 ```
 
@@ -668,20 +668,20 @@ if __name__ == '__main__':
 
 **Priority (highest to lowest):**
 
-1. `/mnt/sbnb-data/state/mqtt.conf` - Persistent user override
-2. `/etc/sbnb/mqtt.conf` - Injected at download time
+1. `/mnt/reefy-data/state/mqtt.conf` - Persistent user override
+2. `/etc/reefy/mqtt.conf` - Injected at download time
 3. Environment variables - Systemd service overrides
-4. Built-in defaults - `console.sbnb.io:8883`
+4. Built-in defaults - `console.reefy.io:8883`
 
 **Example configuration file:**
 
 ```ini
-# /etc/sbnb/mqtt.conf (injected by console)
-MQTT_BROKER=console.sbnb.io
+# /etc/reefy/mqtt.conf (injected by console)
+MQTT_BROKER=console.reefy.io
 MQTT_PORT=8883
-MQTT_CA_CERT=/etc/sbnb/mqtt/ca.crt
-MQTT_CLIENT_CERT=/etc/sbnb/mqtt/client.crt
-MQTT_CLIENT_KEY=/etc/sbnb/mqtt/client.key
+MQTT_CA_CERT=/etc/reefy/mqtt/ca.crt
+MQTT_CLIENT_CERT=/etc/reefy/mqtt/client.crt
+MQTT_CLIENT_KEY=/etc/reefy/mqtt/client.key
 ```
 
 ---
@@ -695,12 +695,12 @@ MQTT_CLIENT_KEY=/etc/sbnb/mqtt/client.key
 ```bash
 # Generate CA
 openssl req -new -x509 -days 3650 -keyout ca.key -out ca.crt \
-  -subj "/CN=SBNB CA/O=sbnb/C=US"
+  -subj "/CN=Reefy CA/O=reefy/C=US"
 
 # Generate bootstrap certificate (shared across all customer devices)
 openssl req -new -newkey rsa:2048 -nodes \
   -keyout bootstrap.key -out bootstrap.csr \
-  -subj "/CN=sbnb-bootstrap/O=sbnb/OU=customer-123"
+  -subj "/CN=reefy-bootstrap/O=reefy/OU=customer-123"
 
 openssl x509 -req -in bootstrap.csr \
   -CA ca.crt -CAkey ca.key \
@@ -714,16 +714,16 @@ openssl x509 -req -in bootstrap.csr \
 
 ```bash
 # On device (automatic during bootstrap):
-openssl genrsa -out /mnt/sbnb-data/state/device.key 2048
+openssl genrsa -out /mnt/reefy-data/state/device.key 2048
 openssl req -new -key device.key -out device.csr \
-  -subj "/O=SBNB/OU=Devices/CN=${HOSTNAME}"
+  -subj "/O=Reefy/OU=Devices/CN=${HOSTNAME}"
 # CSR is sent in MQTT registration message
 
 # On admin console (approve-devices.sh or manual):
 UUID=$(uuidgen)
 openssl req -in device.csr -pubkey -noout > device.pub
 openssl x509 -new -force_pubkey device.pub \
-  -subj "/CN=${UUID}/O=SBNB/OU=Devices" \
+  -subj "/CN=${UUID}/O=Reefy/OU=Devices" \
   -CA ca.crt -CAkey ca.key \
   -days 3650 -out device.crt
 # Only the signed certificate is published back via MQTT
@@ -735,11 +735,11 @@ openssl x509 -new -force_pubkey device.pub \
 
 ## Deployment Scenarios
 
-### Scenario 1: Managed Service (console.sbnb.io)
+### Scenario 1: Managed Service (console.reefy.io)
 
 **User perspective:**
-1. Register at console.sbnb.io
-2. Download sbnb.raw (credentials pre-injected)
+1. Register at console.reefy.io
+2. Download reefy.raw (credentials pre-injected)
 3. Flash USB and boot
 4. Device appears in dashboard
 5. Configure via web UI
@@ -748,23 +748,23 @@ openssl x509 -new -force_pubkey device.pub \
 **What's injected:**
 - Bootstrap certificate (customer-specific or shared)
 - CA certificate
-- Broker URL: `console.sbnb.io:8883`
+- Broker URL: `console.reefy.io:8883`
 
 ### Scenario 2: Self-Hosted (Open Source)
 
 **User perspective:**
-1. Build sbnb.raw from source
+1. Build reefy.raw from source
 2. Set up own MQTT broker (Mosquitto, HiveMQ, etc.)
 3. Generate own CA + bootstrap certificates
 4. Manually inject credentials into image:
    ```bash
-   mount -o loop,rw sbnb.raw /mnt/work
+   mount -o loop,rw reefy.raw /mnt/work
 
-   cp my-ca.crt /mnt/work/etc/sbnb/mqtt/ca.crt
-   cp my-bootstrap.crt /mnt/work/etc/sbnb/mqtt/bootstrap.crt
-   cp my-bootstrap.key /mnt/work/etc/sbnb/mqtt/bootstrap.key
+   cp my-ca.crt /mnt/work/etc/reefy/mqtt/ca.crt
+   cp my-bootstrap.crt /mnt/work/etc/reefy/mqtt/bootstrap.crt
+   cp my-bootstrap.key /mnt/work/etc/reefy/mqtt/bootstrap.key
 
-   cat > /mnt/work/etc/sbnb/mqtt.conf <<EOF
+   cat > /mnt/work/etc/reefy/mqtt.conf <<EOF
    MQTT_BROKER=mqtt.mycompany.com
    MQTT_PORT=8883
    EOF
@@ -777,13 +777,13 @@ openssl x509 -new -force_pubkey device.pub \
 
 ### Scenario 3: Hybrid
 
-**Use console.sbnb.io services but point to own MQTT broker:**
+**Use console.reefy.io services but point to own MQTT broker:**
 
 ```bash
 # Download image from console, then modify broker URL
-mount -o loop,rw sbnb.raw /mnt/work
+mount -o loop,rw reefy.raw /mnt/work
 
-cat > /mnt/work/etc/sbnb/mqtt.conf <<EOF
+cat > /mnt/work/etc/reefy/mqtt.conf <<EOF
 MQTT_BROKER=mqtt.mycompany.com
 MQTT_PORT=8883
 EOF
@@ -804,10 +804,10 @@ Device uses console certificates but connects to customer broker.
 │ Devices                                    [+ Add Device]  │
 ├───────────────────────────────────────────────────────────┤
 │ Name           Hostname            Status      Apps        │
-│ ML Server      sbnb-525400123456   🟢 Online   Docker,     │
+│ ML Server      reefy-525400123456   🟢 Online   Docker,     │
 │                                                OpenClaw     │
-│ NVR Server     sbnb-525400789abc   🟢 Online   Frigate     │
-│ New Device     sbnb-525400def123   ⚠️  Config   -          │
+│ NVR Server     reefy-525400789abc   🟢 Online   Frigate     │
+│ New Device     reefy-525400def123   ⚠️  Config   -          │
 └───────────────────────────────────────────────────────────┘
 ```
 
@@ -839,7 +839,7 @@ Device uses console certificates but connects to customer broker.
 
 ```
 ┌─────────────────────────────────────────┐
-│ ML Server (sbnb-525400123456)           │
+│ ML Server (reefy-525400123456)           │
 ├─────────────────────────────────────────┤
 │ Status: 🟢 Online                       │
 │ Last Seen: 2 minutes ago                │
@@ -891,20 +891,20 @@ vms: []
 **provision.yml:**
 
 ```yaml
-- name: Provision SBNB Device
+- name: Provision Reefy Device
   hosts: localhost
   connection: local
 
   roles:
-    - role: sbnb.compute.storage
-    - role: sbnb.compute.networking
-    - role: sbnb.compute.docker
+    - role: reefy.compute.storage
+    - role: reefy.compute.networking
+    - role: reefy.compute.docker
       when: "'docker' in apps"
 
-    - role: sbnb.compute.openclaw
+    - role: reefy.compute.openclaw
       when: "'openclaw' in apps"
 
-    - role: sbnb.compute.ollama
+    - role: reefy.compute.ollama
       when: "'ollama' in apps"
 ```
 
@@ -914,17 +914,17 @@ vms: []
 
 ### Phase 1: Foundation (Non-Breaking)
 
-- [ ] Add `BR2_PACKAGE_PYTHON_PAHO_MQTT=y` to `configs/sbnb_defconfig`
-- [ ] Create `/etc/sbnb/mqtt.conf.example` template
-- [ ] Create empty `/etc/sbnb/mqtt/` directory in rootfs-overlay
-- [ ] Implement `start_mqtt()` function in `boot-sbnb.sh`
-- [ ] Create `sbnb-mqtt.service` systemd unit
-- [ ] Implement `sbnb-mqtt-reconciler` Python script
+- [ ] Add `BR2_PACKAGE_PYTHON_PAHO_MQTT=y` to `configs/reefy_defconfig`
+- [ ] Create `/etc/reefy/mqtt.conf.example` template
+- [ ] Create empty `/etc/reefy/mqtt/` directory in rootfs-overlay
+- [ ] Implement `start_mqtt()` function in `boot-reefy.sh`
+- [ ] Create `reefy-mqtt.service` systemd unit
+- [ ] Implement `reefy-mqtt-reconciler` Python script
 - [ ] Test that existing Tailscale deployments are unaffected
 
 ### Phase 2: Console Integration
 
-- [ ] Implement image injection endpoint on console.sbnb.io
+- [ ] Implement image injection endpoint on console.reefy.io
 - [ ] Create dashboard device registration view
 - [ ] Implement MQTT broker with mTLS
 - [ ] Create device provisioning UI
@@ -955,11 +955,11 @@ vms: []
 ```markdown
 # MQTT Configuration
 
-SBNB supports MQTT+mTLS for efficient pull-based configuration management.
+Reefy supports MQTT+mTLS for efficient pull-based configuration management.
 
-## Quick Start (console.sbnb.io)
+## Quick Start (console.reefy.io)
 
-1. Register at console.sbnb.io
+1. Register at console.reefy.io
 2. Download pre-configured image
 3. Flash and boot - device appears in dashboard automatically
 
@@ -969,7 +969,7 @@ SBNB supports MQTT+mTLS for efficient pull-based configuration management.
 
 ```bash
 cd buildroot
-make BR2_EXTERNAL=.. sbnb_defconfig
+make BR2_EXTERNAL=.. reefy_defconfig
 make -j $(nproc)
 ```
 
@@ -980,14 +980,14 @@ See [docs/MQTT-BROKER-SETUP.md](MQTT-BROKER-SETUP.md) for detailed instructions.
 ### 3. Inject credentials
 
 ```bash
-mount -o loop,rw output/images/sbnb.raw /mnt/work
+mount -o loop,rw output/images/reefy.raw /mnt/work
 
-mkdir -p /mnt/work/etc/sbnb/mqtt/
-cp ca.crt /mnt/work/etc/sbnb/mqtt/
-cp bootstrap.crt /mnt/work/etc/sbnb/mqtt/
-cp bootstrap.key /mnt/work/etc/sbnb/mqtt/
+mkdir -p /mnt/work/etc/reefy/mqtt/
+cp ca.crt /mnt/work/etc/reefy/mqtt/
+cp bootstrap.crt /mnt/work/etc/reefy/mqtt/
+cp bootstrap.key /mnt/work/etc/reefy/mqtt/
 
-cat > /mnt/work/etc/sbnb/mqtt.conf <<EOF
+cat > /mnt/work/etc/reefy/mqtt.conf <<EOF
 MQTT_BROKER=mqtt.example.com
 MQTT_PORT=8883
 EOF
@@ -1064,7 +1064,7 @@ Your devices will connect to your MQTT broker.
 
 3. **Credential Storage:**
    - Bootstrap cert embedded in image (read-only filesystem)
-   - Device cert stored in /mnt/sbnb-data (persistent, writable, LUKS-encrypted)
+   - Device cert stored in /mnt/reefy-data (persistent, writable, LUKS-encrypted)
    - Private keys generated on device, never transmitted over network (CSR-based provisioning)
 
 4. **CSR-Based Provisioning:**

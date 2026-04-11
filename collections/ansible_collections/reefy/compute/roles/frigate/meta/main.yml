@@ -1,0 +1,21 @@
+---
+galaxy_info:
+  author: Reefy Team
+  description: Run Frigate NVR with GPU support
+  version: "1.0.0"
+  license: MIT
+  logo_url: ""
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+  galaxy_tags:
+    - frigate
+    - nvr
+    - security
+    - camera
+    - nvidia
+
+dependencies: []

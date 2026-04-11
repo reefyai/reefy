@@ -1,3 +1,6 @@
-# Locally computed (identical content to upstream tailscale-1.94.2)
-sha256  7679024fcd21b6021e80fd5d9695004e3172a35d035a965db7b1c0e0c100a48b  tailscale-reefy-1.94.2-go2.tar.gz
+# Locally computed. The go2.tar.gz is buildroot's golang-package vendored
+# source tarball. Its hash depends on the package name because the
+# top-level directory inside the tarball is tailscale-reefy-<version>/,
+# not tailscale-<version>/, so we can't reuse the upstream tailscale hash.
+sha256  37256f200fb235a63bc11c63f9bf55c3369544b1817ed7e620102a0b544ad556  tailscale-reefy-1.94.2-go2.tar.gz
 sha256  d1ee1c7947d4b2c1963ea214d5324f1d4c89f2f1d0f0224889b4dfb868dad725  LICENSE

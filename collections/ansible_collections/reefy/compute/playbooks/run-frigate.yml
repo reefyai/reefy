@@ -1,0 +1,36 @@
+---
+# Run Frigate NVR
+#
+# Prerequisites (one time):
+#   ansible-galaxy install -r requirements.yml
+#
+# Usage:
+#   Start Frigate:
+#     ansible-playbook -i host, playbooks/run-frigate.yml
+#
+#   With local config file:
+#     ansible-playbook -i host, playbooks/run-frigate.yml \
+#       -e reefy_frigate_local_config=./my-frigate-config.yaml
+#
+#   Stop Frigate:
+#     ansible-playbook -i host, playbooks/run-frigate.yml -e reefy_frigate_state=absent
+
+- name: Deploy Frigate NVR
+  hosts: "{{ target_hosts | default('all') }}"
+  become: true
+  gather_facts: false
+
+  pre_tasks:
+    - name: Wait for host to become reachable
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+        delay: 5
+
+    - name: Gather facts
+      ansible.builtin.setup:
+
+  roles:
+    - role: reefy.compute.docker_vm
+    - role: reefy.compute.nvidia
+      when: ansible_os_family == "Debian"
+    - role: reefy.compute.frigate

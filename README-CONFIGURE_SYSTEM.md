@@ -2,9 +2,9 @@
 
 ## Overview
 
-Sbnb Linux boots a bare-metal server into a baseline usable state. In this state, the bare-metal server is accessible via SSH over a WireGuard tunnel (Tailscale). Once connected, further configuration can be performed remotely using automation tools. Ansible has been chosen as a simple, stable, and widely used solution.
+Reefy Linux boots a bare-metal server into a baseline usable state. In this state, the bare-metal server is accessible via SSH over a WireGuard tunnel (Tailscale). Once connected, further configuration can be performed remotely using automation tools. Ansible has been chosen as a simple, stable, and widely used solution.
 
-## Sbnb Linux Lifetime Stages
+## Reefy Linux Lifetime Stages
 
 ### **Stage 1:** Boot Bare Metal Server
 - The server boots from a USB flash drive into a minimalist in-memory environment.
@@ -25,7 +25,7 @@ The automation system configures the server by executing specific tasks:
 - Allocates 100% free space to LVM.
 - Combines all available drives into a single flat space (similar to RAID0).
 - Creates Physical Volume (PV), Volume Group (VG), and Logical Volume (LV).
-- Formats the LV to `ext4` and mounts it at `/mnt/sbnb-data`.
+- Formats the LV to `ext4` and mounts it at `/mnt/reefy-data`.
 
 This staged approach enables scalable configurations, from small test labs to massive AI training data centers.
 
@@ -33,34 +33,34 @@ This staged approach enables scalable configurations, from small test labs to ma
 
 ## Step-by-Step Guide
 
-### **1. Boot Bare Metal Server into Sbnb Linux**
+### **1. Boot Bare Metal Server into Reefy Linux**
 Follow the instructions in [README-INSTALL.md](README-INSTALL.md). After booting, ensure the server appears in your **Tailscale machine list**.
 
 ### **2. Connect Your Laptop to Tailscale**
 This guide assumes a MacBook, but any Linux-based machine will work similarly.
 
-### **3. Clone the Sbnb Repository**
+### **3. Clone the Reefy Repository**
 ```sh
-git clone https://github.com/sbnb-io/sbnb.git
-cd sbnb
+git clone https://github.com/reefyai/reefy.git
+cd reefy
 ```
 
-Under the hood, the Ansible playbook uses three roles from the `sbnb.compute` collection:
-- **[storage](https://github.com/sbnb-io/sbnb/tree/main/collections/ansible_collections/sbnb/compute/roles/storage)** - Configures LVM storage from available drives
-- **[networking](https://github.com/sbnb-io/sbnb/tree/main/collections/ansible_collections/sbnb/compute/roles/networking)** - Sets up bridge networking (br0 for wired, virbr0 NAT for WiFi)
-- **[docker](https://github.com/sbnb-io/sbnb/tree/main/collections/ansible_collections/sbnb/compute/roles/docker)** - Configures Docker daemon to use the storage mount
+Under the hood, the Ansible playbook uses three roles from the `reefy.compute` collection:
+- **[storage](https://github.com/reefyai/reefy/tree/main/collections/ansible_collections/reefy/compute/roles/storage)** - Configures LVM storage from available drives
+- **[networking](https://github.com/reefyai/reefy/tree/main/collections/ansible_collections/reefy/compute/roles/networking)** - Sets up bridge networking (br0 for wired, virbr0 NAT for WiFi)
+- **[docker](https://github.com/reefyai/reefy/tree/main/collections/ansible_collections/reefy/compute/roles/docker)** - Configures Docker daemon to use the storage mount
 
-For implementation details, see the [roles directory](https://github.com/sbnb-io/sbnb/tree/main/collections/ansible_collections/sbnb/compute/roles).
+For implementation details, see the [roles directory](https://github.com/reefyai/reefy/tree/main/collections/ansible_collections/reefy/compute/roles).
 
 ### **4. Run Ansible Playbook**
 
 Tailscale's Magic DNS allows you to use hostnames directly:
 ```sh
-ansible-playbook -i sbnb-F6S0R8000719, \
-  collections/ansible_collections/sbnb/compute/playbooks/configure-system.yml
+ansible-playbook -i reefy-F6S0R8000719, \
+  collections/ansible_collections/reefy/compute/playbooks/configure-system.yml
 ```
 
-Replace `sbnb-F6S0R8000719` with your server's Tailscale hostname.
+Replace `reefy-F6S0R8000719` with your server's Tailscale hostname.
 
 **Congratulations!** Your storage and network configurations are now automated!
 
@@ -92,32 +92,32 @@ sdc      8:32   0 476.9G  0 disk
 ```
 
 ### **Post-Configuration Server State**
-The disks are combined into an LVM volume, formatted as `ext4`, and mounted at `/mnt/sbnb-data`.
+The disks are combined into an LVM volume, formatted as `ext4`, and mounted at `/mnt/reefy-data`.
 
 #### **Disks After Running Ansible Playbook**
 
-![Sbnb storage - The disks are combined into an LVM volume, formatted as ext4, and mounted at /mnt/sbnb-data.](images/sbnb-storage.png)
+![Reefy storage - The disks are combined into an LVM volume, formatted as ext4, and mounted at /mnt/reefy-data.](images/reefy-storage.png)
 
 
 ```sh
 # lsblk
 NAME                MAJ:MIN RM   SIZE RO TYPE MOUNTPOINTS
 sda                   8:0    0 476.9G  0 disk
-`-sbnb--vg-sbnb--lv 253:0    0   1.4T  0 lvm  /mnt/sbnb-data
+`-reefy--vg-reefy--lv 253:0    0   1.4T  0 lvm  /mnt/reefy-data
 sdb                   8:16   0 476.9G  0 disk
-`-sbnb--vg-sbnb--lv 253:0    0   1.4T  0 lvm  /mnt/sbnb-data
+`-reefy--vg-reefy--lv 253:0    0   1.4T  0 lvm  /mnt/reefy-data
 sdc                   8:32   0 476.9G  0 disk
-`-sbnb--vg-sbnb--lv 253:0    0   1.4T  0 lvm  /mnt/sbnb-data
+`-reefy--vg-reefy--lv 253:0    0   1.4T  0 lvm  /mnt/reefy-data
 
 # df -h
-/dev/mapper/sbnb--vg-sbnb--lv 1.4T      2.3M      1.4T   0% /mnt/sbnb-data
+/dev/mapper/reefy--vg-reefy--lv 1.4T      2.3M      1.4T   0% /mnt/reefy-data
 ```
 
 
 
 #### **Network After Running Ansible Playbook**
 
-![Sbnb net - The main Ethernet interface is attached to a Linux bridge br0](images/sbnb-net.png)
+![Reefy net - The main Ethernet interface is attached to a Linux bridge br0](images/reefy-net.png)
 
 The main Ethernet interface is attached to a Linux bridge (`br0`).
 ```sh

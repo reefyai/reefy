@@ -1,0 +1,16 @@
+[Match]
+Name={{ reefy_bridge_name }}
+
+[Network]
+{% if reefy_bridge_dhcp %}
+DHCP=yes
+{% else %}
+Address={{ reefy_bridge_address }}
+Gateway={{ reefy_bridge_gateway }}
+{% for dns in reefy_bridge_dns | default([]) %}
+DNS={{ dns }}
+{% endfor %}
+{% endif %}
+
+[DHCP]
+RouteMetric=100

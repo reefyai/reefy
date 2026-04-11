@@ -1,0 +1,17 @@
+---
+# RAGFlow role defaults
+
+# Container state
+reefy_ragflow_state: started
+reefy_ragflow_pull: missing  # Only pull if not present locally
+reefy_ragflow_recreate: auto
+
+# RAGFlow image version
+reefy_ragflow_image: "infiniflow/ragflow:v0.17.2"
+
+# Git repository
+reefy_ragflow_repo: "https://github.com/infiniflow/ragflow"
+reefy_ragflow_version: main
+
+# Source path
+reefy_ragflow_src_path: /mnt/reefy-data/src/ragflow

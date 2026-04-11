@@ -1,4 +1,4 @@
-# Build Sbnb Linux Image
+# Build Reefy Linux Image
 
 ## Prerequisites
 
@@ -17,8 +17,8 @@ sudo apt-get install -y build-essential sed make binutils diffutils gcc g++ \
 Clone the repository and initialize submodules:
 
 ```bash
-git clone https://github.com/sbnb-io/sbnb.git
-cd sbnb
+git clone https://github.com/reefyai/reefy.git
+cd reefy
 git submodule init
 git submodule update
 ```
@@ -27,7 +27,7 @@ Start the build:
 
 ```bash
 cd buildroot
-make BR2_EXTERNAL=.. sbnb_defconfig
+make BR2_EXTERNAL=.. reefy_defconfig
 make -j $(nproc)
 ```
 
@@ -37,18 +37,18 @@ After a successful build, the following files are generated in `output/images/`:
 
 | File | Description |
 |------|-------------|
-| `sbnb.efi` | UEFI bootable Sbnb image in Unified Kernel Image (UKI) format. Integrates the Linux kernel, kernel arguments (cmdline), and initramfs into a single image. |
-| `sbnb.raw` | Disk image ready to be written directly to a USB flash drive. Features a GPT partition table and a bootable VFAT partition containing `sbnb.efi`. |
+| `reefy.efi` | UEFI bootable Reefy image in Unified Kernel Image (UKI) format. Integrates the Linux kernel, kernel arguments (cmdline), and initramfs into a single image. |
+| `reefy.raw` | Disk image ready to be written directly to a USB flash drive. Features a GPT partition table and a bootable VFAT partition containing `reefy.efi`. |
 
 ## Quick Test
 
 Test the build locally using QEMU:
 
 ```bash
-./scripts/sbnb-local-boot.sh
+./scripts/reefy-local-boot.sh
 ```
 
-This script automatically detects OVMF BIOS and boots the `sbnb.raw` image in QEMU with appropriate settings.
+This script automatically detects OVMF BIOS and boots the `reefy.raw` image in QEMU with appropriate settings.
 
 Additional options:
 - `-disk <path>` - Boot a custom disk image
@@ -60,8 +60,8 @@ Additional options:
 Example:
 ```bash
 # Boot with read-only snapshot mode
-./scripts/sbnb-local-boot.sh -snapshot
+./scripts/reefy-local-boot.sh -snapshot
 
 # Boot custom image with bridge networking
-./scripts/sbnb-local-boot.sh -disk /path/to/custom.raw -net bridge
+./scripts/reefy-local-boot.sh -disk /path/to/custom.raw -net bridge
 ```

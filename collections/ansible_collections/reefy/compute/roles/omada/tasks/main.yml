@@ -1,0 +1,55 @@
+---
+# Omada role - runs TP-Link Omada Controller
+# Source: run-omada.yaml
+
+- name: Ensure data directory exists
+  ansible.builtin.file:
+    path: "{{ reefy_omada_data_path }}"
+    state: directory
+    mode: '0755'
+  when: reefy_omada_state == 'started'
+
+- name: Ensure logs directory exists
+  ansible.builtin.file:
+    path: "{{ reefy_omada_logs_path }}"
+    state: directory
+    mode: '0755'
+  when: reefy_omada_state == 'started'
+
+- name: Start TP-Link Omada Controller
+  community.docker.docker_container:
+    name: "{{ reefy_omada_container_name }}"
+    image: "{{ reefy_omada_image }}"
+    state: started
+    pull: "{{ reefy_omada_pull }}"
+    recreate: "{{ reefy_omada_recreate }}"
+    network_mode: host
+    stop_timeout: 60
+    env:
+      TZ: "{{ reefy_omada_timezone }}"
+    ulimits:
+      - nofile:4096:8192
+    volumes:
+      - "{{ reefy_omada_data_path }}:/opt/tplink/EAPController/data"
+      - "{{ reefy_omada_logs_path }}:/opt/tplink/EAPController/logs"
+  register: container_result
+  retries: 40
+  delay: 15
+  until: container_result is succeeded
+  when: reefy_omada_state == 'started'
+
+- name: Stop Omada Controller
+  community.docker.docker_container:
+    name: "{{ reefy_omada_container_name }}"
+    state: absent
+  when: reefy_omada_state == 'absent'
+
+- name: Display Omada status
+  ansible.builtin.debug:
+    msg: |
+      TP-Link Omada Controller:
+        Name: {{ reefy_omada_container_name }}
+        State: {{ reefy_omada_state }}
+        Image: {{ reefy_omada_image }}
+        Web UI: https://{{ inventory_hostname }}:8043/
+  when: reefy_omada_state == 'started'

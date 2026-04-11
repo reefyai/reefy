@@ -1,0 +1,10 @@
+---
+# GPU Fryer role defaults
+
+# Container configuration
+reefy_gpu_fryer_container_name: gpu-fryer
+reefy_gpu_fryer_image: ghcr.io/huggingface/gpu-fryer:latest
+reefy_gpu_fryer_state: started
+
+# Duration in seconds (default 60 seconds)
+reefy_gpu_fryer_duration: 60

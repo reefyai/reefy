@@ -1,0 +1,27 @@
+---
+# Ollama role defaults
+
+# Container configuration
+reefy_ollama_container_name: ollama
+reefy_ollama_image: ollama/ollama:latest
+reefy_ollama_state: started
+reefy_ollama_pull: false  # Only pull when explicitly needed
+reefy_ollama_recreate: false
+
+# Port (Ollama listens on 11434)
+reefy_ollama_port: 11434
+
+# Network mode: "host" (default) or custom Docker network name
+# When using a custom network, OpenClaw can reach Ollama by container name
+# Example: reefy_ollama_network: reefy
+reefy_ollama_network: ""
+
+# Storage path for models
+reefy_ollama_data_path: /mnt/reefy-data/ollama
+
+# Models to pull after start
+reefy_ollama_models: []
+# Example:
+# reefy_ollama_models:
+#   - llama3.1:8b
+#   - qwen3:0.6b

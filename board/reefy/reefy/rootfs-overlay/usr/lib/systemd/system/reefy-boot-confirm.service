@@ -1,0 +1,11 @@
+[Unit]
+Description=reefy A/B boot slot confirmation
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/reefy-boot-confirm
+TimeoutStartSec=360
+
+[Install]
+WantedBy=multi-user.target

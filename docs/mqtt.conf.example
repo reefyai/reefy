@@ -1,5 +1,5 @@
 # MQTT Broker Configuration Example
-# Copy this file to your USB flash drive: /mnt/sbnb/mqtt/mqtt.conf
+# Copy this file to your USB flash drive: /mnt/reefy/mqtt/mqtt.conf
 # Customize the values below for your MQTT broker setup
 
 # MQTT Broker hostname or IP address
@@ -11,15 +11,15 @@ MQTT_PORT=8883
 # Keepalive interval in seconds (recommended: 60)
 MQTT_KEEPALIVE=60
 
-# Certificate paths (these are copied from USB to /etc/sbnb/mqtt/ at boot)
-# After provisioning, device cert will be in /mnt/sbnb-data/state/
-MQTT_CA_CERT=/etc/sbnb/mqtt/ca.crt
-MQTT_CLIENT_CERT=/etc/sbnb/mqtt/bootstrap.crt
-MQTT_CLIENT_KEY=/etc/sbnb/mqtt/bootstrap.key
+# Certificate paths (these are copied from USB to /etc/reefy/mqtt/ at boot)
+# After provisioning, device cert will be in /mnt/reefy-data/state/
+MQTT_CA_CERT=/etc/reefy/mqtt/ca.crt
+MQTT_CLIENT_CERT=/etc/reefy/mqtt/bootstrap.crt
+MQTT_CLIENT_KEY=/etc/reefy/mqtt/bootstrap.key
 
-# Topic prefix (optional, defaults to "sbnb")
+# Topic prefix (optional, defaults to "reefy")
 # Useful for multi-tenant or development/production separation
-# MQTT_TOPIC_PREFIX=sbnb-dev
+# MQTT_TOPIC_PREFIX=reefy-dev
 
 # QoS levels (optional, defaults shown)
 # MQTT_QOS=1

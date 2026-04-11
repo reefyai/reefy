@@ -1,0 +1,20 @@
+---
+galaxy_info:
+  author: Reefy Team
+  description: Run OpenClaw AI gateway as a Docker container
+  version: "1.0.0"
+  license: MIT
+  min_ansible_version: "2.14"
+  logo_url: ""
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+  galaxy_tags:
+    - openclaw
+    - ai
+    - llm
+    - gateway
+
+dependencies: []

@@ -1,7 +1,0 @@
----
-- hosts: all
-  gather_facts: true
-  ignore_unreachable: true
-
-  roles:
-    - role: sbnb.compute.sysbench

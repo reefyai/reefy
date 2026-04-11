@@ -1,0 +1,42 @@
+---
+# RAGFlow role - runs RAGFlow RAG platform
+# Source: run-ragflow.yaml
+
+- name: Clone RAGFlow repository
+  ansible.builtin.git:
+    repo: "{{ reefy_ragflow_repo }}"
+    version: "{{ reefy_ragflow_version }}"
+    force: true
+    dest: "{{ reefy_ragflow_src_path }}"
+  when: reefy_ragflow_state == 'started'
+
+- name: Start RAGFlow with docker-compose
+  community.docker.docker_compose_v2:
+    project_src: "{{ reefy_ragflow_src_path }}/docker"
+    files: docker-compose.yml
+    state: present
+    pull: "{{ reefy_ragflow_pull }}"
+    recreate: "{{ reefy_ragflow_recreate }}"
+  environment:
+    RAGFLOW_IMAGE: "{{ reefy_ragflow_image }}"
+  register: compose_result
+  retries: 40
+  delay: 15
+  until: compose_result is succeeded
+  when: reefy_ragflow_state == 'started'
+
+- name: Stop RAGFlow
+  community.docker.docker_compose_v2:
+    project_src: "{{ reefy_ragflow_src_path }}/docker"
+    files: docker-compose.yml
+    state: absent
+  when: reefy_ragflow_state == 'absent'
+
+- name: Display RAGFlow status
+  ansible.builtin.debug:
+    msg: |
+      RAGFlow:
+        State: {{ reefy_ragflow_state }}
+        Image: {{ reefy_ragflow_image }}
+        Source: {{ reefy_ragflow_src_path }}
+  when: reefy_ragflow_state == 'started'

@@ -1,0 +1,8 @@
+---
+# Docker VM role defaults
+
+# Docker data root path
+reefy_docker_vm_data_root: /mnt/reefy-data/docker
+
+# Containerd data root path (where images are actually stored)
+reefy_docker_vm_containerd_root: /mnt/reefy-data/containerd

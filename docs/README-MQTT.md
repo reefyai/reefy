@@ -1,10 +1,10 @@
-# MQTT Configuration for SBNB
+# MQTT Configuration for Reefy
 
-This document describes how to configure MQTT+mTLS communication for SBNB devices as an alternative or addition to Tailscale connectivity.
+This document describes how to configure MQTT+mTLS communication for Reefy devices as an alternative or addition to Tailscale connectivity.
 
 ## Overview
 
-SBNB supports MQTT with mutual TLS (mTLS) authentication for secure device-to-console communication. This enables:
+Reefy supports MQTT with mutual TLS (mTLS) authentication for secure device-to-console communication. This enables:
 
 - **Event-driven configuration management** - devices receive commands and configurations without polling
 - **Self-hosted deployments** - run your own MQTT broker instead of relying on external services
@@ -24,7 +24,7 @@ The reconciler service runs continuously, listening for configuration updates an
 Place MQTT configuration on your USB flash drive alongside Tailscale keys:
 
 ```
-/mnt/sbnb/
+/mnt/reefy/
 ├── tailscale/
 │   └── tskey-*.txt          # Optional: Tailscale auth key
 └── mqtt/                     # MQTT configuration bundle
@@ -44,13 +44,13 @@ MQTT_BROKER=mqtt.example.com
 MQTT_PORT=8883
 MQTT_KEEPALIVE=60
 
-# Certificate paths (relative to /etc/sbnb/mqtt/ or /mnt/sbnb-data/state/)
-MQTT_CA_CERT=/etc/sbnb/mqtt/ca.crt
-MQTT_CLIENT_CERT=/etc/sbnb/mqtt/bootstrap.crt
-MQTT_CLIENT_KEY=/etc/sbnb/mqtt/bootstrap.key
+# Certificate paths (relative to /etc/reefy/mqtt/ or /mnt/reefy-data/state/)
+MQTT_CA_CERT=/etc/reefy/mqtt/ca.crt
+MQTT_CLIENT_CERT=/etc/reefy/mqtt/bootstrap.crt
+MQTT_CLIENT_KEY=/etc/reefy/mqtt/bootstrap.key
 
-# Topic prefix (optional, defaults to sbnb)
-# MQTT_TOPIC_PREFIX=sbnb
+# Topic prefix (optional, defaults to reefy)
+# MQTT_TOPIC_PREFIX=reefy
 ```
 
 ## Certificate Management
@@ -65,7 +65,7 @@ MQTT_CLIENT_KEY=/etc/sbnb/mqtt/bootstrap.key
 ### Device Certificates (Individual)
 
 - Assigned after successful registration
-- Stored in `/mnt/sbnb-data/state/` (persistent storage)
+- Stored in `/mnt/reefy-data/state/` (persistent storage)
 - Unique per device, identified by UUID
 - Full privileges for that specific device
 
@@ -80,32 +80,32 @@ Root CA
 
 ## Service Behavior
 
-The `sbnb-mqtt.service` systemd unit:
+The `reefy-mqtt.service` systemd unit:
 
-- **Starts automatically** if CA certificate exists at `/etc/sbnb/mqtt/ca.crt`
+- **Starts automatically** if CA certificate exists at `/etc/reefy/mqtt/ca.crt`
 - **Auto-restarts** on failure (network issues, broker downtime)
 - **Resource limited** - max 256MB RAM, 10% CPU quota
 - **Event-driven** - no polling, uses MQTT pub/sub with retain flags
 
 Check service status:
 ```bash
-systemctl status sbnb-mqtt
-journalctl -u sbnb-mqtt -f
+systemctl status reefy-mqtt
+journalctl -u reefy-mqtt -f
 ```
 
 ## MQTT Topics
 
 ### Device → Broker
 
-- `sbnb/devices/bootstrap` - Initial registration (retain flag, QoS 1)
-- `sbnb/devices/{uuid}/status` - Periodic status updates
-- `sbnb/devices/{uuid}/logs` - Log messages (optional)
+- `reefy/devices/bootstrap` - Initial registration (retain flag, QoS 1)
+- `reefy/devices/{uuid}/status` - Periodic status updates
+- `reefy/devices/{uuid}/logs` - Log messages (optional)
 
 ### Broker → Device
 
-- `sbnb/devices/{uuid}/config` - Configuration updates (retain flag, QoS 1)
-- `sbnb/devices/{uuid}/commands` - One-time commands (QoS 1)
-- `sbnb/devices/{uuid}/provision` - Provisioning response with certificates
+- `reefy/devices/{uuid}/config` - Configuration updates (retain flag, QoS 1)
+- `reefy/devices/{uuid}/commands` - One-time commands (QoS 1)
+- `reefy/devices/{uuid}/provision` - Provisioning response with certificates
 
 ## Message Formats
 
@@ -114,7 +114,7 @@ journalctl -u sbnb-mqtt -f
 ```json
 {
   "mac": "00:11:22:33:44:55",
-  "hostname": "sbnb-0011223344",
+  "hostname": "reefy-0011223344",
   "image_version": "1.0.0",
   "timestamp": "2026-03-06T12:00:00Z"
 }
@@ -148,27 +148,27 @@ journalctl -u sbnb-mqtt -f
 
 Check if CA certificate exists:
 ```bash
-ls -l /etc/sbnb/mqtt/ca.crt
+ls -l /etc/reefy/mqtt/ca.crt
 ```
 
 View service conditions:
 ```bash
-systemctl show sbnb-mqtt | grep Condition
+systemctl show reefy-mqtt | grep Condition
 ```
 
 ### Connection Issues
 
 Verify certificates:
 ```bash
-openssl verify -CAfile /etc/sbnb/mqtt/ca.crt /etc/sbnb/mqtt/bootstrap.crt
+openssl verify -CAfile /etc/reefy/mqtt/ca.crt /etc/reefy/mqtt/bootstrap.crt
 ```
 
 Test broker connectivity:
 ```bash
 mosquitto_pub -h mqtt.example.com -p 8883 \
-  --cafile /etc/sbnb/mqtt/ca.crt \
-  --cert /etc/sbnb/mqtt/bootstrap.crt \
-  --key /etc/sbnb/mqtt/bootstrap.key \
+  --cafile /etc/reefy/mqtt/ca.crt \
+  --cert /etc/reefy/mqtt/bootstrap.crt \
+  --key /etc/reefy/mqtt/bootstrap.key \
   -t test -m "hello"
 ```
 
@@ -176,13 +176,13 @@ mosquitto_pub -h mqtt.example.com -p 8883 \
 
 ```bash
 # Follow live logs
-journalctl -u sbnb-mqtt -f
+journalctl -u reefy-mqtt -f
 
 # Show recent logs
-journalctl -u sbnb-mqtt -n 100
+journalctl -u reefy-mqtt -n 100
 
 # Logs since last boot
-journalctl -u sbnb-mqtt -b
+journalctl -u reefy-mqtt -b
 ```
 
 ## Security Considerations
@@ -211,7 +211,7 @@ Both connectivity methods can coexist:
 
 Place both on USB flash:
 ```
-/mnt/sbnb/
+/mnt/reefy/
 ├── tailscale/
 │   └── tskey-*.txt
 └── mqtt/
@@ -225,7 +225,7 @@ Both services will start automatically and operate independently.
 
 ## Example: Self-Hosted EMQX Broker
 
-SBNB provides automated setup scripts in `tools/mqtt/`. Quick setup:
+Reefy provides automated setup scripts in `tools/mqtt/`. Quick setup:
 
 ```bash
 # Generate certificates and start EMQX broker
@@ -246,10 +246,10 @@ Manual EMQX ACL configuration (`acl.conf`):
 ```erlang
 %% Bootstrap certificate can only publish to registration topic
 %% (peer_cert_as_username=cn extracts just "bootstrap" from CN=bootstrap)
-{allow, {user, "bootstrap"}, publish, ["sbnb/devices/bootstrap"]}.
+{allow, {user, "bootstrap"}, publish, ["reefy/devices/bootstrap"]}.
 
 %% Any authenticated user can access their own topics
-{allow, all, all, ["sbnb/devices/${username}/#"]}.
+{allow, all, all, ["reefy/devices/${username}/#"]}.
 
 %% Deny all other access
 {deny, all}.
@@ -263,13 +263,13 @@ To disable MQTT support:
 
 1. Remove the `mqtt/` directory from USB flash
 2. Service won't start (condition check fails)
-3. Or explicitly disable: `systemctl disable sbnb-mqtt`
+3. Or explicitly disable: `systemctl disable reefy-mqtt`
 
 No need to rebuild the image - MQTT support is always present but conditionally activated.
 
 ## EMQX Broker
 
-SBNB uses EMQX as the recommended MQTT broker for its enterprise features:
+Reefy uses EMQX as the recommended MQTT broker for its enterprise features:
 
 - **Web Dashboard** - Real-time monitoring at http://localhost:18083 (default: admin/public)
 - **Multi-tenancy** - Native support for isolating different deployments

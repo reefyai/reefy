@@ -1,0 +1,67 @@
+---
+# Frigate role defaults
+
+# Container configuration
+reefy_frigate_container_name: frigate
+reefy_frigate_image: ghcr.io/blakeblackshear/frigate:0.16.0-tensorrt
+reefy_frigate_state: started
+reefy_frigate_pull: missing  # Only pull if not present locally
+reefy_frigate_recreate: true
+reefy_frigate_shm_size: "512M"
+
+# Ports
+reefy_frigate_ports:
+  - "8971:8971"
+  - "8554:8554"
+  - "8555:8555/tcp"
+  - "8555:8555/udp"
+
+# Storage paths
+# Convention: {data_disk_mount}/{app_name}/{volume_name}
+reefy_frigate_config_path: /mnt/reefy-data/frigate/config
+reefy_frigate_media_path: /mnt/reefy-data/frigate/media
+
+# Optional local config file to copy
+# reefy_frigate_local_config: frigate-config.yaml
+
+# Force overwrite config on server (use with reefy_frigate_local_config)
+reefy_frigate_config_force: false
+
+# Models container image (pulls model files from container)
+reefy_frigate_models_image: reefy/frigate-models:latest
+
+# Optional model file to copy (deprecated, use models_image instead)
+# reefy_frigate_model_file: yolo_nas_s.onnx
+
+# List of extra files to copy to config directory (models, certificates, etc.)
+# reefy_frigate_extra_files:
+#   - /path/to/yolo_nas_s.onnx
+#   - /path/to/another_model.pt
+#   - relative/path/to/file.txt
+
+# Additional environment variables (dict)
+# reefy_frigate_env: {}
+
+# Authentication (set to false to disable auth behind Tailscale)
+reefy_frigate_auth_enabled: true
+
+# Note: If auth is enabled, password is auto-generated on first run and displayed in playbook output.
+# To reset password: add 'auth: { reset_admin_password: true }' to config.yaml
+
+# Reefy App Spec: Volume declarations
+# The platform uses these to manage host storage, Docker mounts, and backups.
+reefy_frigate_volumes:
+  - name: config
+    container_path: /config
+    backup: true
+    description: "Frigate configuration and camera settings"
+  - name: media
+    container_path: /media/frigate
+    backup: false
+    description: "Video recordings and snapshots (large, not backed up)"
+
+# Reefy App Spec: HTTPS port mappings
+# The platform uses these to configure Tailscale Serve automatically.
+reefy_frigate_https_ports:
+  - listen: 8443
+    target: 8971

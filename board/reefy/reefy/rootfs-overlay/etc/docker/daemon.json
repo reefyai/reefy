@@ -1,0 +1,9 @@
+{
+    "data-root": "/mnt/reefy-data/docker",
+    "builder": {
+        "gc": {
+            "defaultKeepStorage": "0",
+            "enabled": true
+        }
+    }
+}

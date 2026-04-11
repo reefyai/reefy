@@ -1,4 +1,4 @@
-# Confidential Computing Virtual Machine on Sbnb Linux
+# Confidential Computing Virtual Machine on Reefy Linux
 
 ## Overview
 
@@ -10,14 +10,14 @@ Confidential Computing encrypts the memory and CPU states of the virtual machine
 
 - **Bare Metal Server** with **AMD SEV-SNP** support enabled in BIOS.
     - For example, take a look at this [Reddit post](https://www.reddit.com/r/homelab/comments/1hmnnwg/built_a_powerful_and_silent_amd_epyc_home_server/) where we built a powerful and quiet AMD EPYC 3rd Gen home server together with my kids.
-- **Sbnb Linux Boot**:
-    - Refer to the [README-INSTALL.md](README-INSTALL.md) for instructions on how to boot your server into Sbnb Linux.
+- **Reefy Linux Boot**:
+    - Refer to the [README-INSTALL.md](README-INSTALL.md) for instructions on how to boot your server into Reefy Linux.
 
 ## Step-by-step Guide
 
 ### 1. SSH into Bare Metal Server
 
-Ensure your bare metal server is booted into Sbnb Linux and SSH into it using Tailscale.
+Ensure your bare metal server is booted into Reefy Linux and SSH into it using Tailscale.
 
 ```
 ssh user@your-server-tailscale-name-or-ip
@@ -40,26 +40,26 @@ If SEV-SNP is enabled, the command will show a `PASS` messages. Errors indicate 
 Launch a pre-built Docker container with SVSM, OVMF, and QEMU that supports AMD SEV-SNP:
 
 ```
-docker run -it --privileged -v /dev/kvm:/dev/kvm -v /dev/sev:/dev/sev sbnb/svsm bash
+docker run -it --privileged -v /dev/kvm:/dev/kvm -v /dev/sev:/dev/sev reefy/svsm bash
 ```
-Note: For those interested, here is a link to the [Dockerfile](https://github.com/sbnb-io/sbnb/blob/main/containers/svsm/Dockerfile) for exploration.
+Note: For those interested, here is a link to the [Dockerfile](https://github.com/reefyai/reefy/blob/main/containers/svsm/Dockerfile) for exploration.
 It is based on the official SVSM documentation. We created it to simplify the process of building Confidential Computing (CC) software.
 
-### 4. Download Sbnb Linux Image
+### 4. Download Reefy Linux Image
 
-Download the Sbnb Linux `sbnb.raw` image from the official release page:
+Download the Reefy Linux `reefy.raw` image from the official release page:
 
-https://github.com/sbnb-io/sbnb/releases
+https://github.com/reefyai/reefy/releases
 
 ### 5. Inject Tailscale Key into Image
 
 Prepare the image by injecting your actual Tailscale key:
 
 ```
-mkdir sbnb
-mount -o offset=$((2048*512)) sbnb.raw sbnb
-echo tskey-auth-YOUR-KEY > sbnb/sbnb-tskey.txt
-umount sbnb
+mkdir reefy
+mount -o offset=$((2048*512)) reefy.raw reefy
+echo tskey-auth-YOUR-KEY > reefy/reefy-tskey.txt
+umount reefy
 ```
 
 ### 6. Start Confidential Computing VM
@@ -68,7 +68,7 @@ Set environment variables and start the VM:
 
 ```
 export IGVM=/usr/qemu-svsm/coconut-qemu.igvm
-export BOOT_IMAGE=sbnb.raw
+export BOOT_IMAGE=reefy.raw
 export VCPU=16
 export MEM=32G
 
@@ -93,9 +93,9 @@ export MEM=32G
 Once the VM is up, perform remote attestation to verify its integrity. Use the following command:
 
 ```
-docker run -it sbnb/remote-attestation remote-attestation.sh root@<vm-ip>
+docker run -it reefy/remote-attestation remote-attestation.sh root@<vm-ip>
 ```
-Note: If you're interested, check out this [link](https://github.com/sbnb-io/sbnb/tree/main/containers/remote-attestation) to the container referenced in the command above.
+Note: If you're interested, check out this [link](https://github.com/reefyai/reefy/tree/main/containers/remote-attestation) to the container referenced in the command above.
 It simplifies the remote attestation process for Confidential Computing (CC) VMs.
 
 Example output for successful attestation:
@@ -105,7 +105,7 @@ Example output for successful attestation:
 Below is the same output, duplicated as text for reference.
 
 ```
-# docker run -it sbnb/remote-attestation remote-attestation.sh root@100.83.253.96
+# docker run -it reefy/remote-attestation remote-attestation.sh root@100.83.253.96
 Warning: Permanently added '100.83.253.96' (ED25519) to the list of known hosts.
 attestation-report.bin                                                                                                      100% 1184   191.4KB/s   00:00    
 The AMD ARK was self-signed!

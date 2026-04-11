@@ -7,7 +7,7 @@ Desired state is the mechanism for configuring adopted devices. The server build
 ## Data Flow
 
 ```
-Server (reefy-service)                          Device (sbnb-mqtt-reconciler)
+Server (reefy-service)                          Device (reefy-mqtt-reconciler)
        |                                                |
        |-- build_desired_state(uuid)                    |
        |   Queries DB: device, instances, apps          |
@@ -46,7 +46,7 @@ Server (reefy-service)                          Device (sbnb-mqtt-reconciler)
     }
   },
   "app_volumes": [
-    { "path": "/mnt/sbnb-data/apps/<instance>/<vol>", "uid": 1000, "seed_files": {"...": "base64..."} }
+    { "path": "/mnt/reefy-data/apps/<instance>/<vol>", "uid": 1000, "seed_files": {"...": "base64..."} }
   ],
   "wifi": { "ssid": "MyNetwork", "password": "..." },
   "storage": {
@@ -91,14 +91,14 @@ State is pushed via MQTT `apply_state` command in these scenarios:
 3. **Config change** — User modifies services, WiFi, storage, or device name via dashboard → server pushes updated state
 4. **Manual sync** — User clicks "Sync State" in dashboard
 
-## Device Side (`sbnb-mqtt-reconciler`)
+## Device Side (`reefy-mqtt-reconciler`)
 
 ### File paths
 
 | Path | Purpose |
 |------|---------|
-| `/mnt/sbnb-data/state/desired-state.json` | Persisted desired state (survives reboots) |
-| `/mnt/sbnb-data/state/docker-compose.json` | Generated compose file (written from state) |
+| `/mnt/reefy-data/state/desired-state.json` | Persisted desired state (survives reboots) |
+| `/mnt/reefy-data/state/docker-compose.json` | Generated compose file (written from state) |
 
 ### Apply sequence (`_apply_desired_state`)
 

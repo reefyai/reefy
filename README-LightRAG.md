@@ -5,7 +5,7 @@
 
 This guide walks you through setting up a full RAG pipeline on your own bare metal server in just minutes. You'll launch:
 
-- A bare metal server with Nvidia GPUs running **Sbnb Linux**
+- A bare metal server with Nvidia GPUs running **Reefy Linux**
 - A **VM with Ubuntu 24.04**
 - The open-source [**LightRAG**](https://github.com/HKUDS/LightRAG) project
 - PDF uploads to LightRAG to extract knowledge
@@ -40,7 +40,7 @@ This guide walks you through setting up a full RAG pipeline on your own bare met
 
 ## Prerequisites
 
-- Boot Bare Metal server into Sbnb Linux. Read more at [README-INSTALL.md](README-INSTALL.md).
+- Boot Bare Metal server into Reefy Linux. Read more at [README-INSTALL.md](README-INSTALL.md).
 - One or more Nvidia GPUs attached to the Bare Metal server
 - Laptop with [Tailscale](https://tailscale.com/) configured to access the bare metal server for configuration.
 
@@ -48,11 +48,11 @@ This guide walks you through setting up a full RAG pipeline on your own bare met
 
 ## Step-by-Step Setup
 
-### 1. Boot Bare Metal Server into Sbnb Linux
+### 1. Boot Bare Metal Server into Reefy Linux
 
-Follow [README-INSTALL.md](README-INSTALL.md) to boot your server into Sbnb Linux. After boot, verify it appears in your **Tailscale machine list**:
+Follow [README-INSTALL.md](README-INSTALL.md) to boot your server into Reefy Linux. After boot, verify it appears in your **Tailscale machine list**:
 
-![Sbnb Linux: Machine registered in Tailscale](images/serial-number-tailscale.png)
+![Reefy Linux: Machine registered in Tailscale](images/serial-number-tailscale.png)
 
 See [README-SERIAL-NUMBER.md](README-SERIAL-NUMBER.md) for automatic hostname assignment.
 
@@ -72,7 +72,7 @@ brew install ansible
 
 At this point, your network should resemble the diagram below - with both your laptop and server able to communicate directly over the Tailscale network.
 
-![Sbnb Linux: laptop and server able to communicate directly over the Tailscale network](images/sbnb-control.png)
+![Reefy Linux: laptop and server able to communicate directly over the Tailscale network](images/reefy-control.png)
 
 ### Warning: Run All Commands From Your Laptop
 
@@ -80,11 +80,11 @@ All commands below should be executed on your **laptop**, not the server.
 
 ---
 
-### 3. Clone the Sbnb Repository
+### 3. Clone the Reefy Repository
 
 ```sh
-git clone https://github.com/sbnb-io/sbnb.git
-cd sbnb
+git clone https://github.com/reefyai/reefy.git
+cd reefy
 ```
 
 ---
@@ -92,37 +92,37 @@ cd sbnb
 ### 4. Start a VM with GPU Passthrough
 
 ```sh
-ansible-playbook -i sbnb-F6S0R8000719, \
-  collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey="tskey-auth-xxxxx" \
-  -e sbnb_vm_attach_gpus=true \
-  -e sbnb_vm_vcpu=8 \
-  -e sbnb_vm_mem=16G \
-  -e sbnb_vm_image_size=100G
+ansible-playbook -i reefy-F6S0R8000719, \
+  collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey="tskey-auth-xxxxx" \
+  -e reefy_vm_attach_gpus=true \
+  -e reefy_vm_vcpu=8 \
+  -e reefy_vm_mem=16G \
+  -e reefy_vm_image_size=100G
 ```
 
-Replace `sbnb-F6S0R8000719` with your server's Tailscale hostname and `tskey-auth-xxxxx` with your Tailscale auth key.
+Replace `reefy-F6S0R8000719` with your server's Tailscale hostname and `tskey-auth-xxxxx` with your Tailscale auth key.
 
 See [README-COLLECTIONS.md](README-COLLECTIONS.md) for all VM options.
 
-You should see the VM appear in Tailscale as `sbnb-vm-<VMID>` (e.g., `sbnb-vm-67f97659333f`).
+You should see the VM appear in Tailscale as `reefy-vm-<VMID>` (e.g., `reefy-vm-67f97659333f`).
 
 > All Nvidia GPUs will be attached using vfio-pci.
 
-![nvidia-vfio-sbnb-linux](images/nvidia-vfio-sbnb-linux.png)
+![nvidia-vfio-reefy-linux](images/nvidia-vfio-reefy-linux.png)
 
 ---
 
 ### 5. Install Docker and NVIDIA Drivers in the VM
 
 ```sh
-export VM_HOST=sbnb-vm-67f97659333f
+export VM_HOST=reefy-vm-67f97659333f
 
 ansible-playbook -i $VM_HOST, \
-  collections/ansible_collections/sbnb/compute/playbooks/install-docker.yml
+  collections/ansible_collections/reefy/compute/playbooks/install-docker.yml
 
 ansible-playbook -i $VM_HOST, \
-  collections/ansible_collections/sbnb/compute/playbooks/install-nvidia.yml
+  collections/ansible_collections/reefy/compute/playbooks/install-nvidia.yml
 ```
 
 ---
@@ -135,7 +135,7 @@ At this point, you have a VM running **Ubuntu 24.04** with **Nvidia GPU** attach
 
 ```bash
 ansible-playbook -i $VM_HOST, \
-  collections/ansible_collections/sbnb/compute/playbooks/run-lightrag.yml
+  collections/ansible_collections/reefy/compute/playbooks/run-lightrag.yml
 ```
 
 This command will:
@@ -155,7 +155,7 @@ This command will:
 Navigate to the VM hostname via Tailscale, using port `8000`. Example URL:
 
 ```
-http://sbnb-vm-67f97659333f:8000/
+http://reefy-vm-67f97659333f:8000/
 ```
 
 ---
@@ -201,8 +201,8 @@ LightRAG responds with the answer **"... $5.0 trillion in FY 2024"** and cites t
 
 ```sh
 ansible-playbook -i $VM_HOST, \
-  collections/ansible_collections/sbnb/compute/playbooks/run-lightrag.yml \
-  -e sbnb_lightrag_state=absent
+  collections/ansible_collections/reefy/compute/playbooks/run-lightrag.yml \
+  -e reefy_lightrag_state=absent
 ```
 
 ---

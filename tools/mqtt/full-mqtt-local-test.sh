@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# SBNB MQTT Local Test Environment
+# Reefy MQTT Local Test Environment
 #
 # Interactive tool that orchestrates the full MQTT provisioning flow:
 # generate certs, start broker, inject config, approve devices, send playbooks.
@@ -10,7 +10,7 @@
 #
 # Options:
 #   -d, --domain IP/HOST    Broker IP/hostname (default: auto-detect)
-#   -i, --image FILE        Disk image path (default: buildroot/output/images/sbnb.raw)
+#   -i, --image FILE        Disk image path (default: buildroot/output/images/reefy.raw)
 #   -h, --help              Show this help message
 #
 # All state is stored in tools/mqtt/mqtt-server/
@@ -76,7 +76,7 @@ if [[ -z "${BROKER_IP}" ]]; then
 fi
 
 if [[ -z "${IMAGE}" ]]; then
-    IMAGE="${PROJECT_ROOT}/buildroot/output/images/sbnb.raw"
+    IMAGE="${PROJECT_ROOT}/buildroot/output/images/reefy.raw"
 fi
 
 # Check basic dependencies
@@ -135,9 +135,9 @@ do_setup() {
         read -r -p "Regenerate? [y/N] " regen
         if [[ "${regen}" != "y" && "${regen}" != "Y" ]]; then
             # Stop stale broker if running (may have wrong volume mounts)
-            if docker ps -q -f name=sbnb-mqtt-broker &>/dev/null; then
-                docker stop sbnb-mqtt-broker &>/dev/null || true
-                docker rm sbnb-mqtt-broker &>/dev/null || true
+            if docker ps -q -f name=reefy-mqtt-broker &>/dev/null; then
+                docker stop reefy-mqtt-broker &>/dev/null || true
+                docker rm reefy-mqtt-broker &>/dev/null || true
             fi
             # Start broker with correct paths
             echo -e "${CYAN}Starting broker...${NC}"
@@ -188,7 +188,7 @@ do_inject() {
     echo -e "${GREEN}Config injected${NC}"
     echo ""
     echo -e "Boot the device in a separate terminal:"
-    echo -e "  ${CYAN}./scripts/sbnb-local-boot.sh${NC}"
+    echo -e "  ${CYAN}./scripts/reefy-local-boot.sh${NC}"
 }
 
 # Action: Approve devices
@@ -401,13 +401,13 @@ do_status() {
 main() {
     while true; do
         echo ""
-        echo -e "${BOLD}SBNB MQTT Local Test Environment${NC}"
+        echo -e "${BOLD}Reefy MQTT Local Test Environment${NC}"
         echo -e "================================="
         echo -e "Broker: ${CYAN}${BROKER_IP}:8883${NC}  Status: $(broker_status)"
         echo -e "Image:  ${DIM}${IMAGE}${NC}"
         echo ""
         echo -e "  [${BOLD}1${NC}] Setup    - Generate certs & start broker"
-        echo -e "  [${BOLD}2${NC}] Inject   - Inject MQTT config into sbnb.raw"
+        echo -e "  [${BOLD}2${NC}] Inject   - Inject MQTT config into reefy.raw"
         echo -e "  [${BOLD}3${NC}] Approve  - Discover & approve pending devices"
         echo -e "  [${BOLD}4${NC}] Playbook - Send ansible playbook to a device"
         echo -e "  [${BOLD}5${NC}] MCL      - Send mgmt config to a device"

@@ -1,6 +1,6 @@
-# SBNB Compute Ansible Collection
+# Reefy Compute Ansible Collection
 
-The `sbnb.compute` collection provides modules and roles for managing QEMU virtual machines with GPU passthrough, Tailscale networking, and optional AMD SEV-SNP confidential computing support.
+The `reefy.compute` collection provides modules and roles for managing QEMU virtual machines with GPU passthrough, Tailscale networking, and optional AMD SEV-SNP confidential computing support.
 
 ## Prerequisites
 
@@ -13,11 +13,11 @@ The `sbnb.compute` collection provides modules and roles for managing QEMU virtu
 Create a VM with all GPUs attached, using maximum available resources:
 
 ```bash
-ansible-playbook -i myhost, collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey=tskey-auth-xxxxx \
-  -e sbnb_vm_name=my-vm \
-  -e sbnb_vm_vcpu=max \
-  -e sbnb_vm_mem=max
+ansible-playbook -i myhost, collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey=tskey-auth-xxxxx \
+  -e reefy_vm_name=my-vm \
+  -e reefy_vm_vcpu=max \
+  -e reefy_vm_mem=max
 ```
 
 Note: The trailing comma after `myhost,` is required for single-host inventory.
@@ -27,20 +27,20 @@ Note: The trailing comma after `myhost,` is required for single-host inventory.
 ### Create a Basic VM
 
 ```bash
-ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey=tskey-auth-xxxxx \
-  -e sbnb_vm_name=dev-vm
+ansible-playbook -i gpu-server, collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey=tskey-auth-xxxxx \
+  -e reefy_vm_name=dev-vm
 ```
 
 ### Create a VM with Custom Resources
 
 ```bash
-ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey=tskey-auth-xxxxx \
-  -e sbnb_vm_name=dev-vm \
-  -e sbnb_vm_vcpu=8 \
-  -e sbnb_vm_mem=32G \
-  -e sbnb_vm_image_size=100G
+ansible-playbook -i gpu-server, collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey=tskey-auth-xxxxx \
+  -e reefy_vm_name=dev-vm \
+  -e reefy_vm_vcpu=8 \
+  -e reefy_vm_mem=32G \
+  -e reefy_vm_image_size=100G
 ```
 
 ### Create a VM with Maximum Resources
@@ -48,39 +48,39 @@ ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/pla
 Automatically uses all available CPUs minus 2 and all available memory minus 2GB:
 
 ```bash
-ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey=tskey-auth-xxxxx \
-  -e sbnb_vm_name=max-vm \
-  -e sbnb_vm_vcpu=max \
-  -e sbnb_vm_mem=max
+ansible-playbook -i gpu-server, collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey=tskey-auth-xxxxx \
+  -e reefy_vm_name=max-vm \
+  -e reefy_vm_vcpu=max \
+  -e reefy_vm_mem=max
 ```
 
 ### Create a VM Without GPUs
 
 ```bash
-ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey=tskey-auth-xxxxx \
-  -e sbnb_vm_name=no-gpu-vm \
-  -e sbnb_vm_attach_gpus=false
+ansible-playbook -i gpu-server, collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey=tskey-auth-xxxxx \
+  -e reefy_vm_name=no-gpu-vm \
+  -e reefy_vm_attach_gpus=false
 ```
 
 ### Create a VM with Specific GPUs
 
 ```bash
-ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey=tskey-auth-xxxxx \
-  -e sbnb_vm_name=gpu-vm \
-  -e '{"sbnb_vm_attach_gpus": ["0000:01:00.0", "0000:41:00.0"]}'
+ansible-playbook -i gpu-server, collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey=tskey-auth-xxxxx \
+  -e reefy_vm_name=gpu-vm \
+  -e '{"reefy_vm_attach_gpus": ["0000:01:00.0", "0000:41:00.0"]}'
 ```
 
 ### Create a VM with Data Disk
 
 ```bash
-ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey=tskey-auth-xxxxx \
-  -e sbnb_vm_name=data-vm \
-  -e sbnb_vm_data_disk_name=my-data \
-  -e sbnb_vm_data_disk_size=500G
+ansible-playbook -i gpu-server, collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey=tskey-auth-xxxxx \
+  -e reefy_vm_name=data-vm \
+  -e reefy_vm_data_disk_name=my-data \
+  -e reefy_vm_data_disk_size=500G
 ```
 
 ### Create a VM with Root Password (for Console Access)
@@ -88,10 +88,10 @@ ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/pla
 Useful when Tailscale is unavailable and you need console access:
 
 ```bash
-ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey=tskey-auth-xxxxx \
-  -e sbnb_vm_name=console-vm \
-  -e sbnb_vm_root_password=mysecretpassword
+ansible-playbook -i gpu-server, collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey=tskey-auth-xxxxx \
+  -e reefy_vm_name=console-vm \
+  -e reefy_vm_root_password=mysecretpassword
 ```
 
 Access console via: `docker attach <vm-name>`
@@ -101,10 +101,10 @@ Access console via: `docker attach <vm-name>`
 Run custom commands on first boot via cloud-init (e.g., kernel tuning, package installs):
 
 ```bash
-ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey=tskey-auth-xxxxx \
-  -e sbnb_vm_name=tuned-vm \
-  -e '{"sbnb_vm_runcmd": ["sysctl -w net.ipv4.tcp_window_scaling=0", "apt-get update && apt-get install -y htop"]}'
+ansible-playbook -i gpu-server, collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey=tskey-auth-xxxxx \
+  -e reefy_vm_name=tuned-vm \
+  -e '{"reefy_vm_runcmd": ["sysctl -w net.ipv4.tcp_window_scaling=0", "apt-get update && apt-get install -y htop"]}'
 ```
 
 ### Create a VM with Custom Tailscale Tags
@@ -112,10 +112,10 @@ ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/pla
 Tags must be pre-authorized in your Tailscale ACL policy:
 
 ```bash
-ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey=tskey-auth-xxxxx \
-  -e sbnb_vm_name=tagged-vm \
-  -e sbnb_vm_tailscale_tags=tag:sbnb,tag:dev
+ansible-playbook -i gpu-server, collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey=tskey-auth-xxxxx \
+  -e reefy_vm_name=tagged-vm \
+  -e reefy_vm_tailscale_tags=tag:reefy,tag:dev
 ```
 
 ### Create a VM with Confidential Computing (AMD SEV-SNP)
@@ -123,17 +123,17 @@ ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/pla
 Requires AMD EPYC processor with SEV-SNP support:
 
 ```bash
-ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey=tskey-auth-xxxxx \
-  -e sbnb_vm_name=secure-vm \
-  -e sbnb_vm_confidential_computing=true
+ansible-playbook -i gpu-server, collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey=tskey-auth-xxxxx \
+  -e reefy_vm_name=secure-vm \
+  -e reefy_vm_confidential_computing=true
 ```
 
 ### Stop a VM
 
 ```bash
-ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/playbooks/stop-vm.yml \
-  -e sbnb_vm_name=my-vm
+ansible-playbook -i gpu-server, collections/ansible_collections/reefy/compute/playbooks/stop-vm.yml \
+  -e reefy_vm_name=my-vm
 ```
 
 ### Remove a VM (Keep Boot Disk)
@@ -141,18 +141,18 @@ ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/pla
 By default, the boot disk is preserved for later reuse:
 
 ```bash
-ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/playbooks/stop-vm.yml \
-  -e sbnb_vm_name=my-vm \
-  -e sbnb_vm_remove=true
+ansible-playbook -i gpu-server, collections/ansible_collections/reefy/compute/playbooks/stop-vm.yml \
+  -e reefy_vm_name=my-vm \
+  -e reefy_vm_remove=true
 ```
 
 ### Remove a VM and Delete Boot Disk
 
 ```bash
-ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/playbooks/stop-vm.yml \
-  -e sbnb_vm_name=my-vm \
-  -e sbnb_vm_remove=true \
-  -e sbnb_vm_persist_boot_image=false
+ansible-playbook -i gpu-server, collections/ansible_collections/reefy/compute/playbooks/stop-vm.yml \
+  -e reefy_vm_name=my-vm \
+  -e reefy_vm_remove=true \
+  -e reefy_vm_persist_boot_image=false
 ```
 
 ### Skip Host Configuration
@@ -160,35 +160,35 @@ ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/pla
 If storage, networking, and Docker are already configured:
 
 ```bash
-ansible-playbook -i gpu-server, collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey=tskey-auth-xxxxx \
-  -e sbnb_vm_name=my-vm \
-  -e sbnb_configure_storage=false \
-  -e sbnb_configure_networking=false \
-  -e sbnb_configure_docker=false
+ansible-playbook -i gpu-server, collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey=tskey-auth-xxxxx \
+  -e reefy_vm_name=my-vm \
+  -e reefy_configure_storage=false \
+  -e reefy_configure_networking=false \
+  -e reefy_configure_docker=false
 ```
 
 ### Multiple Hosts
 
 ```bash
-ansible-playbook -i "host1,host2,host3," collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey=tskey-auth-xxxxx \
-  -e sbnb_vm_vcpu=max \
-  -e sbnb_vm_mem=max
+ansible-playbook -i "host1,host2,host3," collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey=tskey-auth-xxxxx \
+  -e reefy_vm_vcpu=max \
+  -e reefy_vm_mem=max
 ```
 
-Note: VM names will be auto-generated (e.g., `sbnb-vm-quickly-happy-dolphin`).
+Note: VM names will be auto-generated (e.g., `reefy-vm-quickly-happy-dolphin`).
 
 ## Using the Module Directly
 
-For more control, use the `sbnb.compute.qemu_vm` module in your own playbooks:
+For more control, use the `reefy.compute.qemu_vm` module in your own playbooks:
 
 ```yaml
 - name: Manage VMs
   hosts: all
   tasks:
     - name: Create VM with all options
-      sbnb.compute.qemu_vm:
+      reefy.compute.qemu_vm:
         name: my-custom-vm
         state: present
         vcpu: 16
@@ -201,7 +201,7 @@ For more control, use the `sbnb.compute.qemu_vm` module in your own playbooks:
         data_disk_size: 1T
         persist_boot_image: true
         root_password: "{{ root_pass }}"
-        tailscale_tags: "tag:sbnb,tag:prod"
+        tailscale_tags: "tag:reefy,tag:prod"
 ```
 
 ## Configuration Reference
@@ -210,33 +210,33 @@ For more control, use the `sbnb.compute.qemu_vm` module in your own playbooks:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `sbnb_vm_name` | auto-generated | VM name (also used as Tailscale hostname) |
-| `sbnb_vm_state` | `present` | `present`, `absent`, `started`, `stopped` |
-| `sbnb_vm_vcpu` | `2` | vCPUs or `max` for auto-calculation |
-| `sbnb_vm_mem` | `4G` | Memory (e.g., `4G`, `64G`) or `max` |
-| `sbnb_vm_image_size` | `10G` | Boot disk size |
-| `sbnb_vm_image_url` | Ubuntu Noble | Cloud image URL |
-| `sbnb_vm_tskey` | **required** | Tailscale auth key |
-| `sbnb_vm_tailscale_tags` | `tag:sbnb` | Tailscale tags to advertise |
-| `sbnb_vm_attach_gpus` | `true` | `true`/`false` or list of PCI addresses |
-| `sbnb_vm_attach_pcie_devices` | `[]` | Additional PCIe devices to passthrough |
-| `sbnb_vm_confidential_computing` | `false` | Enable AMD SEV-SNP |
-| `sbnb_vm_data_disk_name` | - | Optional data disk name |
-| `sbnb_vm_data_disk_size` | - | Data disk size (required if name set) |
-| `sbnb_vm_persist_boot_image` | `true` | Keep boot disk across restarts |
-| `sbnb_vm_root_password` | - | Optional root password for console |
-| `sbnb_vm_runcmd` | `[]` | Custom commands to run on first boot (cloud-init runcmd) |
+| `reefy_vm_name` | auto-generated | VM name (also used as Tailscale hostname) |
+| `reefy_vm_state` | `present` | `present`, `absent`, `started`, `stopped` |
+| `reefy_vm_vcpu` | `2` | vCPUs or `max` for auto-calculation |
+| `reefy_vm_mem` | `4G` | Memory (e.g., `4G`, `64G`) or `max` |
+| `reefy_vm_image_size` | `10G` | Boot disk size |
+| `reefy_vm_image_url` | Ubuntu Noble | Cloud image URL |
+| `reefy_vm_tskey` | **required** | Tailscale auth key |
+| `reefy_vm_tailscale_tags` | `tag:reefy` | Tailscale tags to advertise |
+| `reefy_vm_attach_gpus` | `true` | `true`/`false` or list of PCI addresses |
+| `reefy_vm_attach_pcie_devices` | `[]` | Additional PCIe devices to passthrough |
+| `reefy_vm_confidential_computing` | `false` | Enable AMD SEV-SNP |
+| `reefy_vm_data_disk_name` | - | Optional data disk name |
+| `reefy_vm_data_disk_size` | - | Data disk size (required if name set) |
+| `reefy_vm_persist_boot_image` | `true` | Keep boot disk across restarts |
+| `reefy_vm_root_password` | - | Optional root password for console |
+| `reefy_vm_runcmd` | `[]` | Custom commands to run on first boot (cloud-init runcmd) |
 
 ### Host Configuration Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `sbnb_configure_storage` | `true` | Configure LVM storage |
-| `sbnb_configure_networking` | `true` | Configure bridge networking |
-| `sbnb_configure_docker` | `true` | Configure Docker daemon |
-| `sbnb_storage_mount` | `/mnt/sbnb-data` | Storage mount point |
-| `sbnb_bridge_name` | `br0` | Network bridge name |
-| `sbnb_docker_image` | `sbnb/svsm` | Container image for QEMU |
+| `reefy_configure_storage` | `true` | Configure LVM storage |
+| `reefy_configure_networking` | `true` | Configure bridge networking |
+| `reefy_configure_docker` | `true` | Configure Docker daemon |
+| `reefy_storage_mount` | `/mnt/reefy-data` | Storage mount point |
+| `reefy_bridge_name` | `br0` | Network bridge name |
+| `reefy_docker_image` | `reefy/svsm` | Container image for QEMU |
 
 ## Advanced: Using Inventory Files
 
@@ -254,15 +254,15 @@ all:
     gpu-server-2:
       ansible_host: 192.168.1.11
   vars:
-    sbnb_vm_tskey: "tskey-auth-xxxxx"
-    sbnb_vm_vcpu: max
-    sbnb_vm_mem: max
+    reefy_vm_tskey: "tskey-auth-xxxxx"
+    reefy_vm_vcpu: max
+    reefy_vm_mem: max
 ```
 
 Run:
 
 ```bash
-ansible-playbook -i inventory.yml collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml
+ansible-playbook -i inventory.yml collections/ansible_collections/reefy/compute/playbooks/start-vm.yml
 ```
 
 ### Inventory with Host-Specific Settings
@@ -272,20 +272,20 @@ all:
   hosts:
     small-server:
       ansible_host: 192.168.1.10
-      sbnb_vm_vcpu: 4
-      sbnb_vm_mem: 16G
-      sbnb_vm_attach_gpus: false
+      reefy_vm_vcpu: 4
+      reefy_vm_mem: 16G
+      reefy_vm_attach_gpus: false
 
     large-gpu-server:
       ansible_host: 192.168.1.11
-      sbnb_vm_vcpu: max
-      sbnb_vm_mem: max
-      sbnb_vm_attach_gpus: true
-      sbnb_vm_confidential_computing: true
+      reefy_vm_vcpu: max
+      reefy_vm_mem: max
+      reefy_vm_attach_gpus: true
+      reefy_vm_confidential_computing: true
 
   vars:
-    sbnb_vm_tskey: "tskey-auth-xxxxx"
-    sbnb_vm_image_size: 100G
+    reefy_vm_tskey: "tskey-auth-xxxxx"
+    reefy_vm_image_size: 100G
 ```
 
 ### Inventory with Groups
@@ -300,9 +300,9 @@ all:
         dev-2:
           ansible_host: 192.168.1.11
       vars:
-        sbnb_vm_tailscale_tags: "tag:sbnb,tag:dev"
-        sbnb_vm_vcpu: 4
-        sbnb_vm_mem: 16G
+        reefy_vm_tailscale_tags: "tag:reefy,tag:dev"
+        reefy_vm_vcpu: 4
+        reefy_vm_mem: 16G
 
     prod_servers:
       hosts:
@@ -311,19 +311,19 @@ all:
         prod-2:
           ansible_host: 192.168.1.21
       vars:
-        sbnb_vm_tailscale_tags: "tag:sbnb,tag:prod"
-        sbnb_vm_vcpu: max
-        sbnb_vm_mem: max
-        sbnb_vm_confidential_computing: true
+        reefy_vm_tailscale_tags: "tag:reefy,tag:prod"
+        reefy_vm_vcpu: max
+        reefy_vm_mem: max
+        reefy_vm_confidential_computing: true
 
   vars:
-    sbnb_vm_tskey: "tskey-auth-xxxxx"
+    reefy_vm_tskey: "tskey-auth-xxxxx"
 ```
 
 Run on specific group:
 
 ```bash
-ansible-playbook -i inventory.yml collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
+ansible-playbook -i inventory.yml collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
   -e target_hosts=prod_servers
 ```
 
@@ -345,29 +345,29 @@ inventory/
 
 `inventory/group_vars/all.yml`:
 ```yaml
-sbnb_vm_tskey: "tskey-auth-xxxxx"
-sbnb_vm_image_size: 50G
+reefy_vm_tskey: "tskey-auth-xxxxx"
+reefy_vm_image_size: 50G
 ```
 
 `inventory/group_vars/prod_servers.yml`:
 ```yaml
-sbnb_vm_vcpu: max
-sbnb_vm_mem: max
-sbnb_vm_confidential_computing: true
-sbnb_vm_tailscale_tags: "tag:sbnb,tag:prod"
+reefy_vm_vcpu: max
+reefy_vm_mem: max
+reefy_vm_confidential_computing: true
+reefy_vm_tailscale_tags: "tag:reefy,tag:prod"
 ```
 
 `inventory/host_vars/prod-1.yml`:
 ```yaml
-sbnb_vm_name: prod-primary
-sbnb_vm_data_disk_name: prod-data
-sbnb_vm_data_disk_size: 2T
+reefy_vm_name: prod-primary
+reefy_vm_data_disk_name: prod-data
+reefy_vm_data_disk_size: 2T
 ```
 
 Run:
 
 ```bash
-ansible-playbook -i inventory/ collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml
+ansible-playbook -i inventory/ collections/ansible_collections/reefy/compute/playbooks/start-vm.yml
 ```
 
 ## Debugging
@@ -384,9 +384,9 @@ Use `-v` flags to increase verbosity for troubleshooting:
 Example:
 
 ```bash
-ansible-playbook -i gpu-server, -vvv collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey=tskey-auth-xxxxx \
-  -e sbnb_vm_name=debug-vm
+ansible-playbook -i gpu-server, -vvv collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey=tskey-auth-xxxxx \
+  -e reefy_vm_name=debug-vm
 ```
 
 At `-vvv` level, the `qemu_vm` module will output the full QEMU command being executed.

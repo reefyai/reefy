@@ -1,0 +1,90 @@
+---
+# vLLM role - runs vLLM OpenAI-compatible inference server
+# Source: run-vllm.yaml
+
+- name: Validate HuggingFace token is provided
+  ansible.builtin.assert:
+    that:
+      - reefy_vllm_hf_token is defined
+      - reefy_vllm_hf_token | length > 0
+    fail_msg: "reefy_vllm_hf_token must be provided for model downloads"
+    quiet: true
+  when: reefy_vllm_require_hf_token | bool
+
+- name: Ensure cache directory exists
+  ansible.builtin.file:
+    path: "{{ reefy_vllm_cache_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Set vLLM volumes
+  ansible.builtin.set_fact:
+    _vllm_volumes:
+      - "{{ reefy_vllm_cache_path }}:/root/.cache/huggingface"
+      - "{{ reefy_vllm_data_path }}:/mnt/reefy-data/src"
+
+- name: Set vLLM environment
+  ansible.builtin.set_fact:
+    _vllm_env:
+      HUGGING_FACE_HUB_TOKEN: "{{ reefy_vllm_hf_token | default('') }}"
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      # Fix for driver 580+/590+ (CUDA 13.x): prefer host libcuda over container cuda-compat
+      # See: https://github.com/vllm-project/vllm/issues/32373
+      LD_LIBRARY_PATH: /lib/x86_64-linux-gnu:/usr/local/cuda/lib64
+
+- name: Build vLLM command
+  ansible.builtin.set_fact:
+    _vllm_command: >-
+      --model {{ reefy_vllm_model }}
+      --host 0.0.0.0 --port 8000
+      {% if reefy_vllm_enforce_eager | bool %}--enforce-eager{% endif %}
+      {{ reefy_vllm_extra_args }}
+
+- name: Debug vLLM command
+  ansible.builtin.debug:
+    msg: |
+      Model: {{ reefy_vllm_model }}
+      Enforce eager: {{ reefy_vllm_enforce_eager }}
+      Extra args: [{{ reefy_vllm_extra_args }}]
+      Full command: [{{ _vllm_command }}]
+
+- name: Start vLLM container
+  community.docker.docker_container:
+    name: "{{ reefy_vllm_container_name }}"
+    image: "{{ reefy_vllm_image }}"
+    state: "{{ reefy_vllm_state }}"
+    runtime: nvidia
+    ipc_mode: host
+    pull: "{{ reefy_vllm_pull }}"
+    recreate: "{{ reefy_vllm_recreate }}"
+    env: "{{ _vllm_env }}"
+    ports: "{{ reefy_vllm_ports }}"
+    volumes: "{{ _vllm_volumes }}"
+    device_requests:
+      - driver: nvidia
+        count: -1
+        capabilities:
+          - - gpu
+            - nvidia
+    command: "{{ _vllm_command }}"
+  register: container_result
+  retries: 40
+  delay: 15
+  until: container_result is succeeded
+  when: reefy_vllm_state == 'started'
+
+- name: Stop vLLM container
+  community.docker.docker_container:
+    name: "{{ reefy_vllm_container_name }}"
+    state: absent
+  when: reefy_vllm_state == 'absent'
+
+- name: Display vLLM status
+  ansible.builtin.debug:
+    msg: |
+      vLLM Container:
+        Name: {{ reefy_vllm_container_name }}
+        State: {{ reefy_vllm_state }}
+        Image: {{ reefy_vllm_image }}
+        Command: {{ _vllm_command }}
+  when: reefy_vllm_state == 'started'

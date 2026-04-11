@@ -1,0 +1,24 @@
+---
+# GenAI-Perf role defaults
+# NVIDIA's benchmarking tool for OpenAI-compatible APIs
+
+# Container configuration
+reefy_genai_perf_container_name: genai-perf
+reefy_genai_perf_image: nvcr.io/nvidia/tritonserver:25.01-py3-sdk
+reefy_genai_perf_pull: false  # Only pull when explicitly needed
+
+# Target API endpoint
+reefy_genai_perf_url: "http://localhost:8000"
+reefy_genai_perf_service_kind: openai
+reefy_genai_perf_endpoint_type: chat
+
+# Model to benchmark
+reefy_genai_perf_model: "Qwen/Qwen3-0.6B"
+
+# Benchmark parameters
+reefy_genai_perf_concurrency: 1
+reefy_genai_perf_num_prompts: 100
+reefy_genai_perf_tokenizer: ""
+
+# Extra arguments
+reefy_genai_perf_extra_args: ""

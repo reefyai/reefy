@@ -1,11 +1,11 @@
-### Starting an Ubuntu Virtual Machine (VM) on Sbnb Linux
+### Starting an Ubuntu Virtual Machine (VM) on Reefy Linux
 
 1. **Initialize the Development Environment**
     
-    SSH into the sbnb Linux machine and start the development environment by executing:
+    SSH into the reefy Linux machine and start the development environment by executing:
     
     ```
-    sbnb-dev-env.sh
+    reefy-dev-env.sh
     
     ```
     

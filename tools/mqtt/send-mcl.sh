@@ -161,8 +161,8 @@ MQTT_ARGS=(
     --key "${CLIENT_KEY}"
 )
 
-COMMAND_TOPIC="sbnb/devices/${DEVICE_UUID}/commands"
-STATUS_TOPIC="sbnb/devices/${DEVICE_UUID}/status"
+COMMAND_TOPIC="reefy/devices/${DEVICE_UUID}/commands"
+STATUS_TOPIC="reefy/devices/${DEVICE_UUID}/status"
 
 # Create tar.gz bundle
 TMPDIR=$(mktemp -d)

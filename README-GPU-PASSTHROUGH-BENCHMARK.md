@@ -6,7 +6,7 @@ In this article, we measure the performance penalty introduced by GPU passthroug
 
 - **GPU:** AMD RX 9060 XT 16GB  
 - **Bare Metal OS:** Ubuntu 24.04 Server  
-- **VM OS:** Ubuntu 24.04 Cloud Image running under AI Linux (Sbnb Linux) with `vfio-pci` GPU passthrough  
+- **VM OS:** Ubuntu 24.04 Cloud Image running under AI Linux (Reefy Linux) with `vfio-pci` GPU passthrough  
 - **LLM Models Tested (fit within 16GB VRAM):**
   - `mistral:7b`
   - `gemma2:9b`
@@ -85,6 +85,6 @@ llm_benchmark run --custombenchmark=benchmarks.yml
 
 ## Conclusion
 
-The performance impact of GPU passthrough via `vfio-pci` in AI Linux (Sbnb Linux) is impressively low-averaging around 1-2% across a range of LLM models. This makes it a highly viable option for running accelerated inference inside virtual machines, enabling isolation and flexibility without compromising performance.
+The performance impact of GPU passthrough via `vfio-pci` in AI Linux (Reefy Linux) is impressively low-averaging around 1-2% across a range of LLM models. This makes it a highly viable option for running accelerated inference inside virtual machines, enabling isolation and flexibility without compromising performance.
 
 ---

@@ -1,0 +1,46 @@
+---
+# LightRAG role - runs LightRAG API server
+# Ollama is started via role dependency (reefy.compute.ollama)
+
+- name: Create temporary directory for compose file
+  ansible.builtin.file:
+    path: /dev/shm/lightrag
+    state: directory
+    mode: '0755'
+  when: reefy_lightrag_state == 'started'
+
+- name: Copy docker-compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: /dev/shm/lightrag/docker-compose.yml
+    mode: '0644'
+  when: reefy_lightrag_state == 'started'
+
+- name: Start LightRAG with docker-compose
+  community.docker.docker_compose_v2:
+    project_src: /dev/shm/lightrag
+    files: docker-compose.yml
+    state: present
+    pull: "{{ reefy_lightrag_pull }}"
+  register: compose_result
+  retries: 40
+  delay: 15
+  until: compose_result is succeeded
+  when: reefy_lightrag_state == 'started'
+
+- name: Stop LightRAG
+  community.docker.docker_compose_v2:
+    project_src: /dev/shm/lightrag
+    files: docker-compose.yml
+    state: absent
+  when: reefy_lightrag_state == 'absent'
+
+- name: Display LightRAG status
+  ansible.builtin.debug:
+    msg: |
+      LightRAG:
+        State: {{ reefy_lightrag_state }}
+        Ollama Port: {{ reefy_lightrag_ollama_port }}
+        Models: {{ reefy_lightrag_models | join(', ') }}
+        LightRAG Port: {{ reefy_lightrag_port }}
+  when: reefy_lightrag_state == 'started'

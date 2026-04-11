@@ -1,0 +1,4 @@
+---
+reefy_browser_use_state: present
+reefy_browser_use_model: "qwen2.5:7b"
+reefy_browser_use_vnc_password: "youvncpassword"

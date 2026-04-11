@@ -1,0 +1,23 @@
+---
+# Storage role defaults
+
+# Mount point for the LVM logical volume
+reefy_storage_mount: /mnt/reefy-data
+
+# LVM volume group name
+reefy_vg_name: reefy-vg
+
+# LVM logical volume name
+reefy_lv_name: reefy-lv
+
+# Filesystem type for the logical volume
+reefy_fs_type: ext4
+
+# Filesystem options (no reserved space for root)
+reefy_fs_opts: -m 0
+
+# Drive patterns to search for (unpartitioned drives)
+reefy_drive_patterns:
+  - "sd"
+  - "hd"
+  - "nvme"

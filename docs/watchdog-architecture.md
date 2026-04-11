@@ -7,8 +7,8 @@ Three layers of watchdog protection ensure devices recover from failures automat
 | Layer | What it watches | Trigger | Recovery |
 |-------|----------------|---------|----------|
 | **Hardware watchdog** (systemd) | systemd itself, kernel | Kernel panic, deadlock, freeze | Hardware reboot in ~60-120s |
-| **Boot watchdog** (sbnb-boot-watchdog) | A/B firmware update health | Critical services not starting after update | sysrq reboot in 360s, falls back to old firmware |
-| **App watchdog** (sbnb-watchdog.timer) | Docker, MQTT, network | Service failures, connectivity loss | Restart services or reboot |
+| **Boot watchdog** (reefy-boot-watchdog) | A/B firmware update health | Critical services not starting after update | sysrq reboot in 360s, falls back to old firmware |
+| **App watchdog** (reefy-watchdog.timer) | Docker, MQTT, network | Service failures, connectivity loss | Restart services or reboot |
 
 ## Layer 1: Hardware Watchdog (systemd RuntimeWatchdogSec)
 
@@ -50,28 +50,28 @@ echo c > /proc/sysrq-trigger
 
 ## Layer 2: Boot Watchdog (A/B Firmware Updates)
 
-**Script**: `/usr/bin/sbnb-boot-watchdog`
-**Service**: `sbnb-boot-watchdog.service`
+**Script**: `/usr/bin/reefy-boot-watchdog`
+**Service**: `reefy-boot-watchdog.service`
 
 **How it works**:
 - Only activates when `BootCurrent != BootOrder[0]` (pending A/B firmware update)
 - Starts a 360-second timer
-- If `sbnb-boot-confirm` doesn't stop the service within 360s → sysrq reboot
+- If `reefy-boot-confirm` doesn't stop the service within 360s → sysrq reboot
 - UEFI falls back to old firmware slot (BootNext was consumed)
 
 **No hardware watchdog manipulation** — Layer 1 (systemd) owns `/dev/watchdog0` exclusively. Boot watchdog uses sysrq as a software fallback.
 
 **Boot confirmation flow**:
 1. Device boots new firmware via BootNext
-2. `sbnb-boot-confirm` waits for critical services (sbnb-storage, sbnb-mqtt) to be active
-3. If all healthy → `sbnb-efi confirm` commits new slot as default
-4. Stops `sbnb-boot-watchdog` → timer cancelled
+2. `reefy-boot-confirm` waits for critical services (reefy-storage, reefy-mqtt) to be active
+3. If all healthy → `reefy-efi confirm` commits new slot as default
+4. Stops `reefy-boot-watchdog` → timer cancelled
 5. If services fail → watchdog fires → sysrq reboot → old slot
 
-## Layer 3: App Watchdog (sbnb-watchdog.timer)
+## Layer 3: App Watchdog (reefy-watchdog.timer)
 
-**Timer**: `sbnb-watchdog.timer` (every 60s, starts 2min after boot)
-**Script**: `/usr/bin/sbnb-watchdog`
+**Timer**: `reefy-watchdog.timer` (every 60s, starts 2min after boot)
+**Script**: `/usr/bin/reefy-watchdog`
 
 Checks app-level health: Docker running, MQTT connected, network reachable. Can restart individual services or trigger full reboot if recovery fails.
 
@@ -79,7 +79,7 @@ Checks app-level health: Docker running, MQTT connected, network reachable. Can 
 
 ### Why systemd owns the hardware watchdog
 
-Previous design: `sbnb-boot-watchdog` opened `/dev/watchdog0` directly with `exec 3>/dev/watchdog0`. This caused issues:
+Previous design: `reefy-boot-watchdog` opened `/dev/watchdog0` directly with `exec 3>/dev/watchdog0`. This caused issues:
 - Watchdog was only armed during A/B updates, not during normal operation
 - No watchdog pinging during the timeout → hardware rebooted prematurely (~60s instead of 360s)
 - Closing the watchdog fd without writing magic close char `V` left the watchdog ticking
@@ -93,13 +93,13 @@ Boot ─────────────────────────
   │
   ├─ t=0    systemd starts, opens /dev/watchdog0, pings every 60s
   │
-  ├─ t=3s   sbnb-storage.service completes
-  │           ├─ sbnb-boot-watchdog starts (360s timer, sysrq only)
-  │           └─ sbnb-boot-confirm starts (waits for services)
+  ├─ t=3s   reefy-storage.service completes
+  │           ├─ reefy-boot-watchdog starts (360s timer, sysrq only)
+  │           └─ reefy-boot-confirm starts (waits for services)
   │
-  ├─ t=8s   sbnb-mqtt connects, boot-confirm health checks pass
-  │           ├─ sbnb-efi confirm → commits new boot slot
-  │           └─ stops sbnb-boot-watchdog (timer cancelled)
+  ├─ t=8s   reefy-mqtt connects, boot-confirm health checks pass
+  │           ├─ reefy-efi confirm → commits new boot slot
+  │           └─ stops reefy-boot-watchdog (timer cancelled)
   │
   ├─ t=∞    systemd keeps pinging hardware watchdog forever
   │           Any kernel hang → hardware reboot in ~60-120s
@@ -113,8 +113,8 @@ Boot ─────────────────────────
 | File | Purpose |
 |------|---------|
 | `etc/systemd/system.conf.d/watchdog.conf` | RuntimeWatchdogSec + RebootWatchdogSec |
-| `usr/bin/sbnb-boot-watchdog` | A/B update sysrq safety net |
-| `usr/lib/systemd/system/sbnb-boot-watchdog.service` | Systemd unit for boot watchdog |
-| `usr/bin/sbnb-boot-confirm` | Health check + boot slot confirmation |
-| `usr/lib/systemd/system/sbnb-boot-confirm.service` | Systemd unit for boot confirm |
-| `usr/bin/sbnb-efi` | EFI operations (fix/update/confirm/status) |
+| `usr/bin/reefy-boot-watchdog` | A/B update sysrq safety net |
+| `usr/lib/systemd/system/reefy-boot-watchdog.service` | Systemd unit for boot watchdog |
+| `usr/bin/reefy-boot-confirm` | Health check + boot slot confirmation |
+| `usr/lib/systemd/system/reefy-boot-confirm.service` | Systemd unit for boot confirm |
+| `usr/bin/reefy-efi` | EFI operations (fix/update/confirm/status) |

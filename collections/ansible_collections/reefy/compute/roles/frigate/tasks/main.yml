@@ -1,0 +1,182 @@
+---
+# Frigate role - runs Frigate NVR
+# Source: run-frigate.yaml
+
+- name: Ensure config directory exists
+  ansible.builtin.file:
+    path: "{{ reefy_frigate_config_path }}"
+    state: directory
+    mode: '0755'
+  when: reefy_frigate_state == 'started'
+
+- name: Ensure media directory exists
+  ansible.builtin.file:
+    path: "{{ reefy_frigate_media_path }}"
+    state: directory
+    mode: '0755'
+  when: reefy_frigate_state == 'started'
+
+- name: Set absolute path for local config
+  ansible.builtin.set_fact:
+    _frigate_local_config_path: "{{ reefy_frigate_local_config if reefy_frigate_local_config.startswith('/') else (lookup('env', 'PWD') + '/' + reefy_frigate_local_config) }}"
+  when: reefy_frigate_state == 'started' and reefy_frigate_local_config is defined
+
+- name: Check if Frigate config exists locally
+  ansible.builtin.stat:
+    path: "{{ _frigate_local_config_path }}"
+  delegate_to: localhost
+  become: false
+  register: frigate_config_file
+  when: reefy_frigate_state == 'started' and reefy_frigate_local_config is defined
+
+- name: Fail if local config specified but not found
+  ansible.builtin.fail:
+    msg: "Local config file not found: {{ _frigate_local_config_path }}"
+  when: reefy_frigate_state == 'started' and reefy_frigate_local_config is defined and not frigate_config_file.stat.exists
+
+- name: Copy Frigate config if exists
+  ansible.builtin.copy:
+    src: "{{ _frigate_local_config_path }}"
+    dest: "{{ reefy_frigate_config_path }}/config.yaml"
+    force: "{{ reefy_frigate_config_force | bool }}"
+    mode: '0644'
+  when: reefy_frigate_state == 'started' and reefy_frigate_local_config is defined
+
+- name: Check if config already exists on remote
+  ansible.builtin.stat:
+    path: "{{ reefy_frigate_config_path }}/config.yaml"
+  register: remote_config_file
+  when: reefy_frigate_state == 'started'
+
+- name: Deploy minimal Frigate config if none exists
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ reefy_frigate_config_path }}/config.yaml"
+    mode: '0644'
+  when: reefy_frigate_state == 'started' and not remote_config_file.stat.exists
+
+- name: Copy model file if provided
+  ansible.builtin.copy:
+    src: "{{ reefy_frigate_model_file }}"
+    dest: "{{ reefy_frigate_config_path }}/{{ reefy_frigate_model_file | basename }}"
+  when: reefy_frigate_state == 'started' and reefy_frigate_model_file is defined
+
+- name: Extract models from container
+  when: reefy_frigate_state == 'started' and reefy_frigate_models_image is defined
+  block:
+    - name: Check if model already exists
+      ansible.builtin.stat:
+        path: "{{ reefy_frigate_config_path }}/yolo_nas_s.onnx"
+      register: model_file
+
+    - name: Pull and extract models
+      when: not model_file.stat.exists
+      block:
+        - name: Pull models container
+          community.docker.docker_image:
+            name: "{{ reefy_frigate_models_image }}"
+            source: pull
+
+        - name: Create temporary container for model extraction
+          ansible.builtin.command:
+            cmd: docker create --name frigate-models-temp {{ reefy_frigate_models_image }} .
+          register: create_result
+          changed_when: create_result.rc == 0
+
+        - name: Copy models from container
+          ansible.builtin.command:
+            cmd: docker cp frigate-models-temp:/models/. {{ reefy_frigate_config_path }}/
+          register: copy_result
+          changed_when: copy_result.rc == 0
+
+        - name: Remove temporary container
+          ansible.builtin.command:
+            cmd: docker rm frigate-models-temp
+          changed_when: true
+
+- name: Copy extra files to config directory
+  ansible.builtin.copy:
+    src: "{{ item if item.startswith('/') else (lookup('env', 'PWD') + '/' + item) }}"
+    dest: "{{ reefy_frigate_config_path }}/{{ item | basename }}"
+    mode: '0644'
+  loop: "{{ reefy_frigate_extra_files }}"
+  when: reefy_frigate_state == 'started' and reefy_frigate_extra_files is defined
+
+- name: Start Frigate NVR container
+  community.docker.docker_container:
+    name: "{{ reefy_frigate_container_name }}"
+    image: "{{ reefy_frigate_image }}"
+    state: started
+    shm_size: "{{ reefy_frigate_shm_size }}"
+    stop_timeout: 30
+    restart_policy: unless-stopped
+    pull: "{{ reefy_frigate_pull }}"
+    recreate: "{{ reefy_frigate_recreate }}"
+    ports: "{{ reefy_frigate_ports }}"
+    env: "{{ reefy_frigate_env | default({}) }}"
+    volumes:
+      - "{{ reefy_frigate_media_path }}:/media/frigate"
+      - "{{ reefy_frigate_config_path }}:/config"
+      - /etc/localtime:/etc/localtime:ro
+    device_requests:
+      - driver: cdi
+        device_ids:
+          - "nvidia.com/gpu=all"
+  register: container_result
+  retries: 40
+  delay: 15
+  until: container_result is succeeded
+  when: reefy_frigate_state == 'started'
+
+- name: Wait for Frigate to initialize
+  ansible.builtin.wait_for:
+    port: 8971
+    timeout: 120
+  when: reefy_frigate_state == 'started'
+
+- name: Extract admin password from logs
+  ansible.builtin.shell:
+    cmd: docker logs {{ reefy_frigate_container_name }} 2>&1 | grep -oP 'Password:\s+\K\S+'
+  register: frigate_password
+  changed_when: false
+  failed_when: false
+  when: reefy_frigate_state == 'started' and reefy_frigate_auth_enabled | bool
+
+- name: Stop Frigate container
+  community.docker.docker_container:
+    name: "{{ reefy_frigate_container_name }}"
+    state: absent
+  when: reefy_frigate_state == 'absent'
+
+- name: Display Frigate status
+  vars:
+    _auth_info: "{{ 'enabled - password: ' + (frigate_password.stdout | default('check logs')) if reefy_frigate_auth_enabled | bool else 'disabled (Tailscale protected)' }}"
+  ansible.builtin.debug:
+    msg:
+      - "Frigate NVR"
+      - "  Name:   {{ reefy_frigate_container_name }}"
+      - "  State:  {{ reefy_frigate_state }}"
+      - "  Image:  {{ reefy_frigate_image }}"
+      - "  Web UI: http://{{ inventory_hostname }}:8971/"
+      - "  Auth:   {{ _auth_info }}"
+  when: reefy_frigate_state == 'started'
+
+- name: Set app outputs for platform
+  ansible.builtin.set_fact:
+    reefy_outputs: "{{ reefy_outputs | default([]) + outputs }}"
+  vars:
+    outputs:
+      - name: web_ui_url
+        value: "http://{{ inventory_hostname }}:8971/"
+        label: "Web UI"
+        show_to_user: true
+      - name: admin_password
+        value: "{{ frigate_password.stdout | default('check container logs') }}"
+        label: "Admin Password"
+        show_to_user: true
+  when: reefy_frigate_state == 'started'
+
+- name: Report outputs to platform
+  ansible.builtin.debug:
+    msg: "REEFY_OUTPUTS={{ reefy_outputs | to_json }}"
+  when: reefy_outputs is defined and reefy_outputs | length > 0

@@ -1,4 +1,4 @@
-# Use Nvidia GPU within KVM Virtual Machines in PCIe Passthrough Mode with SBNB Linux
+# Use Nvidia GPU within KVM Virtual Machines in PCIe Passthrough Mode with Reefy Linux
 
 ## Prerequisites:
 
@@ -10,13 +10,13 @@
 
 The diagram below depicts the final state after following this tutorial. The Nvidia GPU will be attached to the guest Virtual Machine using the low-overhead `vfio-pci` mechanism.
 
-![nvidia-vfio-sbnb-linux](images/nvidia-vfio-sbnb-linux.png)
+![nvidia-vfio-reefy-linux](images/nvidia-vfio-reefy-linux.png)
 
 
-### 1. Boot Bare Metal Server into Sbnb Linux
-Boot the Bare Metal server into Sbnb Linux using the instructions in [README-INSTALL.md](README-INSTALL.md). After booting, verify that the server appears in your **Tailscale machine list**.
+### 1. Boot Bare Metal Server into Reefy Linux
+Boot the Bare Metal server into Reefy Linux using the instructions in [README-INSTALL.md](README-INSTALL.md). After booting, verify that the server appears in your **Tailscale machine list**.
 
-![Sbnb Linux: Machine registered in Tailscale (tailnet)](images/serial-number-tailscale.png)
+![Reefy Linux: Machine registered in Tailscale (tailnet)](images/serial-number-tailscale.png)
 
 For more details on automatic hostname assignments, refer to [README-SERIAL-NUMBER.md](README-SERIAL-NUMBER.md).
 
@@ -26,7 +26,7 @@ Verify that the server appears in your Tailscale machine list and SSH into the s
 
 ## Step 3: Prepare the Environment
 
-Execute `sbnb-dev-env.sh`. This will prepare the full environment with QEMU installed.
+Execute `reefy-dev-env.sh`. This will prepare the full environment with QEMU installed.
 
 ## Step 4: Attach Nvidia GPU to vfio-pci
 

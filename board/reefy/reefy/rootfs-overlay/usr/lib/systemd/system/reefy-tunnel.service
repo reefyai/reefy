@@ -1,0 +1,15 @@
+[Unit]
+Description=reefy tunnel service
+After=reefy-storage.service
+Wants=reefy-storage.service
+ConditionPathExists=/mnt/reefy/tunnel-start.sh
+
+[Service]
+Type=simple
+ExecStart=/bin/sh /mnt/reefy/tunnel-start.sh
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+

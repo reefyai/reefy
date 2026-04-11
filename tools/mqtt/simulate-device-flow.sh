@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Simulate SBNB Device Registration Flow (CSR-based)
+# Simulate Reefy Device Registration Flow (CSR-based)
 #
 # This script simulates the complete device registration and provisioning flow:
 # 1. Device generates RSA keypair and CSR
@@ -96,12 +96,12 @@ MQTT_ARGS=(
 
 # Generate simulated device identity
 MAC_ADDRESS="02:$(openssl rand -hex 5 | sed 's/\(..\)/\1:/g; s/:$//')"
-HOSTNAME="sbnb-$(echo ${MAC_ADDRESS} | tr -d ':' | tail -c 9)"
+HOSTNAME="reefy-$(echo ${MAC_ADDRESS} | tr -d ':' | tail -c 9)"
 TEMP_DIR=$(mktemp -d)
 trap "rm -rf ${TEMP_DIR}" EXIT
 
 echo "=========================================="
-echo "SBNB Device Flow Simulator (CSR-based)"
+echo "Reefy Device Flow Simulator (CSR-based)"
 echo "=========================================="
 echo "Broker:   ${HOST}:${PORT}"
 echo "Device:   ${HOSTNAME}"
@@ -120,7 +120,7 @@ log_device "Generating CSR..."
 openssl req -new \
     -key "${TEMP_DIR}/device.key" \
     -out "${TEMP_DIR}/device.csr" \
-    -subj "/O=SBNB/OU=Devices/CN=${HOSTNAME}" 2>/dev/null
+    -subj "/O=Reefy/OU=Devices/CN=${HOSTNAME}" 2>/dev/null
 
 CSR_PEM=$(cat "${TEMP_DIR}/device.csr")
 log_success "Keypair and CSR generated (private key stays local)"
@@ -144,8 +144,8 @@ REGISTER_MSG=$(jq -n \
         csr: $csr
     }')
 
-REGISTER_TOPIC="sbnb/devices/bootstrap/${HOSTNAME}/register"
-PROVISION_TOPIC="sbnb/devices/bootstrap/${HOSTNAME}/provision"
+REGISTER_TOPIC="reefy/devices/bootstrap/${HOSTNAME}/register"
+PROVISION_TOPIC="reefy/devices/bootstrap/${HOSTNAME}/provision"
 
 if mosquitto_pub "${MQTT_ARGS[@]}" \
     -t "${REGISTER_TOPIC}" \
@@ -238,7 +238,7 @@ DEVICE_MQTT_ARGS=(
 )
 
 if mosquitto_pub "${DEVICE_MQTT_ARGS[@]}" \
-    -t "sbnb/devices/${UUID}/status" \
+    -t "reefy/devices/${UUID}/status" \
     -m "${STATUS_MSG}" \
     -q 1 2>/dev/null; then
     log_success "Status sent with device certificate (CN=${UUID})"
@@ -252,13 +252,13 @@ echo "=========================================="
 echo "Phase 4: Listen for Commands"
 echo "=========================================="
 echo ""
-log_device "Subscribing to: sbnb/devices/${UUID}/commands"
+log_device "Subscribing to: reefy/devices/${UUID}/commands"
 echo ""
 echo -e "${YELLOW}Listening for commands (Ctrl+C to exit)...${NC}"
 echo ""
 
 mosquitto_sub "${DEVICE_MQTT_ARGS[@]}" \
-    -t "sbnb/devices/${UUID}/commands" \
+    -t "reefy/devices/${UUID}/commands" \
     -v | while read -r line; do
     echo ""
     log_success "Received command:"

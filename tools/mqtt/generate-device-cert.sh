@@ -145,7 +145,7 @@ EOF
 # -subj: server controls the certificate identity (CN=UUID for EMQX ACL matching)
 openssl x509 -new \
     -force_pubkey "${OUTPUT_DIR}/device.pub" \
-    -subj "/C=US/ST=FL/L=Miami/O=SBNB/OU=Devices/CN=${UUID}" \
+    -subj "/C=US/ST=FL/L=Miami/O=Reefy/OU=Devices/CN=${UUID}" \
     -CA "${CA_DIR}/ca.crt" -CAkey "${CA_DIR}/ca.key" \
     -CAcreateserial -days 3650 \
     -out "${OUTPUT_DIR}/device.crt" \

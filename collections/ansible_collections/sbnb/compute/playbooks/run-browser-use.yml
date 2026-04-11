@@ -1,7 +1,0 @@
----
-- hosts: all
-  gather_facts: false
-  ignore_unreachable: true
-
-  roles:
-    - role: sbnb.compute.browser_use

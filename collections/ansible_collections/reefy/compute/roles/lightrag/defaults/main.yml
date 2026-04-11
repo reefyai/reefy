@@ -1,0 +1,22 @@
+---
+# LightRAG role defaults
+# Note: Ollama is started via role dependency (reefy.compute.ollama)
+
+# Container state
+reefy_lightrag_state: started
+reefy_lightrag_pull: missing  # Only pull if not present locally
+
+# Ports (LightRAG uses 9000 to avoid conflict with vLLM/SGLang on 8000)
+reefy_lightrag_port: 9000
+reefy_lightrag_ollama_port: 11434
+
+# Storage paths
+reefy_lightrag_data_path: /mnt/reefy-data/lightrag
+
+# Container image
+reefy_lightrag_image: reefy/lightrag
+
+# Ollama models to pull (passed to ollama role dependency)
+reefy_lightrag_models:
+  - bge-m3
+  - mistral-nemo:latest

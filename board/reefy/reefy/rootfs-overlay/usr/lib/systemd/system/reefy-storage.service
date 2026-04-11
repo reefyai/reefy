@@ -1,0 +1,13 @@
+[Unit]
+Description=reefy storage setup (critical path)
+Wants=dev-disk-by\x2dpartlabel-reefy\x2da.device
+After=dev-disk-by\x2dpartlabel-reefy\x2da.device
+Before=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/boot-reefy-storage.sh
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target

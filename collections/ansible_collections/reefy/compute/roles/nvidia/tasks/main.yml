@@ -1,0 +1,96 @@
+---
+# NVIDIA role - installs NVIDIA drivers and container toolkit
+# Combines: install-nvidia.yaml + install-nvidia-container-toolkit.yaml
+
+# =============================================================================
+# NVIDIA Driver Installation
+# =============================================================================
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Set kernel module package name
+  ansible.builtin.set_fact:
+    _nvidia_kernel_module: "linux-modules-nvidia-{{ reefy_nvidia_driver_branch }}-server{{ '-open' if reefy_nvidia_open_modules | bool else '' }}-{{ ansible_kernel }}"
+
+- name: Install NVIDIA kernel modules and utilities
+  ansible.builtin.apt:
+    pkg:
+      - "nvidia-utils-{{ reefy_nvidia_driver_branch }}-server"
+      - "{{ _nvidia_kernel_module }}"
+      - "libnvidia-decode-{{ reefy_nvidia_driver_branch }}-server"
+    state: present
+  when: reefy_nvidia_install_driver | bool
+
+# =============================================================================
+# CUDA Compatibility Libraries (for containers with CUDA version mismatch)
+# =============================================================================
+- name: Add NVIDIA CUDA repository key
+  ansible.builtin.apt_key:
+    url: https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/3bf863cc.pub
+    state: present
+  when: reefy_nvidia_install_cuda_compat | bool
+
+- name: Add NVIDIA CUDA repository
+  ansible.builtin.apt_repository:
+    repo: "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/ /"
+    state: present
+    filename: cuda
+    update_cache: true
+  when: reefy_nvidia_install_cuda_compat | bool
+
+- name: Install CUDA compatibility libraries
+  ansible.builtin.apt:
+    pkg:
+      - cuda-compat-12-9
+    state: present
+  when: reefy_nvidia_install_cuda_compat | bool
+
+# =============================================================================
+# NVIDIA Container Toolkit Installation
+# =============================================================================
+- name: Add NVIDIA container toolkit apt key
+  ansible.builtin.apt_key:
+    url: https://nvidia.github.io/libnvidia-container/gpgkey
+    state: present
+  when: reefy_nvidia_install_container_toolkit | bool
+
+- name: Add NVIDIA container toolkit apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb https://nvidia.github.io/libnvidia-container/stable/deb/$(ARCH) /"
+    state: present
+    update_cache: true
+  when: reefy_nvidia_install_container_toolkit | bool
+
+- name: Install nvidia-container-toolkit
+  ansible.builtin.apt:
+    pkg:
+      - nvidia-container-toolkit
+    state: present
+  when: reefy_nvidia_install_container_toolkit | bool
+
+- name: Generate NVIDIA CDI specification
+  ansible.builtin.command:
+    cmd: nvidia-ctk cdi generate --output=/var/run/cdi/nvidia.yaml
+  changed_when: true
+  when: reefy_nvidia_install_container_toolkit | bool
+
+- name: Verify CDI devices are available
+  ansible.builtin.command:
+    cmd: nvidia-ctk cdi list
+  register: cdi_list
+  changed_when: false
+  when: reefy_nvidia_install_container_toolkit | bool
+
+- name: Show CDI devices
+  ansible.builtin.debug:
+    msg: "{{ cdi_list.stdout_lines }}"
+  when: reefy_nvidia_install_container_toolkit | bool
+
+- name: Display NVIDIA installation summary
+  ansible.builtin.debug:
+    msg: |
+      NVIDIA Installation Complete:
+        Driver Branch: {{ reefy_nvidia_driver_branch }}
+        Driver Installed: {{ reefy_nvidia_install_driver }}
+        Container Toolkit: {{ reefy_nvidia_install_container_toolkit }}

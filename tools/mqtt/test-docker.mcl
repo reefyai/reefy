@@ -1,4 +1,4 @@
-# SBNB mgmt Docker Test
+# Reefy mgmt Docker Test
 #
 # Runs an nginx container with port mapping.
 # Uses Meta:reverse so the container is auto-removed when this
@@ -9,7 +9,7 @@ docker:image "nginx" {
 	Meta:reverse => true,
 }
 
-docker:container "sbnb-nginx" {
+docker:container "reefy-nginx" {
 	state => "running",
 	image => "nginx",
 	cmd => ["nginx", "-g", "daemon off;",],
@@ -18,8 +18,8 @@ docker:container "sbnb-nginx" {
 	Meta:reverse => true,
 }
 
-file "/tmp/sbnb-mgmt-test.txt" {
-	content => "SBNB mgmt with docker container active\n",
+file "/tmp/reefy-mgmt-test.txt" {
+	content => "Reefy mgmt with docker container active\n",
 	state => $const.res.file.state.exists,
 	mode => "0644",
 	Meta:reverse => true,

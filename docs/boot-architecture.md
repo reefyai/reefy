@@ -7,44 +7,44 @@ The boot process is split into two phases via systemd units, enabling parallel s
 ## Systemd Unit Graph
 
 ```
-                       sbnb-storage.service ──────────────────────────────────┐
+                       reefy-storage.service ──────────────────────────────────┐
                           (critical path)                                     │
                     ┌───────┬──────────────┬──────┬──────┬──────┐             │
                     │       │              │      │      │      │             │
-               docker  sbnb-wifi-early  tunnel  cmds  mgmt  nvidia-cdi   sbnb-init
+               docker  reefy-wifi-early  tunnel  cmds  mgmt  nvidia-cdi   reefy-init
                           │                                              (non-critical)
                     network-online.target
                     (--any, 30s timeout)
                           │
-                      sbnb-mqtt
+                      reefy-mqtt
 ```
 
-All services in the bottom row start **in parallel** once `sbnb-storage.service` completes.
+All services in the bottom row start **in parallel** once `reefy-storage.service` completes.
 
-`sbnb-wifi-early` runs before `network-online.target`, ensuring WiFi connectivity is available even without ethernet. `systemd-networkd-wait-online` uses `--any` so it succeeds as soon as any interface (WiFi or ethernet) has an IP address.
+`reefy-wifi-early` runs before `network-online.target`, ensuring WiFi connectivity is available even without ethernet. `systemd-networkd-wait-online` uses `--any` so it succeeds as soon as any interface (WiFi or ethernet) has an IP address.
 
-## Phase 1: sbnb-storage.service (critical path)
+## Phase 1: reefy-storage.service (critical path)
 
-**Script**: `/usr/bin/boot-sbnb-storage.sh`
+**Script**: `/usr/bin/boot-reefy-storage.sh`
 **Type**: oneshot, `RemainAfterExit=yes`
 **Flags**: `set -euxo pipefail` — any failure here is fatal (no storage = no system)
 
 | Step | Function | What it does | Failure impact |
 |------|----------|-------------|----------------|
-| 1 | `set_hostname` | Set hostname from MAC via `sbnb-default-hostname` | Cosmetic only |
-| 2 | `mount_sbnb_usb` | Mount active ESP read-only at `/mnt/sbnb` | No certs, no MQTT config |
-| 3 | `ensure_boot_entries` | Verify/fix EFI boot entries via `sbnb-efi fix` | Stale boot entries |
-| 4 | `setup_internal_storage` | Open LUKS on internal drives, activate LVM VG `sbnb`, mount at `/mnt/sbnb-data` | Falls back to USB |
-| 5 | `setup_data_partition` | If no internal storage: open LUKS on USB partition 4, mount at `/mnt/sbnb-data` | No persistent state |
+| 1 | `set_hostname` | Set hostname from MAC via `reefy-default-hostname` | Cosmetic only |
+| 2 | `mount_reefy_usb` | Mount active ESP read-only at `/mnt/reefy` | No certs, no MQTT config |
+| 3 | `ensure_boot_entries` | Verify/fix EFI boot entries via `reefy-efi fix` | Stale boot entries |
+| 4 | `setup_internal_storage` | Open LUKS on internal drives, activate LVM VG `reefy`, mount at `/mnt/reefy-data` | Falls back to USB |
+| 5 | `setup_data_partition` | If no internal storage: open LUKS on USB partition 4, mount at `/mnt/reefy-data` | No persistent state |
 
-**After this completes**: `/mnt/sbnb` and `/mnt/sbnb-data` are mounted. Docker, MQTT, and all other services can start.
+**After this completes**: `/mnt/reefy` and `/mnt/reefy-data` are mounted. Docker, MQTT, and all other services can start.
 
-## Phase 2: sbnb-init.service (non-critical, parallel)
+## Phase 2: reefy-init.service (non-critical, parallel)
 
-**Script**: `/usr/bin/boot-sbnb-init.sh`
+**Script**: `/usr/bin/boot-reefy-init.sh`
 **Type**: oneshot, `RemainAfterExit=yes`
 **Flags**: `set -uxo pipefail` — **no `set -e`**, errors are logged but don't stop execution
-**After**: `sbnb-storage.service`
+**After**: `reefy-storage.service`
 
 | Step | Function | What it does | Failure impact |
 |------|----------|-------------|----------------|
@@ -57,43 +57,43 @@ All services in the bottom row start **in parallel** once `sbnb-storage.service`
 
 | Unit | Type | Depends on | Purpose |
 |------|------|-----------|---------|
-| `sbnb-storage.service` | oneshot | `dev-disk-by-partlabel-sbnb.device` | Mount USB, open LUKS, mount internal storage |
-| `sbnb-init.service` | oneshot | `sbnb-storage.service` | Device credentials, banner |
-| `docker.service` | — | `sbnb-storage.service` | Container runtime (via drop-in `ramdisk.conf`) |
-| `sbnb-wifi-early.service` | oneshot | `sbnb-storage.service` | Apply saved WiFi config before `network-online.target` |
-| `sbnb-mqtt.service` | simple | `sbnb-storage.service`, `network-online.target` | MQTT reconciler — device registration, desired state |
-| `sbnb-tunnel.service` | simple | `sbnb-storage.service` | Tailscale tunnel (if configured) |
-| `sbnb-cmds.service` | oneshot | `sbnb-storage.service` | Execute custom commands from USB |
-| `sbnb-mgmt.service` | simple | `sbnb-storage.service`, `network-online.target` | Mgmt config daemon (if configured) |
-| `nvidia-cdi-generate.service` | oneshot | `sbnb-storage.service`, `systemd-modules-load` | GPU device nodes + CDI spec |
-| `sbnb-watchdog.timer` | timer | — | Health check every 60s (starts 2min after boot) |
+| `reefy-storage.service` | oneshot | `dev-disk-by-partlabel-reefy.device` | Mount USB, open LUKS, mount internal storage |
+| `reefy-init.service` | oneshot | `reefy-storage.service` | Device credentials, banner |
+| `docker.service` | — | `reefy-storage.service` | Container runtime (via drop-in `ramdisk.conf`) |
+| `reefy-wifi-early.service` | oneshot | `reefy-storage.service` | Apply saved WiFi config before `network-online.target` |
+| `reefy-mqtt.service` | simple | `reefy-storage.service`, `network-online.target` | MQTT reconciler — device registration, desired state |
+| `reefy-tunnel.service` | simple | `reefy-storage.service` | Tailscale tunnel (if configured) |
+| `reefy-cmds.service` | oneshot | `reefy-storage.service` | Execute custom commands from USB |
+| `reefy-mgmt.service` | simple | `reefy-storage.service`, `network-online.target` | Mgmt config daemon (if configured) |
+| `nvidia-cdi-generate.service` | oneshot | `reefy-storage.service`, `systemd-modules-load` | GPU device nodes + CDI spec |
+| `reefy-watchdog.timer` | timer | — | Health check every 60s (starts 2min after boot) |
 
 ## Normal Boot Timeline
 
 ```
 t=0   EFI hands off to systemd
-t+1s  sbnb-storage.service starts
+t+1s  reefy-storage.service starts
         ├── hostname set
         ├── USB mounted
         ├── EFI boot entries verified
-        ├── internal drive mounted at /mnt/sbnb-data (or USB fallback)
+        ├── internal drive mounted at /mnt/reefy-data (or USB fallback)
         └── LUKS opened
-t+3s  sbnb-storage.service completes → triggers parallel startup:
-        ├── sbnb-wifi-early.service (applies saved WiFi config if present)
+t+3s  reefy-storage.service completes → triggers parallel startup:
+        ├── reefy-wifi-early.service (applies saved WiFi config if present)
         ├── docker.service          (pulls images, starts containers)
-        ├── sbnb-tunnel.service     (Tailscale tunnel)
+        ├── reefy-tunnel.service     (Tailscale tunnel)
         ├── nvidia-cdi-generate     (GPU device nodes)
-        └── sbnb-init.service       (credentials + banner)
-t+7s  sbnb-wifi-early completes (WiFi connected or skipped)
+        └── reefy-init.service       (credentials + banner)
+t+7s  reefy-wifi-early completes (WiFi connected or skipped)
         └── network-online.target reached (--any: first interface with IP)
-            └── sbnb-mqtt.service   (connects to EMQX, registers device)
+            └── reefy-mqtt.service   (connects to EMQX, registers device)
 t+9s  MQTT connected, device registered
 t+10s Docker containers running
 ```
 
 ## First Boot Differences
 
-On first boot, `sbnb-storage.service` takes longer (~5-10s extra):
+On first boot, `reefy-storage.service` takes longer (~5-10s extra):
 - Creates USB partitions 2 (key) and 3 (data)
 - Fills key partition with random data + passphrase
 - LUKS formats partition 3
@@ -106,7 +106,7 @@ Everything after storage setup is the same as normal boot.
 | Failure | Impact | Recovery |
 |---------|--------|----------|
 | `set_hostname` fails | Generic hostname, boot continues | Reboot |
-| `mount_sbnb_usb` fails | Fatal — no USB means no certs/config | Check USB dongle |
+| `mount_reefy_usb` fails | Fatal — no USB means no certs/config | Check USB dongle |
 | `setup_data_partition` fails | Fatal — no persistent state | Check disk, LUKS key |
 | `setup_internal_storage` fails | Docker uses slow USB, boot continues | Check internal drive |
 | `setup_device_credentials` fails | No SSH password, boot continues normally | Fixed on next reboot or manual setup |
@@ -117,12 +117,12 @@ Everything after storage setup is the same as normal boot.
 
 | File | Purpose |
 |------|---------|
-| `usr/bin/boot-sbnb-storage.sh` | Phase 1: hostname, USB mount, EFI fix, LUKS, internal storage |
-| `usr/bin/sbnb-efi` | Unified EFI boot entry management (fix/update/confirm/status) |
-| `usr/bin/boot-sbnb-init.sh` | Phase 2: credentials, banner |
-| `usr/lib/systemd/system/sbnb-storage.service` | Systemd unit for phase 1 |
-| `usr/lib/systemd/system/sbnb-init.service` | Systemd unit for phase 2 |
-| `usr/bin/sbnb-wifi-early` | Apply saved WiFi config from desired-state.json |
-| `usr/lib/systemd/system/sbnb-wifi-early.service` | Systemd unit: runs after storage, before network-online |
+| `usr/bin/boot-reefy-storage.sh` | Phase 1: hostname, USB mount, EFI fix, LUKS, internal storage |
+| `usr/bin/reefy-efi` | Unified EFI boot entry management (fix/update/confirm/status) |
+| `usr/bin/boot-reefy-init.sh` | Phase 2: credentials, banner |
+| `usr/lib/systemd/system/reefy-storage.service` | Systemd unit for phase 1 |
+| `usr/lib/systemd/system/reefy-init.service` | Systemd unit for phase 2 |
+| `usr/bin/reefy-wifi-early` | Apply saved WiFi config from desired-state.json |
+| `usr/lib/systemd/system/reefy-wifi-early.service` | Systemd unit: runs after storage, before network-online |
 | `usr/lib/systemd/system/systemd-networkd-wait-online.service.d/any-interface.conf` | Override: `--any --timeout=30` (succeed on first interface with IP) |
-| `etc/systemd/system/docker.service.d/ramdisk.conf` | Docker depends on sbnb-storage |
+| `etc/systemd/system/docker.service.d/ramdisk.conf` | Docker depends on reefy-storage |

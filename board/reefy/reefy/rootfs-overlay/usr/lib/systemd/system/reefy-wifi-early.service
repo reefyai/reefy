@@ -1,0 +1,19 @@
+[Unit]
+Description=Apply saved WiFi config early in boot
+After=reefy-storage.service
+Wants=reefy-storage.service
+Before=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/reefy-wifi-early
+RemainAfterExit=true
+TimeoutStartSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=reefy-wifi-early
+
+[Install]
+WantedBy=multi-user.target

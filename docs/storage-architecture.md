@@ -6,10 +6,10 @@ A reefy device has two mount points:
 
 | Mount Point | Media | Purpose |
 |-------------|-------|---------|
-| `/mnt/sbnb` | USB dongle, partition 1 (A or B) | EFI image, certs, MQTT bootstrap (read-only) |
-| `/mnt/sbnb-data` | Internal drive (preferred) or USB partition 4 (fallback) | Everything: device state, Docker, app volumes |
+| `/mnt/reefy` | USB dongle, partition 1 (A or B) | EFI image, certs, MQTT bootstrap (read-only) |
+| `/mnt/reefy-data` | Internal drive (preferred) or USB partition 4 (fallback) | Everything: device state, Docker, app volumes |
 
-When an internal drive is available, it is mounted directly at `/mnt/sbnb-data` by `boot-sbnb-storage.sh`. If no internal drive, USB partition 4 is used as fallback.
+When an internal drive is available, it is mounted directly at `/mnt/reefy-data` by `boot-reefy-storage.sh`. If no internal drive, USB partition 4 is used as fallback.
 
 ## Partition Layout
 
@@ -19,8 +19,8 @@ When an internal drive is available, it is mounted directly at `/mnt/sbnb-data` 
 USB dongle (e.g., 58 GB)
 ├── Partition 1: EFI System Partition        (0 - 511 MiB)
 │   Type:      EFI System (GPT)
-│   Format:    VFAT, PARTLABEL="sbnb"
-│   Mount:     /mnt/sbnb (read-only)
+│   Format:    VFAT, PARTLABEL="reefy"
+│   Mount:     /mnt/reefy (read-only)
 │   Contents:  EFI boot image, MQTT certs, bootstrap config
 │   Lifecycle: Written once during image flash; updated only by firmware OTA
 │
@@ -34,19 +34,19 @@ USB dongle (e.g., 58 GB)
 └── Partition 3: Data Partition              (512 MiB - end of disk)
     Type:      Linux data
     Format:    LUKS2 → f2fs inside
-    PARTLABEL: "sbnb-data"
-    Mount:     /mnt/sbnb-data (read-write, noatime)
+    PARTLABEL: "reefy-data"
+    Mount:     /mnt/reefy-data (read-write, noatime)
     Contents:  Device state, MQTT config, app data (or bind-mount targets)
     Lifecycle: Created and encrypted on first boot; persists across reboots/updates
 ```
 
-### Internal Drive(s) (optional, mounted directly at /mnt/sbnb-data)
+### Internal Drive(s) (optional, mounted directly at /mnt/reefy-data)
 
 ```
 Internal drives (nvme0n1, sda, etc.)
 └── Entire device(s) wiped and reformatted:
-    LUKS2 → LVM PV → VG "sbnb" → LV "data" → ext4
-    Mount: /mnt/sbnb-data (read-write, noatime, commit=60)
+    LUKS2 → LVM PV → VG "reefy" → LV "data" → ext4
+    Mount: /mnt/reefy-data (read-write, noatime, commit=60)
 
     Multiple drives are combined into a single LVM volume group
     (linear concatenation, not striped — handles mixed sizes).
@@ -92,7 +92,7 @@ echo -n "YOUR_BACKED_UP_PASSPHRASE" | dd of=/dev/sdb2 conv=notrunc
 
 # Or open LUKS manually with the passphrase as a file
 echo -n "YOUR_BACKED_UP_PASSPHRASE" > /tmp/key
-cryptsetup luksOpen /dev/sdb3 sbnb-data --key-file /tmp/key --keyfile-size 44
+cryptsetup luksOpen /dev/sdb3 reefy-data --key-file /tmp/key --keyfile-size 44
 shred -u /tmp/key
 ```
 
@@ -107,17 +107,17 @@ Partition 2 is typed as "Microsoft Reserved" so all operating systems ignore it.
 ```
 power on
   → EFI boots from USB partition 1
-  → sbnb-storage.service runs boot-sbnb-storage.sh
-  → mount /dev/sdb1 → /mnt/sbnb (read-only)
+  → reefy-storage.service runs boot-reefy-storage.sh
+  → mount /dev/sdb1 → /mnt/reefy (read-only)
   → detect: partition 3 doesn't exist
   → fix GPT backup header (image was 512 MB, dongle is larger)
   → create partition 2 (1 MiB, key) + partition 3 (rest, data)
   → fill partition 2 with urandom, write passphrase at offset 0
   → LUKS2 format partition 3 with passphrase
   → mkfs.f2fs inside LUKS container
-  → mount → /mnt/sbnb-data
-  → start docker, sbnb-mqtt reconciler (parallel)
-  → sbnb-init.service: credentials + banner (parallel)
+  → mount → /mnt/reefy-data
+  → start docker, reefy-mqtt reconciler (parallel)
+  → reefy-init.service: credentials + banner (parallel)
   → device registers via MQTT bootstrap
 ```
 
@@ -132,14 +132,14 @@ systemd's `EnvironmentFile=-` prefix) and handle missing mounts gracefully.
 ```
 power on
   → EFI boots from USB partition 1
-  → sbnb-storage.service runs boot-sbnb-storage.sh
-  → mount /dev/sdb1 → /mnt/sbnb (read-only)
+  → reefy-storage.service runs boot-reefy-storage.sh
+  → mount /dev/sdb1 → /mnt/reefy (read-only)
   → detect: partition 3 exists and is LUKS
   → read passphrase from partition 2
-  → cryptsetup luksOpen → mount → /mnt/sbnb-data
-  → mount internal drive at /mnt/sbnb-data (if available)
-  → start docker, sbnb-mqtt reconciler (parallel)
-  → sbnb-init.service: credentials + banner (parallel)
+  → cryptsetup luksOpen → mount → /mnt/reefy-data
+  → mount internal drive at /mnt/reefy-data (if available)
+  → start docker, reefy-mqtt reconciler (parallel)
+  → reefy-init.service: credentials + banner (parallel)
   → reconciler connects, receives desired state
 ```
 
@@ -154,17 +154,17 @@ reconciler receives desired state with storage config
       → LUKS2 format with passphrase from USB partition 2
       → cryptsetup luksOpen
       → pvcreate (LVM physical volume)
-  → vgcreate "sbnb" from all PVs
+  → vgcreate "reefy" from all PVs
   → lvcreate -l 100%FREE (linear, full capacity)
   → mkfs.ext4
-  → migrate state from overlay → mount at /mnt/sbnb-data
+  → migrate state from overlay → mount at /mnt/reefy-data
   → restart Docker for new storage
 ```
 
 ## Directory Structure
 
 ```
-/mnt/sbnb/                              ← USB partition 1 (read-only)
+/mnt/reefy/                              ← USB partition 1 (read-only)
 ├── EFI/Boot/bootx64.efi               ← EFI boot image
 └── mqtt/
     ├── mqtt.conf                       ← MQTT broker config (bootstrap)
@@ -172,7 +172,7 @@ reconciler receives desired state with storage config
     ├── bootstrap.crt                   ← Bootstrap client cert
     └── bootstrap.key                   ← Bootstrap client key
 
-/mnt/sbnb-data/                         ← USB partition 3 (encrypted)
+/mnt/reefy-data/                         ← USB partition 3 (encrypted)
 ├── state/
 │   ├── mqtt.conf                       ← MQTT runtime config (post-adoption)
 │   ├── device-uuid                     ← Device UUID
@@ -189,15 +189,15 @@ reconciler receives desired state with storage config
 └── cache/                             ← Temporary files
 ```
 
-When an internal drive is configured, `/mnt/sbnb-data` is the internal drive (mounted directly by `boot-sbnb-storage.sh` or the reconciler). Everything — state, apps, docker — lives on the fast internal drive.
+When an internal drive is configured, `/mnt/reefy-data` is the internal drive (mounted directly by `boot-reefy-storage.sh` or the reconciler). Everything — state, apps, docker — lives on the fast internal drive.
 
 ## Filesystem Choices
 
 | Mount | Filesystem | Rationale |
 |-------|-----------|-----------|
-| `/mnt/sbnb` | VFAT | EFI standard; must be FAT for UEFI boot |
-| `/mnt/sbnb-data` (USB) | f2fs | Flash-friendly, log-structured; converts random writes to sequential; `noatime` |
-| `/mnt/sbnb-data` (internal) | ext4 | Standard for internal drives; `noatime,commit=60` for batched journal writes |
+| `/mnt/reefy` | VFAT | EFI standard; must be FAT for UEFI boot |
+| `/mnt/reefy-data` (USB) | f2fs | Flash-friendly, log-structured; converts random writes to sequential; `noatime` |
+| `/mnt/reefy-data` (internal) | ext4 | Standard for internal drives; `noatime,commit=60` for batched journal writes |
 
 ## Security Properties
 
@@ -231,11 +231,11 @@ tpm2_create -C primary.ctx -u key.pub -r key.priv -i /dev/sdb2
 
 | File | Purpose |
 |------|---------|
-| `board/sbnb/sbnb/rootfs-overlay/usr/bin/boot-sbnb-storage.sh` | Partition creation, LUKS setup, mount internal storage |
-| `board/sbnb/sbnb/rootfs-overlay/usr/bin/boot-sbnb-init.sh` | Device credentials, banner |
-| `board/sbnb/sbnb/rootfs-overlay/usr/bin/sbnb-efi` | Unified EFI boot entry management (fix/update/confirm/status) |
-| `board/sbnb/sbnb/rootfs-overlay/usr/bin/sbnb-mqtt-reconciler` | Internal storage setup (LUKS+LVM), app lifecycle |
-| `board/sbnb/sbnb/rootfs-overlay/usr/lib/systemd/system/sbnb-storage.service` | Runs boot-sbnb-storage.sh at startup |
-| `board/sbnb/sbnb/rootfs-overlay/usr/lib/systemd/system/sbnb-init.service` | Runs boot-sbnb-init.sh (parallel, non-critical) |
-| `configs/sbnb_defconfig` | Buildroot packages (cryptsetup, e2fsprogs, lvm2) |
-| `board/sbnb/sbnb/kernel-config` | Kernel modules (dm_crypt, crypto) |
+| `board/reefy/reefy/rootfs-overlay/usr/bin/boot-reefy-storage.sh` | Partition creation, LUKS setup, mount internal storage |
+| `board/reefy/reefy/rootfs-overlay/usr/bin/boot-reefy-init.sh` | Device credentials, banner |
+| `board/reefy/reefy/rootfs-overlay/usr/bin/reefy-efi` | Unified EFI boot entry management (fix/update/confirm/status) |
+| `board/reefy/reefy/rootfs-overlay/usr/bin/reefy-mqtt-reconciler` | Internal storage setup (LUKS+LVM), app lifecycle |
+| `board/reefy/reefy/rootfs-overlay/usr/lib/systemd/system/reefy-storage.service` | Runs boot-reefy-storage.sh at startup |
+| `board/reefy/reefy/rootfs-overlay/usr/lib/systemd/system/reefy-init.service` | Runs boot-reefy-init.sh (parallel, non-critical) |
+| `configs/reefy_defconfig` | Buildroot packages (cryptsetup, e2fsprogs, lvm2) |
+| `board/reefy/reefy/kernel-config` | Kernel modules (dm_crypt, crypto) |

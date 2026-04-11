@@ -1,0 +1,3 @@
+#!/bin/sh
+# Thin wrapper for backward compatibility — delegates to reefy-efi update
+exec reefy-efi update "$@"

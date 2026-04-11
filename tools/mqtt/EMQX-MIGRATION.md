@@ -60,19 +60,19 @@ broker-config/
 ```conf
 # User-based rules
 user CN=bootstrap
-topic write sbnb/devices/bootstrap
+topic write reefy/devices/bootstrap
 
 # Pattern-based rules
-pattern readwrite sbnb/devices/%u/#
+pattern readwrite reefy/devices/%u/#
 ```
 
 **EMQX ACL (Erlang):**
 ```erlang
 %% User-based rules
-{allow, {user, "CN=bootstrap"}, publish, ["sbnb/devices/bootstrap"]}.
+{allow, {user, "CN=bootstrap"}, publish, ["reefy/devices/bootstrap"]}.
 
 %% Pattern-based rules with ${username} placeholder
-{allow, {user, "${username}"}, pubsub, ["sbnb/devices/${username}/#"]}.
+{allow, {user, "${username}"}, pubsub, ["reefy/devices/${username}/#"]}.
 
 %% Explicit deny
 {deny, all}.
@@ -158,7 +158,7 @@ mosquitto_pub -h localhost -p 8883 \
   --cafile certs/ca.crt \
   --cert certs/bootstrap.crt \
   --key certs/bootstrap.key \
-  -t 'sbnb/devices/bootstrap' \
+  -t 'reefy/devices/bootstrap' \
   -m '{"test":"message"}'
 ```
 
@@ -204,7 +204,7 @@ SELECT
   payload.hostname as hostname,
   payload.status as status
 FROM
-  "sbnb/devices/+/status"
+  "reefy/devices/+/status"
 WHERE
   payload.priority = 'high'
 ```

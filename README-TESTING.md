@@ -1,6 +1,6 @@
 # Integration Testing
 
-End-to-end integration tests for the SBNB compute collection. Tests run against a real bare metal host, creating and destroying VMs to verify the full stack from VM lifecycle to service deployment.
+End-to-end integration tests for the Reefy compute collection. Tests run against a real bare metal host, creating and destroying VMs to verify the full stack from VM lifecycle to service deployment.
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ End-to-end integration tests for the SBNB compute collection. Tests run against 
 ## Quick Start
 
 ```bash
-cd collections/ansible_collections/sbnb/compute
+cd collections/ansible_collections/reefy/compute
 
 ./tests/integration/run-tests.sh \
   --host=bare-metal-host \
@@ -26,7 +26,7 @@ cd collections/ansible_collections/sbnb/compute
 --tskey=<key>         Tailscale auth key for VM creation
 --skip-gpu            Skip GPU tests (Phase 2-4) for CPU-only hosts
 --hf-token=<token>    HuggingFace token for gated models
---vm-password=<pw>    VM root password (default: sbnb-test)
+--vm-password=<pw>    VM root password (default: reefy-test)
 --runcmd=<cmd>        Command to run in VM on first boot (repeatable)
 -v, -vv, -vvv        Ansible verbosity level
 ```
@@ -37,7 +37,7 @@ Tests run sequentially in 5 phases. Phases 0-1 are required; phases 2-4 are skip
 
 ### Phase 0: Bare Metal Pre-checks
 
-Confirms that the bare metal portion of Sbnb Linux has properly booted and configured the host: LVM storage mounted, bridge network up, QEMU container image available.
+Confirms that the bare metal portion of Reefy Linux has properly booted and configured the host: LVM storage mounted, bridge network up, QEMU container image available.
 
 ### Phase 1: CPU VM Lifecycle
 
@@ -53,12 +53,12 @@ Each service gets its own fresh VM with full isolation:
 
 | Service | VM Name | What's Tested |
 |---------|---------|---------------|
-| gpu_fryer | `sbnb-test-fryer-*` | 30s GPU stress test completes |
-| vLLM | `sbnb-test-vllm-*` | API responds, model loaded, inference works |
-| SGLang | `sbnb-test-sglang-*` | API responds, model loaded, inference works |
-| Frigate | `sbnb-test-frigate-*` | HTTPS endpoint accessible (200 or 401) |
-| Ollama | `sbnb-test-ollama-*` | API responds, model pulled, inference works |
-| LightRAG | `sbnb-test-ollama-*` | Health endpoint responds (shares VM with Ollama) |
+| gpu_fryer | `reefy-test-fryer-*` | 30s GPU stress test completes |
+| vLLM | `reefy-test-vllm-*` | API responds, model loaded, inference works |
+| SGLang | `reefy-test-sglang-*` | API responds, model loaded, inference works |
+| Frigate | `reefy-test-frigate-*` | HTTPS endpoint accessible (200 or 401) |
+| Ollama | `reefy-test-ollama-*` | API responds, model pulled, inference works |
+| LightRAG | `reefy-test-ollama-*` | Health endpoint responds (shares VM with Ollama) |
 
 Each service test follows the same pattern:
 1. Create a fresh GPU VM
@@ -72,7 +72,7 @@ Each service test follows the same pattern:
 
 | Service | VM Name | What's Tested |
 |---------|---------|---------------|
-| OpenClaw | `sbnb-test-openclaw-*` | Health endpoint responds |
+| OpenClaw | `reefy-test-openclaw-*` | Health endpoint responds |
 
 Same isolation pattern as Phase 3 but without NVIDIA drivers.
 
@@ -80,7 +80,7 @@ Same isolation pattern as Phase 3 but without NVIDIA drivers.
 
 ```
 ══════════════════════════════════════════
-SBNB INTEGRATION TEST SUMMARY
+Reefy INTEGRATION TEST SUMMARY
 ══════════════════════════════════════════
 Started: 2026-02-19 06:40:52
 Finished: 2026-02-19 07:11:32
@@ -120,7 +120,7 @@ Every service test creates its own VM from scratch. This ensures:
 ### File Structure
 
 ```
-collections/ansible_collections/sbnb/compute/tests/integration/
+collections/ansible_collections/reefy/compute/tests/integration/
   run-tests.sh              # Wrapper script with CLI args and ctrl-c cleanup
   test-integration.yml      # Orchestrator playbook (phases 0-4)
   tasks/
@@ -138,10 +138,10 @@ collections/ansible_collections/sbnb/compute/tests/integration/
 All VMs use a random 4-character suffix generated at the start of each run:
 
 ```
-sbnb-test-{service}-{suffix}
+reefy-test-{service}-{suffix}
 ```
 
-For example: `sbnb-test-vllm-axkm`, `sbnb-test-frigate-axkm`.
+For example: `reefy-test-vllm-axkm`, `reefy-test-frigate-axkm`.
 
 This allows concurrent test runs on different hosts without name collisions, and enables the ctrl-c handler to clean up all VMs from the current run.
 
@@ -152,7 +152,7 @@ This allows concurrent test runs on different hosts without name collisions, and
 VMs are accessible via Tailscale during the test. SSH in to inspect:
 
 ```bash
-ssh root@sbnb-test-vllm-axkm
+ssh root@reefy-test-vllm-axkm
 ```
 
 ### VM not cleaned up after failure
@@ -161,10 +161,10 @@ The ctrl-c handler and `always` blocks should handle cleanup. If a VM is left be
 
 ```bash
 ansible-playbook -i bare-metal-host, playbooks/stop-vm.yml \
-  -e sbnb_vm_name=sbnb-test-vllm-axkm \
-  -e sbnb_vm_remove=true
+  -e reefy_vm_name=reefy-test-vllm-axkm \
+  -e reefy_vm_remove=true
 ```
 
 ### Logs
 
-Each run saves a full log to `/tmp/sbnb-integration-test-{timestamp}.log`. Use `-vv` or `-vvv` for more detail.
+Each run saves a full log to `/tmp/reefy-integration-test-{timestamp}.log`. Use `-vv` or `-vvv` for more detail.

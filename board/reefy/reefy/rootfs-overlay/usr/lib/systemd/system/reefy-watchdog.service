@@ -1,0 +1,7 @@
+[Unit]
+Description=reefy watchdog
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/reefy-watchdog.sh
+TimeoutStartSec=50s

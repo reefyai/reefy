@@ -1,0 +1,232 @@
+#!/bin/sh
+# Disable inherited set -e/pipefail — we handle errors explicitly
+set +e +o pipefail 2>/dev/null
+# reefy-efi — Unified EFI boot entry and firmware management
+#
+# Commands:
+#   reefy-efi fix                    Verify/fix EFI entries + boot order
+#   reefy-efi update <efi-file> [-r] A/B firmware update with BootNext
+#   reefy-efi confirm                Commit current slot as default (swap BootOrder)
+#   reefy-efi status                 Show current slot info
+#
+# All commands are idempotent and self-healing:
+# - Remove duplicate/stale EFI entries
+# - Recreate missing entries with correct PARTUUIDs
+# - Fix boot order (reefy entries first)
+
+set -e
+
+REEFY_MNT="/mnt/reefy"
+
+# ── Helpers ──
+
+die() { echo "Error: $1" >&2; exit 1; }
+
+# Find the reefy USB disk from what's mounted at /mnt/reefy
+# Sets: MOUNTED_DEV, DISK
+find_disk() {
+    MOUNTED_DEV=$(findmnt -n -o SOURCE "$REEFY_MNT" 2>/dev/null) || true
+    [ -z "$MOUNTED_DEV" ] && return 1
+    DISK="/dev/$(lsblk -no PKNAME "$MOUNTED_DEV" 2>/dev/null)"
+    [ -b "$DISK" ] || return 1
+}
+
+# Resolve active/inactive slots
+# Sets: ACTIVE_LABEL, INACTIVE_LABEL, INACTIVE_PART, INACTIVE_DEV, CURRENT_BOOTNUM
+resolve_slots() {
+    find_disk || die "$REEFY_MNT not mounted"
+
+    CURRENT_BOOTNUM=$(efibootmgr 2>/dev/null | grep '^BootCurrent:' | awk '{print $2}')
+
+    # Always resolve from what's mounted — BootCurrent can be a transient entry
+    # that doesn't match the mounted ESP (e.g., after USB swap or UEFI quirks)
+    if [ "$MOUNTED_DEV" = "${DISK}1" ]; then
+        ACTIVE_LABEL="reefy-a"
+        INACTIVE_LABEL="reefy-b"
+        INACTIVE_PART=2
+    else
+        ACTIVE_LABEL="reefy-b"
+        INACTIVE_LABEL="reefy-a"
+        INACTIVE_PART=1
+    fi
+
+    INACTIVE_DEV="${DISK}${INACTIVE_PART}"
+}
+
+# Verify and fix all EFI boot entries. Idempotent.
+# - Remove duplicates (UEFI auto-created entries pointing to our partitions)
+# - Remove stale reefy-a/reefy-b entries (wrong PARTUUIDs from old USB)
+# - Create missing reefy-a/reefy-b entries
+# - Fix boot order (reefy entries first)
+fix_entries() {
+    find_disk || die "$REEFY_MNT not mounted"
+
+    GUID_A=$(blkid -s PARTUUID -o value "${DISK}1" 2>/dev/null)
+    GUID_B=$(blkid -s PARTUUID -o value "${DISK}2" 2>/dev/null)
+
+    mount -o remount,rw /sys/firmware/efi/efivars 2>/dev/null || true
+
+    # Remove UEFI auto-created entries that point to our partitions but aren't reefy-a/reefy-b
+    efibootmgr 2>/dev/null | grep '^Boot[0-9A-F]*\*' | while read -r line; do
+        BOOTNUM=$(echo "$line" | sed 's/Boot\([0-9A-F]*\)\*.*/\1/')
+        LABEL=$(echo "$line" | sed 's/Boot[0-9A-F]*\* //' | awk '{print $1}')
+        [ "$LABEL" = "reefy-a" ] && continue
+        [ "$LABEL" = "reefy-b" ] && continue
+        ENTRY_DETAIL=$(efibootmgr -v 2>/dev/null | grep "^Boot${BOOTNUM}\*")
+        if echo "$ENTRY_DETAIL" | grep -qi "${GUID_A}\|${GUID_B}" 2>/dev/null; then
+            efibootmgr -b "$BOOTNUM" -B 2>/dev/null || true
+            echo "[reefy-efi] Removed duplicate entry: Boot${BOOTNUM} (${LABEL})"
+        fi
+    done
+
+    # Remove stale reefy-a/reefy-b entries that don't point to current disk
+    for REEFY_LABEL in reefy-a reefy-b; do
+        REEFY_ENTRY=$(efibootmgr -v 2>/dev/null | grep "^Boot[0-9A-F]*\* ${REEFY_LABEL}[[:space:]]" || true)
+        if [ -n "$REEFY_ENTRY" ]; then
+            REEFY_NUM=$(echo "$REEFY_ENTRY" | sed 's/Boot\([0-9A-F]*\)\*.*/\1/')
+            if ! echo "$REEFY_ENTRY" | grep -qi "${GUID_A}\|${GUID_B}" 2>/dev/null; then
+                efibootmgr -b "$REEFY_NUM" -B 2>/dev/null || true
+                echo "[reefy-efi] Removed stale entry: Boot${REEFY_NUM} (${REEFY_LABEL})"
+            fi
+        fi
+    done
+
+    # Create missing entries
+    if ! efibootmgr 2>/dev/null | grep -q "reefy-a"; then
+        efibootmgr -c -d "$DISK" -p 1 -L "reefy-a" -l '\EFI\Boot\bootx64.efi' 2>/dev/null || true
+        echo "[reefy-efi] Created entry: reefy-a"
+    fi
+    if ! efibootmgr 2>/dev/null | grep -q "reefy-b"; then
+        efibootmgr -c -d "$DISK" -p 2 -L "reefy-b" -l '\EFI\Boot\bootx64.efi' 2>/dev/null || true
+        echo "[reefy-efi] Created entry: reefy-b"
+    fi
+
+    # Fix boot order — reefy entries must be first
+    REEFY_A_NUM=$(efibootmgr 2>/dev/null | grep "reefy-a" | sed 's/Boot\([0-9A-F]*\)\*.*/\1/')
+    REEFY_B_NUM=$(efibootmgr 2>/dev/null | grep "reefy-b" | sed 's/Boot\([0-9A-F]*\)\*.*/\1/')
+    if [ -n "$REEFY_A_NUM" ] && [ -n "$REEFY_B_NUM" ]; then
+        CURRENT_ORDER=$(efibootmgr 2>/dev/null | grep '^BootOrder:' | awk '{print $2}')
+        FIRST=$(echo "$CURRENT_ORDER" | cut -d, -f1)
+        if [ "$FIRST" != "$REEFY_A_NUM" ] && [ "$FIRST" != "$REEFY_B_NUM" ]; then
+            efibootmgr -o "${REEFY_A_NUM},${REEFY_B_NUM}" 2>/dev/null || true
+            echo "[reefy-efi] Set BootOrder: ${REEFY_A_NUM},${REEFY_B_NUM}"
+        fi
+    fi
+
+    mount -o remount,ro /sys/firmware/efi/efivars 2>/dev/null || true
+}
+
+# ── Commands ──
+
+cmd_fix() {
+    fix_entries
+}
+
+cmd_status() {
+    resolve_slots
+    REEFY_A_NUM=$(efibootmgr 2>/dev/null | grep "reefy-a" | sed 's/Boot\([0-9A-F]*\)\*.*/\1/')
+    REEFY_B_NUM=$(efibootmgr 2>/dev/null | grep "reefy-b" | sed 's/Boot\([0-9A-F]*\)\*.*/\1/')
+    echo "Active:   ${ACTIVE_LABEL} (Boot${CURRENT_BOOTNUM})"
+    echo "Inactive: ${INACTIVE_LABEL} → ${INACTIVE_DEV}"
+    echo "reefy-a:   Boot${REEFY_A_NUM:-missing} → ${DISK}1"
+    echo "reefy-b:   Boot${REEFY_B_NUM:-missing} → ${DISK}2"
+    efibootmgr 2>/dev/null | grep -E '^Boot(Current|Order|Next)'
+}
+
+cmd_confirm() {
+    # Commit current boot slot as default by swapping BootOrder.
+    # Called by reefy-boot-confirm after health checks pass.
+    CURRENT=$(efibootmgr 2>/dev/null | grep '^BootCurrent:' | awk '{print $2}')
+    DEFAULT=$(efibootmgr 2>/dev/null | grep '^BootOrder:' | awk '{print $2}' | cut -d, -f1)
+
+    if [ "$CURRENT" = "$DEFAULT" ]; then
+        echo "[reefy-efi] Already default slot, nothing to confirm"
+        exit 0
+    fi
+
+    mount -o remount,rw /sys/firmware/efi/efivars 2>/dev/null || true
+    efibootmgr -o "${CURRENT},${DEFAULT}" 2>/dev/null
+    mount -o remount,ro /sys/firmware/efi/efivars 2>/dev/null || true
+
+    echo "[reefy-efi] Committed Boot${CURRENT} as default"
+}
+
+cmd_update() {
+    EFI_FILE="$1"
+    REBOOT=0
+    [ "$2" = "-r" ] && REBOOT=1
+
+    [ -z "$EFI_FILE" ] && die "Usage: reefy-efi update <efi-file> [-r]"
+    [ ! -f "$EFI_FILE" ] && die "File not found: $EFI_FILE"
+    mountpoint -q "$REEFY_MNT" || die "$REEFY_MNT not mounted"
+
+    # Acquire lock
+    LOCK_FILE="/var/lock/reefy-update.lock"
+    exec 9>"$LOCK_FILE"
+    flock -n 9 || die "Another update is already running"
+
+    resolve_slots
+    # Fix all EFI entries first (idempotent, self-healing)
+    fix_entries
+
+    # Re-read inactive boot number (may have been recreated by fix_entries)
+    INACTIVE_BOOTNUM=$(efibootmgr 2>/dev/null | grep "^Boot[0-9A-F]*\* ${INACTIVE_LABEL}" | \
+        sed 's/Boot\([0-9A-F]*\)\*.*/\1/')
+
+    echo "A/B Update:"
+    echo "  Active:   ${ACTIVE_LABEL} (Boot${CURRENT_BOOTNUM})"
+    echo "  Inactive: ${INACTIVE_LABEL} (Boot${INACTIVE_BOOTNUM})"
+    echo "  Target:   ${INACTIVE_DEV}"
+    echo "  Source:    ${EFI_FILE}"
+
+    # Format inactive ESP (fixes vfat corruption)
+    echo "Formatting ${INACTIVE_DEV}..."
+    mkfs.vfat -F 32 -n "${INACTIVE_LABEL}" "${INACTIVE_DEV}"
+
+    # Write firmware to inactive slot
+    INACTIVE_MNT=$(mktemp -d)
+    mount "${INACTIVE_DEV}" "${INACTIVE_MNT}"
+    cp -a "${REEFY_MNT}/mqtt" "${INACTIVE_MNT}/" 2>/dev/null || true
+    mkdir -p "${INACTIVE_MNT}/EFI/Boot"
+    echo "Copying EFI file..."
+    cp "$EFI_FILE" "${INACTIVE_MNT}/EFI/Boot/bootx64.efi"
+    sync
+    umount "${INACTIVE_MNT}"
+    rmdir "${INACTIVE_MNT}"
+
+    # Set BootNext for one-shot try
+    mount -o remount,rw /sys/firmware/efi/efivars 2>/dev/null || true
+    efibootmgr -n "${INACTIVE_BOOTNUM}" 2>/dev/null
+
+    if efibootmgr | grep -q "^BootNext:"; then
+        echo "BootNext set to Boot${INACTIVE_BOOTNUM} — safe A/B update"
+    else
+        # BootNext not supported — fall back to overwriting active ESP too
+        efibootmgr -N 2>/dev/null
+        echo "BootNext not supported, overwriting active ESP too"
+        mount -o remount,rw "$REEFY_MNT"
+        cp "$EFI_FILE" "$REEFY_MNT/EFI/Boot/bootx64.efi"
+        sync
+        mount -o remount,ro "$REEFY_MNT"
+    fi
+
+    mount -o remount,ro /sys/firmware/efi/efivars 2>/dev/null || true
+
+    echo "Update complete!"
+
+    if [ "$REBOOT" -eq 1 ]; then
+        echo "Rebooting in 3 seconds..."
+        sleep 3
+        reboot
+    fi
+}
+
+# ── Main ──
+
+case "${1:-}" in
+    fix)     cmd_fix ;;
+    status)  cmd_status ;;
+    confirm) cmd_confirm ;;
+    update)  shift; cmd_update "$@" ;;
+    *)       echo "Usage: reefy-efi {fix|update|confirm|status}"; exit 1 ;;
+esac

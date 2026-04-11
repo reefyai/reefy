@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# SBNB MQTT Server Setup Script
+# Reefy MQTT Server Setup Script
 #
-# This script sets up a complete MQTT+mTLS infrastructure for SBNB devices:
+# This script sets up a complete MQTT+mTLS infrastructure for Reefy devices:
 # 1. Generates CA and bootstrap certificates
 # 2. Configures EMQX broker with mTLS
 # 3. Starts broker in Docker
@@ -30,7 +30,7 @@
 #   ./setup-mqtt-server.sh --skip-certs -s -o ./mqtt-server
 #
 # To inject MQTT config into a raw image, use inject-mqtt-config.sh:
-#   sudo ./inject-mqtt-config.sh -i /path/to/sbnb.raw
+#   sudo ./inject-mqtt-config.sh -i /path/to/reefy.raw
 #
 
 set -euo pipefail
@@ -109,7 +109,7 @@ generate_certificates() {
     log_info "Generating CA certificate..."
     openssl req -new -x509 -days 3650 -extensions v3_ca \
         -keyout ca.key -out ca.crt \
-        -subj "/C=US/ST=FL/L=Miami/O=SBNB/OU=Certificate Authority/CN=SBNB Root CA" \
+        -subj "/C=US/ST=FL/L=Miami/O=Reefy/OU=Certificate Authority/CN=Reefy Root CA" \
         -nodes 2>/dev/null
 
     log_info "✓ CA certificate: ${CERTS_DIR}/ca.crt"
@@ -118,7 +118,7 @@ generate_certificates() {
     log_info "Generating broker server certificate for ${MQTT_DOMAIN}..."
     openssl genrsa -out broker.key 2048 2>/dev/null
     openssl req -new -key broker.key -out broker.csr \
-        -subj "/C=US/ST=FL/L=Miami/O=SBNB/OU=Broker/CN=${MQTT_DOMAIN}" 2>/dev/null
+        -subj "/C=US/ST=FL/L=Miami/O=Reefy/OU=Broker/CN=${MQTT_DOMAIN}" 2>/dev/null
 
     # Create broker cert with SAN extension
     # Auto-detect if domain is an IP address or hostname
@@ -152,7 +152,7 @@ EOF
     log_info "Generating shared bootstrap certificate..."
     openssl genrsa -out bootstrap.key 2048 2>/dev/null
     openssl req -new -key bootstrap.key -out bootstrap.csr \
-        -subj "/C=US/ST=FL/L=Miami/O=SBNB/OU=Devices/CN=bootstrap" 2>/dev/null
+        -subj "/C=US/ST=FL/L=Miami/O=Reefy/OU=Devices/CN=bootstrap" 2>/dev/null
 
     cat > bootstrap-ext.cnf <<EOF
 basicConstraints=CA:FALSE
@@ -194,7 +194,7 @@ generate_device_cert() {
 
     openssl genrsa -out device.key 2048 2>/dev/null
     openssl req -new -key device.key -out device.csr \
-        -subj "/C=US/ST=FL/L=Miami/O=SBNB/OU=Devices/CN=${uuid}" 2>/dev/null
+        -subj "/C=US/ST=FL/L=Miami/O=Reefy/OU=Devices/CN=${uuid}" 2>/dev/null
 
     cat > device-ext.cnf <<EOF
 basicConstraints=CA:FALSE
@@ -223,24 +223,24 @@ create_broker_config() {
 
     # Create EMQX ACL configuration (file-based authorization)
     cat > "${BROKER_CONFIG_DIR}/acl.conf" <<'EOF'
-%% SBNB MQTT Access Control List for EMQX
+%% Reefy MQTT Access Control List for EMQX
 %% Syntax: {allow|deny, who, action, topics}.
 %% action: publish | subscribe | all
 %% who: all | {user, "name"} | {clientid, "id"}
 
 %% Bootstrap certificate (CN=bootstrap) can publish/subscribe to bootstrap topic tree
-%% Devices publish registration to: sbnb/devices/bootstrap/{hostname}/register
-%% Admin publishes provisioning to: sbnb/devices/bootstrap/{hostname}/provision
-{allow, {user, "bootstrap"}, publish, ["sbnb/devices/bootstrap/#"]}.
-{allow, {user, "bootstrap"}, subscribe, ["sbnb/devices/bootstrap/#"]}.
+%% Devices publish registration to: reefy/devices/bootstrap/{hostname}/register
+%% Admin publishes provisioning to: reefy/devices/bootstrap/{hostname}/provision
+{allow, {user, "bootstrap"}, publish, ["reefy/devices/bootstrap/#"]}.
+{allow, {user, "bootstrap"}, subscribe, ["reefy/devices/bootstrap/#"]}.
 
 %% Admin (bootstrap cert) can send commands to devices and monitor status
-{allow, {user, "bootstrap"}, publish, ["sbnb/devices/+/commands"]}.
-{allow, {user, "bootstrap"}, subscribe, ["sbnb/devices/+/status"]}.
+{allow, {user, "bootstrap"}, publish, ["reefy/devices/+/commands"]}.
+{allow, {user, "bootstrap"}, subscribe, ["reefy/devices/+/status"]}.
 
 %% Any authenticated user can publish and subscribe to their own topics
 %% ${username} is replaced with the CN extracted from the client certificate
-{allow, all, all, ["sbnb/devices/${username}/#"]}.
+{allow, all, all, ["reefy/devices/${username}/#"]}.
 
 %% Deny all other access
 {deny, all}.
@@ -251,7 +251,7 @@ EOF
 # EMQX Configuration via Environment Variables
 
 # Cluster and node
-EMQX_NAME=sbnb-mqtt-broker
+EMQX_NAME=reefy-mqtt-broker
 EMQX_HOST=127.0.0.1
 
 # Disable unused listeners (only allow TLS on 8883)
@@ -298,7 +298,7 @@ version: '3.8'
 services:
   emqx:
     image: emqx/emqx:5.8.9
-    container_name: sbnb-mqtt-broker
+    container_name: reefy-mqtt-broker
     restart: unless-stopped
     ports:
       - "${MQTT_PORT}:8883"      # MQTT over TLS
@@ -312,7 +312,7 @@ services:
       - emqx.env
 
     networks:
-      - sbnb-mqtt
+      - reefy-mqtt
     healthcheck:
       test: ["CMD", "/opt/emqx/bin/emqx", "ctl", "status"]
       interval: 30s
@@ -327,7 +327,7 @@ volumes:
     driver: local
 
 networks:
-  sbnb-mqtt:
+  reefy-mqtt:
     driver: bridge
 EOF
 
@@ -350,28 +350,28 @@ create_usb_bundle() {
 
     # Create mqtt.conf
     cat > "${USB_BUNDLE_DIR}/mqtt.conf" <<EOF
-# SBNB MQTT Configuration
-# This file is copied from USB flash to /etc/sbnb/mqtt/ at boot
+# Reefy MQTT Configuration
+# This file is copied from USB flash to /etc/reefy/mqtt/ at boot
 
 MQTT_BROKER=${MQTT_DOMAIN}
 MQTT_PORT=${MQTT_PORT}
 MQTT_KEEPALIVE=60
 
-# Certificate paths (after copying to /etc/sbnb/mqtt/)
-MQTT_CA_CERT=/etc/sbnb/mqtt/ca.crt
-MQTT_CLIENT_CERT=/etc/sbnb/mqtt/bootstrap.crt
-MQTT_CLIENT_KEY=/etc/sbnb/mqtt/bootstrap.key
+# Certificate paths (after copying to /etc/reefy/mqtt/)
+MQTT_CA_CERT=/etc/reefy/mqtt/ca.crt
+MQTT_CLIENT_CERT=/etc/reefy/mqtt/bootstrap.crt
+MQTT_CLIENT_KEY=/etc/reefy/mqtt/bootstrap.key
 
 # Topic prefix
-MQTT_TOPIC_PREFIX=sbnb
+MQTT_TOPIC_PREFIX=reefy
 EOF
 
     # Create README for USB bundle
     cat > "${USB_BUNDLE_DIR}/README.txt" <<EOF
-SBNB MQTT Configuration Bundle
+Reefy MQTT Configuration Bundle
 ================================
 
-This directory contains the MQTT configuration and certificates for SBNB devices.
+This directory contains the MQTT configuration and certificates for Reefy devices.
 
 Files:
   - mqtt.conf       : MQTT broker connection settings
@@ -380,15 +380,15 @@ Files:
   - bootstrap.key   : Bootstrap private key
 
 Usage:
-  1. Copy this entire 'mqtt/' directory to the root of your SBNB USB flash drive
+  1. Copy this entire 'mqtt/' directory to the root of your Reefy USB flash drive
   2. The directory structure should be:
-       /mnt/sbnb/mqtt/mqtt.conf
-       /mnt/sbnb/mqtt/ca.crt
-       /mnt/sbnb/mqtt/bootstrap.crt
-       /mnt/sbnb/mqtt/bootstrap.key
-  3. Insert USB into SBNB device and boot
-  4. The boot script will automatically copy these files to /etc/sbnb/mqtt/
-  5. The sbnb-mqtt service will start and connect to the broker
+       /mnt/reefy/mqtt/mqtt.conf
+       /mnt/reefy/mqtt/ca.crt
+       /mnt/reefy/mqtt/bootstrap.crt
+       /mnt/reefy/mqtt/bootstrap.key
+  3. Insert USB into Reefy device and boot
+  4. The boot script will automatically copy these files to /etc/reefy/mqtt/
+  5. The reefy-mqtt service will start and connect to the broker
 
 Security Notes:
   - The bootstrap certificate is shared across devices (for initial registration)
@@ -456,7 +456,7 @@ start_broker() {
 # ============================================================================
 
 main() {
-    log_info "SBNB MQTT Server Setup"
+    log_info "Reefy MQTT Server Setup"
     log_info "======================"
     log_info "Domain:     ${MQTT_DOMAIN}"
     log_info "Port:       ${MQTT_PORT}"
@@ -500,13 +500,13 @@ main() {
         log_info "   $0 --skip-certs -s -o ${OUTPUT_DIR}"
         log_info ""
     fi
-    log_info "2. Copy USB bundle to your SBNB device:"
+    log_info "2. Copy USB bundle to your Reefy device:"
     log_info "   cp -r ${USB_BUNDLE_DIR} /path/to/usb/mount/point/"
     log_info ""
     log_info "3. Or inject into raw image:"
-    log_info "   sudo ./inject-mqtt-config.sh -o ${OUTPUT_DIR} -i /path/to/sbnb.raw"
+    log_info "   sudo ./inject-mqtt-config.sh -o ${OUTPUT_DIR} -i /path/to/reefy.raw"
     log_info ""
-    log_info "4. Boot SBNB device with MQTT config"
+    log_info "4. Boot Reefy device with MQTT config"
     log_info "   The device will automatically register with the broker"
     log_info ""
     log_info "Files generated:"

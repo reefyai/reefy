@@ -1,0 +1,29 @@
+---
+# SGLang role defaults
+
+# Container configuration
+reefy_sglang_container_name: sglang
+reefy_sglang_image: lmsysorg/sglang:latest
+reefy_sglang_state: started
+reefy_sglang_pull: false  # Only pull when explicitly needed
+reefy_sglang_recreate: false
+reefy_sglang_shm_size: "32g"
+
+# Ports
+reefy_sglang_ports:
+  - "8000:8000"
+
+# Storage paths
+reefy_sglang_cache_path: /mnt/reefy-data/huggingface
+reefy_sglang_data_path: /mnt/reefy-data/src
+
+# HuggingFace token (required for gated models)
+# reefy_sglang_hf_token: "hf_xxx"
+reefy_sglang_require_hf_token: false
+
+# Model to serve
+reefy_sglang_model: "Qwen/Qwen3-0.6B"
+
+# SGLang server arguments (appended to default command)
+# Example: "--max-total-tokens 4096 --quantization awq"
+reefy_sglang_extra_args: ""

@@ -1,0 +1,73 @@
+#!/bin/sh
+set -uxo pipefail
+# NOTE: no set -e — errors are logged but don't stop execution.
+
+# Phase 2: Non-critical init — runs in parallel with Docker/MQTT/GPU.
+# See docs/boot-architecture.md for full boot flow.
+
+REEFY_DATA_MNT="/mnt/reefy-data"
+
+# Generate device password on first boot, create reefy user,
+# and set password for both root and reefy.
+# Runs every boot since rootfs is in RAM (not persistent).
+setup_device_credentials() {
+    PASSWORD_FILE="${REEFY_DATA_MNT}/state/device_password"
+
+    # Generate password on first boot only
+    # Uses easy-to-type chars (no ambiguous 0O1lI): 12 chars ≈ 59 bits entropy
+    # Always generate even without persistent storage (overlay dir is fine —
+    # bootstrap state copy during adoption will carry it to real storage)
+    if [ ! -f "${PASSWORD_FILE}" ]; then
+        mkdir -p "$(dirname "${PASSWORD_FILE}")"
+        PASSWORD=$(tr -dc 'abcdefghjkmnpqrstuvwxyz23456789' < /dev/urandom | head -c 12)
+        echo "${PASSWORD}" > "${PASSWORD_FILE}"
+        chmod 600 "${PASSWORD_FILE}"
+        echo "[reefy] Generated device password"
+    fi
+
+    # Read password
+    PASSWORD=$(cat "${PASSWORD_FILE}" 2>/dev/null) || return 0
+    [ -z "${PASSWORD}" ] && return 0
+
+    # Users to configure — keep in sync with DEVICE_USERS in reefy-mqtt-reconciler
+    DEVICE_USERS="root reefy"
+
+    # Create non-root users if not exists (every boot — rootfs is in RAM)
+    for user in ${DEVICE_USERS}; do
+        [ "${user}" = "root" ] && continue
+        id "${user}" >/dev/null 2>&1 || adduser -D -s /bin/sh "${user}" 2>/dev/null || true
+    done
+
+    # Set passwords using mkpasswd hash + sed (BusyBox passwd doesn't accept stdin)
+    HASH=$(mkpasswd "${PASSWORD}")
+    for user in ${DEVICE_USERS}; do
+        sed -i "s|^${user}:[^:]*:|${user}:${HASH}:|" /etc/shadow
+    done
+
+    echo "[reefy] Device credentials applied"
+}
+
+# Display ASCII banner and hostname/interface IP summary
+display_banner() {
+    {
+        echo "   ____  _           _       _     _"
+        echo "  / ___|| |__  _ __ | |__   | |   (_)_ __  _   ___  __"
+        echo "  \___ \| '_ \| '_ \| '_ \  | |   | | '_ \| | | \ \/ /"
+        echo "   ___) | |_) | | | | |_) | | |___| | | | | |_| |>  <"
+        echo "  |____/|_.__/|_| |_|_.__/  |_____|_|_| |_|\__,_/_/\_\\"
+        echo ""
+        echo "  Welcome to Reefy Linux!"
+        echo "  Version:" $(. /etc/os-release; echo ${IMAGE_VERSION})
+        echo ""
+        echo "  Just an ASCII banner for now."
+        echo "  Animations will arrive right after Linux is rewritten in JavaScript."
+        echo ""
+        echo "Hostname: $(hostname)"
+        echo "Interface IPs:"
+        ip -o -4 addr list | awk '{print $2, $4}'
+    } > /dev/kmsg
+}
+
+# Main execution
+setup_device_credentials
+display_banner

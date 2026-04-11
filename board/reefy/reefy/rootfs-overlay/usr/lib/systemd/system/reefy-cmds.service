@@ -1,0 +1,12 @@
+[Unit]
+Description=Execute reefy custom commands
+After=reefy-storage.service
+Wants=reefy-storage.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/reefy-exec-cmds.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

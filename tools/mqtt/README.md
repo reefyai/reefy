@@ -1,6 +1,6 @@
-# SBNB MQTT Server Tools
+# Reefy MQTT Server Tools
 
-This directory contains tools for setting up and managing the SBNB MQTT+mTLS infrastructure using **EMQX** broker.
+This directory contains tools for setting up and managing the Reefy MQTT+mTLS infrastructure using **EMQX** broker.
 
 ## Overview
 
@@ -81,21 +81,21 @@ sudo umount /mnt/usb
 **Option B: Inject into raw image**
 
 ```bash
-sudo ./inject-mqtt-config.sh -i ../../buildroot/output/images/sbnb.raw
+sudo ./inject-mqtt-config.sh -i ../../buildroot/output/images/reefy.raw
 ```
 
 ### 4. Boot Device
 
-Boot your SBNB device with the USB flash drive or injected image:
+Boot your Reefy device with the USB flash drive or injected image:
 
 ```bash
 # Test locally with QEMU
-../../scripts/sbnb-local-boot.sh
+../../scripts/reefy-local-boot.sh
 ```
 
 The device will:
-1. Copy MQTT config from USB/image to `/etc/sbnb/mqtt/`
-2. Start `sbnb-mqtt` service
+1. Copy MQTT config from USB/image to `/etc/reefy/mqtt/`
+2. Start `reefy-mqtt` service
 3. Register with broker using bootstrap certificate
 4. Wait for provisioning response with device-specific certificate
 
@@ -112,7 +112,7 @@ mosquitto_sub -h localhost -p 8883 \
   --cafile mqtt-server/certs/ca.crt \
   --cert mqtt-server/certs/bootstrap.crt \
   --key mqtt-server/certs/bootstrap.key \
-  -t 'sbnb/devices/bootstrap' -v
+  -t 'reefy/devices/bootstrap' -v
 ```
 
 ## Scripts
@@ -148,7 +148,7 @@ Main setup script that generates certificates, configures EMQX broker, and creat
 
 ### inject-mqtt-config.sh
 
-Injects MQTT configuration into a raw SBNB disk image. Run this after every image rebuild.
+Injects MQTT configuration into a raw Reefy disk image. Run this after every image rebuild.
 Uses the same `-o` output directory as `setup-mqtt-server.sh` (defaults to `./mqtt-server`).
 
 **Usage:**
@@ -164,10 +164,10 @@ sudo ./inject-mqtt-config.sh [OPTIONS]
 
 ```bash
 # Inject using default output directory (./mqtt-server)
-sudo ./inject-mqtt-config.sh -i ../../buildroot/output/images/sbnb.raw
+sudo ./inject-mqtt-config.sh -i ../../buildroot/output/images/reefy.raw
 
 # Inject using custom output directory
-sudo ./inject-mqtt-config.sh -o ./mqtt-prod -i /path/to/sbnb.raw
+sudo ./inject-mqtt-config.sh -o ./mqtt-prod -i /path/to/reefy.raw
 ```
 
 ### generate-device-cert.sh
@@ -230,24 +230,24 @@ mqtt-server/
 ### Device Registration Flow
 
 1. **Device boots** with USB containing bootstrap certificates
-2. **Device registers** by publishing to `sbnb/devices/bootstrap` with MAC and hostname
+2. **Device registers** by publishing to `reefy/devices/bootstrap` with MAC and hostname
 3. **Console receives** registration via MQTT subscription
 4. **Console generates** device-specific certificate:
    ```bash
    ./generate-device-cert.sh -u NEW_UUID -c ./mqtt-server/certs -j
    ```
-5. **Console sends** provisioning response to `sbnb/devices/{uuid}/provision` with device cert
-6. **Device receives** cert, stores in `/mnt/sbnb-data/state/`, reconnects with device cert
-7. **Device subscribes** to `sbnb/devices/{uuid}/config` for configuration updates
+5. **Console sends** provisioning response to `reefy/devices/{uuid}/provision` with device cert
+6. **Device receives** cert, stores in `/mnt/reefy-data/state/`, reconnects with device cert
+7. **Device subscribes** to `reefy/devices/{uuid}/config` for configuration updates
 
 ### Configuration Distribution Flow
 
-1. **Console publishes** config to `sbnb/devices/{uuid}/config` (with retain flag)
+1. **Console publishes** config to `reefy/devices/{uuid}/config` (with retain flag)
 2. **Device receives** config message with download URL and checksum
 3. **Device downloads** configuration bundle (tar.gz)
 4. **Device verifies** checksum
 5. **Device extracts** and applies configuration
-6. **Device sends** status update to `sbnb/devices/{uuid}/status`
+6. **Device sends** status update to `reefy/devices/{uuid}/status`
 
 ## Testing
 
@@ -271,14 +271,14 @@ mosquitto_sub -h localhost -p 8883 \
   --cafile certs/ca.crt \
   --cert certs/bootstrap.crt \
   --key certs/bootstrap.key \
-  -t 'sbnb/devices/bootstrap' -v
+  -t 'reefy/devices/bootstrap' -v
 
 # Publish test message (in another terminal)
 mosquitto_pub -h localhost -p 8883 \
   --cafile certs/ca.crt \
   --cert certs/bootstrap.crt \
   --key certs/bootstrap.key \
-  -t 'sbnb/devices/bootstrap' \
+  -t 'reefy/devices/bootstrap' \
   -m '{"mac":"00:11:22:33:44:55","hostname":"test-device"}'
 ```
 
@@ -300,7 +300,7 @@ mosquitto_sub -h localhost -p 8883 \
   --cafile mqtt-server/certs/ca.crt \
   --cert mqtt-server/device-certs/${UUID}/device.crt \
   --key mqtt-server/device-certs/${UUID}/device.key \
-  -t "sbnb/devices/${UUID}/config" -v
+  -t "reefy/devices/${UUID}/config" -v
 ```
 
 ## Security Considerations
@@ -336,10 +336,10 @@ The ACL (`acl.conf`) enforces topic-based permissions:
 ```
 # Bootstrap can only register
 user CN=bootstrap
-topic write sbnb/devices/bootstrap
+topic write reefy/devices/bootstrap
 
 # Devices can only access their own topics (UUID must match CN)
-pattern readwrite sbnb/devices/%u/#
+pattern readwrite reefy/devices/%u/#
 ```
 
 ### Network Security
@@ -368,8 +368,8 @@ Common issues:
 
 Check device logs:
 ```bash
-# On SBNB device
-journalctl -u sbnb-mqtt -f
+# On Reefy device
+journalctl -u reefy-mqtt -f
 ```
 
 Common issues:
@@ -412,7 +412,7 @@ Rotate bootstrap certificate:
 cd mqtt-server/certs
 openssl genrsa -out bootstrap-new.key 2048
 openssl req -new -key bootstrap-new.key -out bootstrap-new.csr \
-  -subj "/C=US/ST=FL/L=Miami/O=SBNB/OU=Devices/CN=bootstrap"
+  -subj "/C=US/ST=FL/L=Miami/O=Reefy/OU=Devices/CN=bootstrap"
 openssl x509 -req -in bootstrap-new.csr -CA ca.crt -CAkey ca.key \
   -CAcreateserial -out bootstrap-new.crt -days 3650
 

@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# This script automates Sbnb Linux bootable USB creation process on Linux.
-# It downloads, decompresses, and installs the sbnb.raw file onto a selected disk.
-# It also allows the user to provide a Tailscale key and a custom script to be executed during Sbnb Linux boot.
-# More info at https://github.com/sbnb-io/sbnb
+# This script automates Reefy Linux bootable USB creation process on Linux.
+# It downloads, decompresses, and installs the reefy.raw file onto a selected disk.
+# It also allows the user to provide a Tailscale key and a custom script to be executed during Reefy Linux boot.
+# More info at https://github.com/reefyai/reefy
 
 # Exit immediately if a command exits with a non-zero status
 set -e
@@ -16,17 +16,17 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}=========================================${NC}"
-echo -e "${GREEN} Welcome to Sbnb Linux Bootable USB Creation ${NC}"
+echo -e "${GREEN} Welcome to Reefy Linux Bootable USB Creation ${NC}"
 echo -e "${BLUE}=========================================${NC}"
 
-# Step 1: Find latest release and download sbnb.raw.zip if not provided
+# Step 1: Find latest release and download reefy.raw.zip if not provided
 if [ -z "$1" ]; then
-    repoUrl="https://api.github.com/repos/sbnb-io/sbnb/releases/latest"
+    repoUrl="https://api.github.com/repos/reefyai/reefy/releases/latest"
     releaseInfo=$(curl -s $repoUrl)
     latestRelease=$(echo $releaseInfo | grep -oE '"tag_name": "[^"]+"' | cut -d '"' -f 4)
-    downloadUrl=$(echo $releaseInfo | grep -oE '"browser_download_url": "[^"]+"' | cut -d '"' -f 4 | grep "sbnb.raw.zip")
+    downloadUrl=$(echo $releaseInfo | grep -oE '"browser_download_url": "[^"]+"' | cut -d '"' -f 4 | grep "reefy.raw.zip")
 
-    echo -e "${YELLOW}Sbnb Linux latest release: $latestRelease${NC}"
+    echo -e "${YELLOW}Reefy Linux latest release: $latestRelease${NC}"
     echo -e "${YELLOW}Download URL: $downloadUrl${NC}"
 
     # Get the size of the download
@@ -41,18 +41,18 @@ if [ -z "$1" ]; then
         exit
     fi
 
-    echo -e "${YELLOW}Downloading sbnb.raw.zip...${NC}"
-    curl -L -o sbnb.raw.zip $downloadUrl
+    echo -e "${YELLOW}Downloading reefy.raw.zip...${NC}"
+    curl -L -o reefy.raw.zip $downloadUrl
 
-    # Step 2: Decompress sbnb.raw.zip to a temporary directory
+    # Step 2: Decompress reefy.raw.zip to a temporary directory
     tempDir=$(mktemp -d)
-    echo -e "${YELLOW}Decompressing sbnb.raw.zip to $tempDir...${NC}"
-    unzip sbnb.raw.zip -d $tempDir
+    echo -e "${YELLOW}Decompressing reefy.raw.zip to $tempDir...${NC}"
+    unzip reefy.raw.zip -d $tempDir
 
-    SbnbRawPath="$tempDir/sbnb.raw"
+    ReefyRawPath="$tempDir/reefy.raw"
 else
-    SbnbRawPath="$1"
-    echo -e "${YELLOW}Using provided sbnb.raw file: $SbnbRawPath${NC}"
+    ReefyRawPath="$1"
+    echo -e "${YELLOW}Using provided reefy.raw file: $ReefyRawPath${NC}"
 fi
 
 # Step 3: Enumerate all disks and ask user to input disk number
@@ -86,13 +86,13 @@ if mount | grep "$selectedDrive" > /dev/null; then
     fi
 fi
 
-# Step 5: Write sbnb.raw to the selected disk
-echo -e "${YELLOW}Writing sbnb.raw to disk $selectedDrive...${NC}"
-sudo dd if=$SbnbRawPath of=$selectedDrive bs=1M
+# Step 5: Write reefy.raw to the selected disk
+echo -e "${YELLOW}Writing reefy.raw to disk $selectedDrive...${NC}"
+sudo dd if=$ReefyRawPath of=$selectedDrive bs=1M
 
 # Step 6: Mount the newly written disk
 echo -e "${YELLOW}Mounting disk $selectedDrive...${NC}"
-tempMountDir=$(mktemp -d -t sbnb-esp-XXXXXX)
+tempMountDir=$(mktemp -d -t reefy-esp-XXXXXX)
 sudo mount ${selectedDrive}1 $tempMountDir
 
 # Step 7: Ensure the ESP partition is mounted to the temporary directory
@@ -107,7 +107,7 @@ fi
 # Step 7.1: Ask user to provide Tailscale key and place it on the ESP partition
 read -p "Please provide your Tailscale key (press Enter to skip): " tailscaleKey
 if [ -n "$tailscaleKey" ]; then
-    tailscaleKeyPath="$espPath/sbnb-tskey.txt"
+    tailscaleKeyPath="$espPath/reefy-tskey.txt"
     echo -e "${YELLOW}Tailscale key saving to $tailscaleKeyPath${NC}"
     echo "$tailscaleKey" > $tailscaleKeyPath
     echo -e "${YELLOW}Tailscale key saved to $tailscaleKeyPath${NC}"
@@ -116,10 +116,10 @@ else
 fi
 
 # Step 7.2: Ask user to provide the path to a script file and place it on the ESP partition
-read -p "Please provide the path to your script file (this script will be saved to sbnb-cmds.sh and executed during Sbnb Linux boot) (press Enter to skip): " scriptFilePath
+read -p "Please provide the path to your script file (this script will be saved to reefy-cmds.sh and executed during Reefy Linux boot) (press Enter to skip): " scriptFilePath
 if [ -n "$scriptFilePath" ] && [ -f "$scriptFilePath" ]; then
     scriptContent=$(cat "$scriptFilePath")
-    scriptPath="$espPath/sbnb-cmds.sh"
+    scriptPath="$espPath/reefy-cmds.sh"
     echo "$scriptContent" > $scriptPath
     echo -e "${YELLOW}Script saved to $scriptPath${NC}"
 else

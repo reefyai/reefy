@@ -1,13 +1,13 @@
 # Health Watchdog
 
-Sbnb Linux includes a health watchdog that periodically checks system health on bare metal hosts and auto-recovers from known failure modes.
+Reefy Linux includes a health watchdog that periodically checks system health on bare metal hosts and auto-recovers from known failure modes.
 
 ## How It Works
 
 The watchdog uses a **systemd timer + oneshot service**:
 
-- `sbnb-watchdog.timer` fires every 60 seconds
-- `sbnb-watchdog.service` runs the health check script once and exits
+- `reefy-watchdog.timer` fires every 60 seconds
+- `reefy-watchdog.service` runs the health check script once and exits
 - If the script gets stuck, `TimeoutStartSec=50s` kills it
 - If a previous run is still active, systemd skips the new activation (no overlap)
 
@@ -17,36 +17,36 @@ The watchdog uses a **systemd timer + oneshot service**:
 
 **Problem:** Tailscale automatically removes ephemeral nodes that have been offline for an extended period. When the node comes back online, `tailscaled` gets stuck in a `"node not found"` loop where the control plane returns 404 errors indefinitely. The same happens if a node is manually removed from the Tailscale admin console. The daemon reports `BackendState: Running` so standard status checks don't detect it. This is a known upstream bug ([tailscale#12032](https://github.com/tailscale/tailscale/issues/12032)).
 
-**Detection:** The watchdog scans `tailscaled` journal logs for `"node not found"` errors in the last 2 minutes. If 3 or more are found, it restarts `sbnb-tunnel` (which re-runs `tailscale up` with the auth key to re-register the node). It does **not** restart `tailscaled` itself, as that would kill its cgroup and drop all Tailscale SSH sessions.
+**Detection:** The watchdog scans `tailscaled` journal logs for `"node not found"` errors in the last 2 minutes. If 3 or more are found, it restarts `reefy-tunnel` (which re-runs `tailscale up` with the auth key to re-register the node). It does **not** restart `tailscaled` itself, as that would kill its cgroup and drop all Tailscale SSH sessions.
 
-**Cooldown:** After a restart, a 3-minute cooldown prevents restart storms. Cooldown state is stored in `/run/sbnb-watchdog/` (tmpfs, cleared on reboot).
+**Cooldown:** After a restart, a 3-minute cooldown prevents restart storms. Cooldown state is stored in `/run/reefy-watchdog/` (tmpfs, cleared on reboot).
 
 ## Logs
 
 ```bash
-journalctl -u sbnb-watchdog
+journalctl -u reefy-watchdog
 ```
 
 When a restart is triggered, you'll see:
 ```
-sbnb-watchdog: tailscale: 5 'node not found' errors in last 2min, re-authenticating
+reefy-watchdog: tailscale: 5 'node not found' errors in last 2min, re-authenticating
 ```
 
 ## Manual Trigger
 
 ```bash
-systemctl start sbnb-watchdog.service
+systemctl start reefy-watchdog.service
 ```
 
 ## Timer Status
 
 ```bash
-systemctl list-timers sbnb-watchdog.timer
+systemctl list-timers reefy-watchdog.timer
 ```
 
 ## Adding New Checks
 
-Edit `/usr/bin/sbnb-watchdog.sh`:
+Edit `/usr/bin/reefy-watchdog.sh`:
 
 1. Add a `check_xxx()` function
 2. Call it from the main section
@@ -55,7 +55,7 @@ Edit `/usr/bin/sbnb-watchdog.sh`:
 check_xxx() {
     # Detect the problem
     # Take corrective action
-    # Log via: logger -t sbnb-watchdog "xxx: description"
+    # Log via: logger -t reefy-watchdog "xxx: description"
 }
 
 # Main

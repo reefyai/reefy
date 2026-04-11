@@ -15,7 +15,7 @@
 #   -w, --wait SECONDS      Wait time for collecting registrations (default: 3)
 #   -h, --help              Show this help message
 #
-# The tool subscribes to sbnb/devices/bootstrap/+/register to discover
+# The tool subscribes to reefy/devices/bootstrap/+/register to discover
 # devices that have registered with a CSR and are waiting for approval.
 # On approval, it signs the CSR, assigns a UUID, and publishes the
 # signed certificate back to the device.
@@ -114,7 +114,7 @@ collect_registrations() {
     # Subscribe to per-device registration topics, collect for WAIT seconds
     # -v: print topic + payload, -W: timeout
     mosquitto_sub "${MQTT_ARGS[@]}" \
-        -t "sbnb/devices/bootstrap/+/register" \
+        -t "reefy/devices/bootstrap/+/register" \
         -v -W "${WAIT}" > "${reg_file}" 2>/dev/null || true
 
     # Parse results: each line is "topic payload"
@@ -126,7 +126,7 @@ collect_registrations() {
         topic=$(echo "$line" | awk '{print $1}')
         payload=$(echo "$line" | cut -d' ' -f2-)
 
-        # Extract hostname from topic: sbnb/devices/bootstrap/{hostname}/register
+        # Extract hostname from topic: reefy/devices/bootstrap/{hostname}/register
         hostname=$(echo "$topic" | awk -F'/' '{print $4}')
 
         if [[ -n "$hostname" ]] && echo "$payload" | jq . >/dev/null 2>&1; then
@@ -222,7 +222,7 @@ approve_device() {
     echo -e "${GREEN}UUID: ${uuid}${NC}"
 
     # Publish provisioning response
-    local provision_topic="sbnb/devices/bootstrap/${hostname}/provision"
+    local provision_topic="reefy/devices/bootstrap/${hostname}/provision"
     mosquitto_pub "${MQTT_ARGS[@]}" \
         -t "$provision_topic" \
         -m "$cert_json" \
@@ -231,7 +231,7 @@ approve_device() {
     echo -e "${GREEN}Certificate published to ${provision_topic}${NC}"
 
     # Clear the retained registration message (publish empty retained)
-    local register_topic="sbnb/devices/bootstrap/${hostname}/register"
+    local register_topic="reefy/devices/bootstrap/${hostname}/register"
     mosquitto_pub "${MQTT_ARGS[@]}" \
         -t "$register_topic" \
         -n -r
@@ -243,12 +243,12 @@ approve_device() {
 # Main loop
 main() {
     echo ""
-    echo -e "${BOLD}SBNB Device Approval Tool${NC}"
+    echo -e "${BOLD}Reefy Device Approval Tool${NC}"
     echo -e "Broker: ${HOST}:${PORT}"
     echo ""
 
     # Test broker connectivity
-    if ! mosquitto_pub "${MQTT_ARGS[@]}" -t "sbnb/devices/bootstrap/admin/ping" -m "ping" 2>/dev/null; then
+    if ! mosquitto_pub "${MQTT_ARGS[@]}" -t "reefy/devices/bootstrap/admin/ping" -m "ping" 2>/dev/null; then
         echo -e "${RED}Cannot connect to broker at ${HOST}:${PORT}${NC}" >&2
         exit 1
     fi

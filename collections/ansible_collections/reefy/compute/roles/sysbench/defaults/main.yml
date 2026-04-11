@@ -1,0 +1,4 @@
+---
+reefy_sysbench_state: present
+reefy_sysbench_time: 600
+reefy_sysbench_threads: "{{ ansible_facts['processor_nproc'] }}"

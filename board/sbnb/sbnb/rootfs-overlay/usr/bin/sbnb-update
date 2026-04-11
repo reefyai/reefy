@@ -1,3 +1,0 @@
-#!/bin/sh
-# Thin wrapper for backward compatibility — delegates to sbnb-efi update
-exec sbnb-efi update "$@"

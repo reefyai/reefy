@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# Inject MQTT Configuration into SBNB Raw Disk Image
+# Inject MQTT Configuration into Reefy Raw Disk Image
 #
 # This script injects MQTT configuration (certificates and mqtt.conf) into
-# a raw SBNB disk image. Run this after every image rebuild to include
+# a raw Reefy disk image. Run this after every image rebuild to include
 # MQTT configuration in the image.
 #
 # Usage:
@@ -18,10 +18,10 @@
 #
 # Examples:
 #   # Inject using default output directory
-#   sudo ./inject-mqtt-config.sh -i ../../buildroot/output/images/sbnb.raw
+#   sudo ./inject-mqtt-config.sh -i ../../buildroot/output/images/reefy.raw
 #
 #   # Inject using custom output directory
-#   sudo ./inject-mqtt-config.sh -o ./mqtt-prod -i /path/to/sbnb.raw
+#   sudo ./inject-mqtt-config.sh -o ./mqtt-prod -i /path/to/reefy.raw
 #
 
 set -euo pipefail
@@ -70,7 +70,7 @@ BUNDLE_DIR="${OUTPUT_DIR}/usb-bundle/mqtt"
 if [[ -z "${IMAGE_FILE}" ]]; then
     log_error "Image file is required (-i/--image)"
     echo ""
-    echo "Usage: sudo $0 -i /path/to/sbnb.raw [-o ./mqtt-server]"
+    echo "Usage: sudo $0 -i /path/to/reefy.raw [-o ./mqtt-server]"
     exit 1
 fi
 
@@ -102,7 +102,7 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-log_info "SBNB MQTT Config Injection"
+log_info "Reefy MQTT Config Injection"
 log_info "=========================="
 log_info "Bundle:  ${BUNDLE_DIR}"
 log_info "Image:   ${IMAGE_FILE}"
@@ -133,7 +133,7 @@ part_dev="${loop_dev}p1"
 
 if [[ ! -b "${part_dev}" ]]; then
     log_error "Partition not found: ${part_dev}"
-    log_error "Is this a valid SBNB raw image with a GPT partition table?"
+    log_error "Is this a valid Reefy raw image with a GPT partition table?"
     exit 1
 fi
 
@@ -161,5 +161,5 @@ log_info ""
 log_info "MQTT config successfully injected into ${IMAGE_FILE}"
 log_info ""
 log_info "Next steps:"
-log_info "  1. Boot the image (e.g., with sbnb-local-boot.sh)"
-log_info "  2. The device will auto-detect MQTT config and start sbnb-mqtt service"
+log_info "  1. Boot the image (e.g., with reefy-local-boot.sh)"
+log_info "  2. The device will auto-detect MQTT config and start reefy-mqtt service"

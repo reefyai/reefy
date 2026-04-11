@@ -1,0 +1,12 @@
+[Unit]
+Description=reefy device init (credentials, banner)
+After=reefy-storage.service
+Wants=reefy-storage.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/boot-reefy-init.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

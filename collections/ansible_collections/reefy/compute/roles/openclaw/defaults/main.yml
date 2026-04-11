@@ -1,0 +1,78 @@
+---
+# OpenClaw role defaults
+
+# Container configuration
+reefy_openclaw_container_name: openclaw
+reefy_openclaw_image: ghcr.io/openclaw/openclaw:latest
+reefy_openclaw_state: started
+reefy_openclaw_pull: false  # Only pull when explicitly needed
+reefy_openclaw_recreate: false
+
+# Port for gateway web UI
+reefy_openclaw_port: 18789
+
+# Storage path for OpenClaw data
+# Convention: {data_disk_mount}/{app_name}/{volume_name}
+reefy_openclaw_data_path: /mnt/reefy-data/openclaw/config
+
+# Gateway bind mode: lan (recommended for Docker) or loopback
+reefy_openclaw_bind: lan
+
+# Allowed origins for Control UI (when binding to lan)
+# If empty, falls back to Host-header origin mode
+# Example: ["https://myhost.tail12345.ts.net:8443"]
+reefy_openclaw_allowed_origins: []
+
+# Skip device fingerprint pairing (still requires token auth)
+reefy_openclaw_allow_insecure_auth: true
+
+# Optional backup file to restore (disabled by default)
+# Use reefy_openclaw_backup_local_file for local file (will be copied to remote)
+# Use reefy_openclaw_backup_file for file already on remote host
+reefy_openclaw_backup_local_file: ""
+reefy_openclaw_backup_file: ""
+
+# Allow starting without config (for fresh installs)
+reefy_openclaw_allow_unconfigured: true
+
+# Gateway token (auto-generated if not provided)
+# reefy_openclaw_token: ""
+
+# Tailscale Serve for HTTPS access (enabled by default)
+# Provides secure context for web UI device identity
+# Also enables gateway.auth.allowTailscale for auto device approval
+reefy_openclaw_tailscale_serve: true
+reefy_openclaw_https_port: 8443
+
+# Ollama integration (optional)
+# Set reefy_openclaw_ollama_network to connect OpenClaw to Ollama's Docker network
+# OpenClaw will auto-configure OLLAMA_BASE_URL to reach Ollama by container name
+# Example: reefy_openclaw_ollama_network: reefy
+reefy_openclaw_ollama_network: ""
+
+# Ollama container name (used to construct OLLAMA_BASE_URL when on same network)
+reefy_openclaw_ollama_container: ollama
+
+# Ollama port (default 11434)
+reefy_openclaw_ollama_port: 11434
+
+# Debug/logging options
+# Log level: info (default), debug, trace
+reefy_openclaw_log_level: info
+# Diagnostics flags for targeted debug logging (e.g., "ollama.*", "models.*")
+# Set to "ollama.*" to debug Ollama integration issues
+reefy_openclaw_diagnostics: ""
+
+# Reefy App Spec: Volume declarations
+# The platform uses these to manage host storage, Docker mounts, and backups.
+reefy_openclaw_volumes:
+  - name: config
+    container_path: /home/node/.openclaw
+    backup: true
+    description: "Configuration, gateway secrets, and provider settings"
+
+# Reefy App Spec: HTTPS port mappings
+# The platform uses these to configure Tailscale Serve automatically.
+reefy_openclaw_https_ports:
+  - listen: 8443
+    target: 18789

@@ -97,7 +97,7 @@ if ! command -v mosquitto_pub &> /dev/null; then
 fi
 
 echo "=========================================="
-echo "SBNB MQTT Broker Test"
+echo "Reefy MQTT Broker Test"
 echo "=========================================="
 echo "Broker:  ${HOST}:${PORT}"
 echo "Certs:   ${CERTS_DIR}"
@@ -147,7 +147,7 @@ if timeout 5 mosquitto_pub -h "${HOST}" -p "${PORT}" \
     --cafile "${CERTS_DIR}/ca.crt" \
     --cert "${CERTS_DIR}/bootstrap.crt" \
     --key "${CERTS_DIR}/bootstrap.key" \
-    -t 'sbnb/devices/bootstrap' \
+    -t 'reefy/devices/bootstrap' \
     -m "${test_message}" \
     -q 1 2>/dev/null; then
     log_info "Bootstrap publish successful"
@@ -164,7 +164,7 @@ if timeout 5 mosquitto_pub -h "${HOST}" -p "${PORT}" \
     --cafile "${CERTS_DIR}/ca.crt" \
     --cert "${CERTS_DIR}/bootstrap.crt" \
     --key "${CERTS_DIR}/bootstrap.key" \
-    -t 'sbnb/devices/test-uuid/config' \
+    -t 'reefy/devices/test-uuid/config' \
     -m '{"test":"should-fail"}' \
     -q 1 2>/dev/null; then
     log_error "ACL enforcement failed - bootstrap should not access device topics"
@@ -181,7 +181,7 @@ if timeout 2 mosquitto_sub -h "${HOST}" -p "${PORT}" \
     --cafile "${CERTS_DIR}/ca.crt" \
     --cert "${CERTS_DIR}/bootstrap.crt" \
     --key "${CERTS_DIR}/bootstrap.key" \
-    -t 'sbnb/devices/bootstrap' \
+    -t 'reefy/devices/bootstrap' \
     -C 1 2>/dev/null || [[ $? -eq 124 ]]; then
     log_info "Subscribe successful (timeout is expected)"
     ((TESTS_PASSED++))
@@ -200,7 +200,7 @@ TEMP_MSG="test-message-$$-$(date +%s)"
         --cafile "${CERTS_DIR}/ca.crt" \
         --cert "${CERTS_DIR}/bootstrap.crt" \
         --key "${CERTS_DIR}/bootstrap.key" \
-        -t 'sbnb/devices/bootstrap' \
+        -t 'reefy/devices/bootstrap' \
         -m "${TEMP_MSG}" \
         -q 1 2>/dev/null
 ) &
@@ -210,7 +210,7 @@ if timeout 5 mosquitto_sub -h "${HOST}" -p "${PORT}" \
     --cafile "${CERTS_DIR}/ca.crt" \
     --cert "${CERTS_DIR}/bootstrap.crt" \
     --key "${CERTS_DIR}/bootstrap.key" \
-    -t 'sbnb/devices/bootstrap' \
+    -t 'reefy/devices/bootstrap' \
     -C 1 2>/dev/null | grep -q "${TEMP_MSG}"; then
     log_info "Pub/Sub round-trip successful"
     ((TESTS_PASSED++))
@@ -234,7 +234,7 @@ if [[ -d "${CERTS_DIR}/../device-certs" ]]; then
                 --cafile "${CERTS_DIR}/ca.crt" \
                 --cert "${DEVICE_CERT_DIR}/device.crt" \
                 --key "${DEVICE_CERT_DIR}/device.key" \
-                -t "sbnb/devices/${UUID}/status" \
+                -t "reefy/devices/${UUID}/status" \
                 -m '{"status":"online"}' \
                 -q 1 2>/dev/null; then
                 log_info "Device can publish to own topic"
@@ -249,7 +249,7 @@ if [[ -d "${CERTS_DIR}/../device-certs" ]]; then
                 --cafile "${CERTS_DIR}/ca.crt" \
                 --cert "${DEVICE_CERT_DIR}/device.crt" \
                 --key "${DEVICE_CERT_DIR}/device.key" \
-                -t 'sbnb/devices/bootstrap' \
+                -t 'reefy/devices/bootstrap' \
                 -m '{"test":"should-fail"}' \
                 -q 1 2>/dev/null; then
                 log_error "Device should not access bootstrap topic"
@@ -275,7 +275,7 @@ if [[ ${TESTS_FAILED} -eq 0 ]]; then
     echo "Your MQTT broker is configured correctly!"
     echo ""
     echo "Next steps:"
-    echo "  1. Copy USB bundle to SBNB device"
+    echo "  1. Copy USB bundle to Reefy device"
     echo "  2. Boot device with MQTT configuration"
     echo "  3. Monitor broker logs for device registration"
     exit 0

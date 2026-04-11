@@ -1,0 +1,18 @@
+---
+# Networking role defaults
+
+# Bridge interface name
+reefy_bridge_name: br0
+
+# Path to systemd-networkd configuration
+reefy_networkd_path: /etc/systemd/network
+
+# Enable DHCP on bridge
+reefy_bridge_dhcp: true
+
+# Optional: static IP configuration (if reefy_bridge_dhcp is false)
+# reefy_bridge_address: 192.168.1.100/24
+# reefy_bridge_gateway: 192.168.1.1
+# reefy_bridge_dns:
+#   - 8.8.8.8
+#   - 8.8.4.4

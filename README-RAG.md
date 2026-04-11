@@ -4,7 +4,7 @@
 
 This guide walks you through setting up a full RAG pipeline on your own bare metal server in just minutes. You'll launch:
 
-- A bare metal server with Nvidia GPUs running **Sbnb Linux**
+- A bare metal server with Nvidia GPUs running **Reefy Linux**
 - A **VM with Ubuntu 24.04**
 - The open-source [**RAGFlow**](https://github.com/infiniflow/ragflow) project
 - The [**vLLM inference engine**](https://github.com/vllm-project/vllm) with the `Qwen/Qwen2.5-VL-3B-Instruct` model
@@ -40,7 +40,7 @@ This guide walks you through setting up a full RAG pipeline on your own bare met
 
 ## Prerequisites
 
-- Boot Bare Metal server into Sbnb Linux. Read more at [README-INSTALL.md](README-INSTALL.md).
+- Boot Bare Metal server into Reefy Linux. Read more at [README-INSTALL.md](README-INSTALL.md).
 - One or more Nvidia GPUs attached to the Bare Metal server
 - Laptop with [Tailscale](https://tailscale.com/) configured to access the bare metal server for configuration.
 
@@ -48,11 +48,11 @@ This guide walks you through setting up a full RAG pipeline on your own bare met
 
 ## Step-by-Step Setup
 
-### 1. Boot Bare Metal Server into Sbnb Linux
+### 1. Boot Bare Metal Server into Reefy Linux
 
-Follow [README-INSTALL.md](README-INSTALL.md) to boot your server into Sbnb Linux. After boot, verify it appears in your **Tailscale machine list**:
+Follow [README-INSTALL.md](README-INSTALL.md) to boot your server into Reefy Linux. After boot, verify it appears in your **Tailscale machine list**:
 
-![Sbnb Linux: Machine registered in Tailscale](images/serial-number-tailscale.png)
+![Reefy Linux: Machine registered in Tailscale](images/serial-number-tailscale.png)
 
 See [README-SERIAL-NUMBER.md](README-SERIAL-NUMBER.md) for automatic hostname assignment.
 
@@ -64,11 +64,11 @@ We use a MacBook in this tutorial, but any Linux/Unix laptop should work.
 
 ---
 
-### 3. Clone the Sbnb Repository
+### 3. Clone the Reefy Repository
 
 ```sh
-git clone https://github.com/sbnb-io/sbnb.git
-cd sbnb
+git clone https://github.com/reefyai/reefy.git
+cd reefy
 ```
 
 ---
@@ -76,37 +76,37 @@ cd sbnb
 ### 4. Start a VM with GPU Passthrough
 
 ```sh
-ansible-playbook -i sbnb-F6S0R8000719, \
-  collections/ansible_collections/sbnb/compute/playbooks/start-vm.yml \
-  -e sbnb_vm_tskey="tskey-auth-xxxxx" \
-  -e sbnb_vm_attach_gpus=true \
-  -e sbnb_vm_vcpu=8 \
-  -e sbnb_vm_mem=16G \
-  -e sbnb_vm_image_size=100G
+ansible-playbook -i reefy-F6S0R8000719, \
+  collections/ansible_collections/reefy/compute/playbooks/start-vm.yml \
+  -e reefy_vm_tskey="tskey-auth-xxxxx" \
+  -e reefy_vm_attach_gpus=true \
+  -e reefy_vm_vcpu=8 \
+  -e reefy_vm_mem=16G \
+  -e reefy_vm_image_size=100G
 ```
 
-Replace `sbnb-F6S0R8000719` with your server's Tailscale hostname and `tskey-auth-xxxxx` with your Tailscale auth key.
+Replace `reefy-F6S0R8000719` with your server's Tailscale hostname and `tskey-auth-xxxxx` with your Tailscale auth key.
 
 See [README-COLLECTIONS.md](README-COLLECTIONS.md) for all VM options.
 
-You should see the VM appear in Tailscale as `sbnb-vm-<VMID>` (e.g., `sbnb-vm-67f97659333f`).
+You should see the VM appear in Tailscale as `reefy-vm-<VMID>` (e.g., `reefy-vm-67f97659333f`).
 
 > All Nvidia GPUs will be attached using vfio-pci.
 
-![nvidia-vfio-sbnb-linux](images/nvidia-vfio-sbnb-linux.png)
+![nvidia-vfio-reefy-linux](images/nvidia-vfio-reefy-linux.png)
 
 ---
 
 ### 5. Install Docker and NVIDIA Drivers in the VM
 
 ```sh
-export VM_HOST=sbnb-vm-67f97659333f
+export VM_HOST=reefy-vm-67f97659333f
 
 ansible-playbook -i $VM_HOST, \
-  collections/ansible_collections/sbnb/compute/playbooks/install-docker.yml
+  collections/ansible_collections/reefy/compute/playbooks/install-docker.yml
 
 ansible-playbook -i $VM_HOST, \
-  collections/ansible_collections/sbnb/compute/playbooks/install-nvidia.yml
+  collections/ansible_collections/reefy/compute/playbooks/install-nvidia.yml
 ```
 
 ---
@@ -121,8 +121,8 @@ Start vLLM with a vision-capable model:
 
 ```sh
 ansible-playbook -i $VM_HOST, \
-  collections/ansible_collections/sbnb/compute/playbooks/run-vllm.yml \
-  -e 'sbnb_vllm_args="--model Qwen/Qwen2.5-VL-3B-Instruct --tensor-parallel-size 2 --max-model-len 2048 --dtype bfloat16 --limit-mm-per-prompt image=5,video=5"'
+  collections/ansible_collections/reefy/compute/playbooks/run-vllm.yml \
+  -e 'reefy_vllm_args="--model Qwen/Qwen2.5-VL-3B-Instruct --tensor-parallel-size 2 --max-model-len 2048 --dtype bfloat16 --limit-mm-per-prompt image=5,video=5"'
 ```
 
 > We use `--tensor-parallel-size 2` for 2 GPUs, and choose a small model to fit into 24GB total GPU RAM.
@@ -137,7 +137,7 @@ vLLM is now up and running!
 
 ```bash
 ansible-playbook -i $VM_HOST, \
-  collections/ansible_collections/sbnb/compute/playbooks/run-ragflow.yml
+  collections/ansible_collections/reefy/compute/playbooks/run-ragflow.yml
 ```
 
 RAGFlow is up!
@@ -151,7 +151,7 @@ RAGFlow is up!
 Open a browser and navigate to the **VM hostname** from Tailscale, using port `80`. Example URL:
 
 ```
-http://sbnb-vm-67f97659333f/
+http://reefy-vm-67f97659333f/
 ```
 
 Create an admin account.
@@ -240,15 +240,15 @@ RAGFlow responds with the answer **"... 5.0 trillion for FY 2024"** and cites th
 To stop RAGFlow:
 ```sh
 ansible-playbook -i $VM_HOST, \
-  collections/ansible_collections/sbnb/compute/playbooks/run-ragflow.yml \
-  -e sbnb_ragflow_state=absent
+  collections/ansible_collections/reefy/compute/playbooks/run-ragflow.yml \
+  -e reefy_ragflow_state=absent
 ```
 
 To stop vLLM:
 ```sh
 ansible-playbook -i $VM_HOST, \
-  collections/ansible_collections/sbnb/compute/playbooks/run-vllm.yml \
-  -e sbnb_vllm_state=absent
+  collections/ansible_collections/reefy/compute/playbooks/run-vllm.yml \
+  -e reefy_vllm_state=absent
 ```
 
 ---

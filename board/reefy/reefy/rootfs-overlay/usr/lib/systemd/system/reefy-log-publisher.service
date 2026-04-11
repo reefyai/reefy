@@ -1,0 +1,14 @@
+[Unit]
+Description=Reefy Log Publisher (journald → MQTT)
+After=reefy-mqtt.service
+Wants=reefy-mqtt.service
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/reefy-log-publisher --units reefy-mqtt
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

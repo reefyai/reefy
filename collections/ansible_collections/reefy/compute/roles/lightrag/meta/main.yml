@@ -1,0 +1,21 @@
+---
+galaxy_info:
+  author: Reefy Team
+  description: Run LightRAG with Ollama
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+  galaxy_tags:
+    - lightrag
+    - rag
+    - ollama
+    - llm
+
+dependencies:
+  - role: reefy.compute.ollama
+    vars:
+      reefy_ollama_models: "{{ reefy_lightrag_models }}"

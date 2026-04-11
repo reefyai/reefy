@@ -1,0 +1,22 @@
+#!/bin/sh
+# Output the MAC-based default hostname (reefy-<mac>).
+# Used by boot-reefy.sh and reefy-mqtt-reconciler to avoid divergence.
+
+IFACE=""
+for pattern in "eth*" "en*"; do
+    IFACE=$(find /sys/class/net -maxdepth 1 -name "${pattern}" 2>/dev/null | sort | head -n 1)
+    [ -n "${IFACE}" ] && break
+done
+if [ -z "${IFACE}" ]; then
+    IFACE=$(find /sys/class/net -maxdepth 1 -name "wl*" 2>/dev/null | sort | head -n 1)
+fi
+
+HWID=""
+if [ -n "${IFACE}" ]; then
+    HWID=$(cat "${IFACE}/address" 2>/dev/null | tr -d ':')
+fi
+if [ -z "${HWID}" ]; then
+    HWID=$(xxd -l6 -p /dev/random)
+fi
+
+echo "reefy-${HWID}"

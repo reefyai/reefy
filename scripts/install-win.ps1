@@ -1,24 +1,24 @@
-# This script automates Sbnb Linux bootable USB creation process on Windows.
-# It downloads, decompresses, and installs the sbnb.raw file onto a selected disk.
-# It also allows the user to provide a Tailscale key and a custom script to be executed during Sbnb Linux boot.
-# More info at https://github.com/sbnb-io/sbnb
+# This script automates Reefy Linux bootable USB creation process on Windows.
+# It downloads, decompresses, and installs the reefy.raw file onto a selected disk.
+# It also allows the user to provide a Tailscale key and a custom script to be executed during Reefy Linux boot.
+# More info at https://github.com/reefyai/reefy
 
 param (
-    [string]$SbnbRawPath
+    [string]$ReefyRawPath
 )
 
 Write-Host "=========================================" -ForegroundColor Cyan
-Write-Host " Welcome to Sbnb Linux Bootable USB Creation " -ForegroundColor Cyan
+Write-Host " Welcome to Reefy Linux Bootable USB Creation " -ForegroundColor Cyan
 Write-Host "=========================================" -ForegroundColor Cyan
 
-# Step 1: Find latest release and download sbnb.raw.zip if not provided
-if (-not $SbnbRawPath) {
-    $repoUrl = "https://api.github.com/repos/sbnb-io/sbnb/releases/latest"
+# Step 1: Find latest release and download reefy.raw.zip if not provided
+if (-not $ReefyRawPath) {
+    $repoUrl = "https://api.github.com/repos/reefyai/reefy/releases/latest"
     $releaseInfo = Invoke-RestMethod -Uri $repoUrl
     $latestRelease = $releaseInfo.tag_name
-    $downloadUrl = $releaseInfo.assets | Where-Object { $_.name -eq "sbnb.raw.zip" } | Select-Object -ExpandProperty browser_download_url
+    $downloadUrl = $releaseInfo.assets | Where-Object { $_.name -eq "reefy.raw.zip" } | Select-Object -ExpandProperty browser_download_url
 
-    Write-Host "Sbnb Linux latest release: $latestRelease" -ForegroundColor Green
+    Write-Host "Reefy Linux latest release: $latestRelease" -ForegroundColor Green
     Write-Host "Download URL: $downloadUrl" -ForegroundColor Green
 
     # Get the size of the download
@@ -32,21 +32,21 @@ if (-not $SbnbRawPath) {
         exit
     }
 
-    Write-Host "Downloading sbnb.raw.zip..." -ForegroundColor Yellow
+    Write-Host "Downloading reefy.raw.zip..." -ForegroundColor Yellow
     $wc = New-Object net.webclient
-    $wc.DownloadFile($downloadUrl, "sbnb.raw.zip")
+    $wc.DownloadFile($downloadUrl, "reefy.raw.zip")
 
-    # Step 2: Decompress sbnb.raw.zip to a temporary directory
+    # Step 2: Decompress reefy.raw.zip to a temporary directory
     $tempDir = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), [System.IO.Path]::GetRandomFileName())
     [System.IO.Directory]::CreateDirectory($tempDir)
 
-    Write-Host "Decompressing sbnb.raw.zip to $tempDir..." -ForegroundColor Yellow
+    Write-Host "Decompressing reefy.raw.zip to $tempDir..." -ForegroundColor Yellow
     Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [System.IO.Compression.ZipFile]::ExtractToDirectory("sbnb.raw.zip", $tempDir)
+    [System.IO.Compression.ZipFile]::ExtractToDirectory("reefy.raw.zip", $tempDir)
 
-    $SbnbRawPath = "$tempDir\sbnb.raw"
+    $ReefyRawPath = "$tempDir\reefy.raw"
 } else {
-    Write-Host "Using provided sbnb.raw file: $SbnbRawPath" -ForegroundColor Green
+    Write-Host "Using provided reefy.raw file: $ReefyRawPath" -ForegroundColor Green
 }
 
 # Step 3: Enumerate all disks and ask user to input disk number
@@ -69,20 +69,20 @@ if ($confirmation -ne "y") {
     exit
 }
 
-# Step 5: Write sbnb.raw to the selected disk
-Write-Host "Writing sbnb.raw to disk $($disks[$selectedDiskNumber].Model) (Index: $selectedDrive)..." -ForegroundColor Yellow
+# Step 5: Write reefy.raw to the selected disk
+Write-Host "Writing reefy.raw to disk $($disks[$selectedDiskNumber].Model) (Index: $selectedDrive)..." -ForegroundColor Yellow
 $disk = Get-Disk -Number $selectedDrive
 $disk | Clear-Disk -RemoveData -Confirm:$false
 $disk | Set-Disk -IsOffline $false
 $disk | Set-Disk -IsReadOnly $false
 
-$rawFile = [System.IO.File]::OpenRead($SbnbRawPath)
+$rawFile = [System.IO.File]::OpenRead($ReefyRawPath)
 $diskStream = [System.IO.FileStream]::new("\\.\PhysicalDrive$selectedDrive", [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write)
 $rawFile.CopyTo($diskStream)
 $rawFile.Close()
 $diskStream.Close()
 
-# Reread partitions from disk after writing sbnb.raw
+# Reread partitions from disk after writing reefy.raw
 Write-Host "Rereading partitions from disk $($disks[$selectedDiskNumber].Model) (Index: $selectedDrive)..." -ForegroundColor Yellow
 $disk | Update-Disk
 
@@ -104,7 +104,7 @@ if (-not $partition.DriveLetter) {
     Write-Host "Drive letter $($partition.DriveLetter) is already assigned to the first partition." -ForegroundColor Green
 }
 
-# Step 7: Place sbnb-tskey.txt and sbnb-cmds.sh on the first partition
+# Step 7: Place reefy-tskey.txt and reefy-cmds.sh on the first partition
 $partition = Get-Partition -DiskNumber $selectedDrive | Select-Object -First 1
 $espDriveLetter = $partition.DriveLetter
 if (-not [string]::IsNullOrEmpty($espDriveLetter)) {
@@ -117,7 +117,7 @@ if (-not [string]::IsNullOrEmpty($espDriveLetter)) {
 # Step 7.1: Ask user to provide Tailscale key and place it on the ESP partition
 $tailscaleKey = Read-Host "Please provide your Tailscale key (press Enter to skip)"
 if (-not [string]::IsNullOrEmpty($tailscaleKey)) {
-    $tailscaleKeyPath = "$($espDriveLetter):\sbnb-tskey.txt"
+    $tailscaleKeyPath = "$($espDriveLetter):\reefy-tskey.txt"
     Write-Host "Tailscale key saving to $tailscaleKeyPath" -ForegroundColor Yellow
     [System.IO.File]::WriteAllText($tailscaleKeyPath, $tailscaleKey)
     Write-Host "Tailscale key saved to $tailscaleKeyPath" -ForegroundColor Green
@@ -126,14 +126,14 @@ if (-not [string]::IsNullOrEmpty($tailscaleKey)) {
 }
 
 # Step 7.2: Ask user to provide the path to a script file and place it on the ESP partition
-$scriptFilePath = Read-Host "Please provide the path to your script file (this script will be saved to sbnb-cmds.sh and executed during Sbnb Linux boot) (press Enter to skip)"
+$scriptFilePath = Read-Host "Please provide the path to your script file (this script will be saved to reefy-cmds.sh and executed during Reefy Linux boot) (press Enter to skip)"
 $scriptFilePath = $scriptFilePath.Trim('"')
 if (-not [string]::IsNullOrEmpty($scriptFilePath) -and (Test-Path $scriptFilePath)) {
     $scriptContent = Get-Content -Path $scriptFilePath -Raw
     # Convert to Unix format by replacing Windows line endings with Unix line endings
     $scriptContent = $scriptContent -replace "`r`n", "`n"
 
-    $scriptPath = "$($espDriveLetter):\sbnb-cmds.sh"
+    $scriptPath = "$($espDriveLetter):\reefy-cmds.sh"
     [System.IO.File]::WriteAllText($scriptPath, $scriptContent)
     Write-Host "Script saved to $scriptPath" -ForegroundColor Green
 } else {

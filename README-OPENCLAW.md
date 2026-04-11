@@ -1,6 +1,6 @@
 # OpenClaw Ansible Role
 
-Deploy and manage [OpenClaw](https://openclaw.ai/) - your personal AI assistant - as a Docker container on [AI Linux (Sbnb Linux)](https://github.com/sbnb-io/sbnb). Just bring a bare metal PC and you'll have the OS and OpenClaw running in minutes, fully automated.
+Deploy and manage [OpenClaw](https://openclaw.ai/) - your personal AI assistant - as a Docker container on [AI Linux (Reefy Linux)](https://github.com/reefyai/reefy). Just bring a bare metal PC and you'll have the OS and OpenClaw running in minutes, fully automated.
 
 ## Quick Start
 
@@ -8,7 +8,7 @@ Deploy and manage [OpenClaw](https://openclaw.ai/) - your personal AI assistant 
 export VM_HOST=your-vm-hostname
 
 # Deploy OpenClaw
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/run-openclaw.yml
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/run-openclaw.yml
 ```
 
 After deployment, the playbook outputs the Web UI URL with authentication token.
@@ -20,21 +20,21 @@ OpenClaw configuration is done via the CLI after initial deployment. The role pr
 ### Set Telegram Bot Token
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='config set channels.telegram.botToken YOUR_BOT_TOKEN'"
 ```
 
 ### Set OpenAI API Key
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='config set env.OPENAI_API_KEY sk-proj-XXX'"
 ```
 
 ### Set Default Model
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='config set agents.defaults.model.primary openai/gpt-5.1-codex'"
 ```
 
@@ -43,7 +43,7 @@ ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playb
 After changing config, restart the container to apply:
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/run-openclaw.yml
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/run-openclaw.yml
 ```
 
 ### Telegram Pairing
@@ -51,7 +51,7 @@ ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playb
 Now you're ready to use your Telegram bot. Send `/start` to your bot in Telegram and it will respond with a pairing code. Approve the pairing request:
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='pairing approve telegram PAIRING_CODE'"
 ```
 
@@ -60,7 +60,7 @@ ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playb
 You can access the OpenClaw Web UI using the URL displayed after deployment. When accessing the Web UI for the first time, you'll need to approve your device. Approve all pending device requests:
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-approve-devices.yml
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-approve-devices.yml
 ```
 
 ## Available Playbooks
@@ -77,28 +77,28 @@ ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playb
 ### Run Any CLI Command
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='YOUR_COMMAND'"
 ```
 
 ### List Devices
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='devices list'"
 ```
 
 ### Check Health
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='doctor'"
 ```
 
 ### View Logs
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='logs'"
 ```
 
@@ -113,7 +113,7 @@ ansible -i $VM_HOST, all -b -m command -a "docker exec openclaw cat /home/node/.
 Or get full system status including configuration:
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='status --all --deep'"
 ```
 
@@ -121,18 +121,18 @@ ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playb
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `sbnb_openclaw_container_name` | `openclaw` | Docker container name |
-| `sbnb_openclaw_image` | `ghcr.io/openclaw/openclaw:latest` | Docker image |
-| `sbnb_openclaw_port` | `18789` | Gateway port |
-| `sbnb_openclaw_data_path` | `/mnt/sbnb-data/openclaw/.openclaw` | Data directory |
-| `sbnb_openclaw_bind` | `lan` | Bind mode: `lan` or `loopback` |
-| `sbnb_openclaw_tailscale_serve` | `true` | Enable Tailscale Serve for HTTPS |
-| `sbnb_openclaw_https_port` | `8443` | HTTPS port via Tailscale Serve |
-| `sbnb_openclaw_state` | `started` | Container state: `started` or `absent` |
-| `sbnb_openclaw_recreate` | `false` | Force recreate container |
-| `sbnb_openclaw_ollama_network` | `""` | Docker network shared with Ollama |
-| `sbnb_openclaw_ollama_container` | `ollama` | Ollama container name |
-| `sbnb_openclaw_ollama_port` | `11434` | Ollama port |
+| `reefy_openclaw_container_name` | `openclaw` | Docker container name |
+| `reefy_openclaw_image` | `ghcr.io/openclaw/openclaw:latest` | Docker image |
+| `reefy_openclaw_port` | `18789` | Gateway port |
+| `reefy_openclaw_data_path` | `/mnt/reefy-data/openclaw/.openclaw` | Data directory |
+| `reefy_openclaw_bind` | `lan` | Bind mode: `lan` or `loopback` |
+| `reefy_openclaw_tailscale_serve` | `true` | Enable Tailscale Serve for HTTPS |
+| `reefy_openclaw_https_port` | `8443` | HTTPS port via Tailscale Serve |
+| `reefy_openclaw_state` | `started` | Container state: `started` or `absent` |
+| `reefy_openclaw_recreate` | `false` | Force recreate container |
+| `reefy_openclaw_ollama_network` | `""` | Docker network shared with Ollama |
+| `reefy_openclaw_ollama_container` | `ollama` | Ollama container name |
+| `reefy_openclaw_ollama_port` | `11434` | Ollama port |
 
 ## Supported Model Providers
 
@@ -156,8 +156,8 @@ sudo docker exec -it openclaw node dist/index.js onboard
 ## Stop OpenClaw
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/run-openclaw.yml \
-  -e "sbnb_openclaw_state=absent"
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/run-openclaw.yml \
+  -e "reefy_openclaw_state=absent"
 ```
 
 ## Migration
@@ -170,7 +170,7 @@ Migrate from an existing OpenClaw installation to AI Linux.
 
 ```bash
 export OLD_HOST=your-old-openclaw-host
-ansible-playbook -i $OLD_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-backup.yml
+ansible-playbook -i $OLD_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-backup.yml
 ```
 
 This automatically finds the OpenClaw data directory and saves the backup to `./openclaw-backup.tgz`.
@@ -189,8 +189,8 @@ tar -czvf openclaw-backup.tgz .openclaw
 ### Step 2: Deploy with Backup Restore
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/run-openclaw.yml \
-  -e "sbnb_openclaw_backup_local_file=~/openclaw-backup.tgz"
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/run-openclaw.yml \
+  -e "reefy_openclaw_backup_local_file=~/openclaw-backup.tgz"
 ```
 
 The playbook automatically copies the backup to the remote host and restores it.
@@ -198,7 +198,7 @@ The playbook automatically copies the backup to the remote host and restores it.
 The backup includes your configuration, approved devices, conversation history, and credentials. After restore, verify with:
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='doctor'"
 ```
 
@@ -211,16 +211,16 @@ Run OpenClaw with local LLMs on bare metal GPU using [Ollama](https://ollama.com
 Deploy Ollama on the same host with a shared Docker network and pull the model:
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/run-ollama.yml \
-  -e "sbnb_ollama_network=sbnb" \
-  -e '{"sbnb_ollama_models": ["qwen3:14b-q4_K_M"]}'
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/run-ollama.yml \
+  -e "reefy_ollama_network=reefy" \
+  -e '{"reefy_ollama_models": ["qwen3:14b-q4_K_M"]}'
 ```
 
 ### Step 2: Deploy OpenClaw with Ollama Network
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/run-openclaw.yml \
-  -e "sbnb_openclaw_ollama_network=sbnb"
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/run-openclaw.yml \
+  -e "reefy_openclaw_ollama_network=reefy"
 ```
 
 ### Step 3: Configure Ollama Provider
@@ -228,7 +228,7 @@ ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playb
 Configure the provider explicitly using the `value` parameter for JSON:
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='config set models.providers.ollama'" \
   -e 'value={"baseUrl":"http://ollama:11434/v1","apiKey":"ollama-local","api":"openai-responses","models":[{"id":"qwen3:14b-q4_K_M","name":"Qwen3 14B","reasoning":false,"input":["text"],"contextWindow":32000,"maxTokens":8192}]}'
 ```
@@ -236,15 +236,15 @@ ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playb
 ### Step 4: Set Default Model
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='config set agents.defaults.model.primary ollama/qwen3:14b-q4_K_M'"
 ```
 
 ### Step 5: Restart to Apply
 
 ```bash
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/run-openclaw.yml \
-  -e "sbnb_openclaw_ollama_network=sbnb"
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/run-openclaw.yml \
+  -e "reefy_openclaw_ollama_network=reefy"
 ```
 
 ### Tuning for Local Models
@@ -253,15 +253,15 @@ Local models have smaller context windows than cloud APIs. Reduce OpenClaw's sys
 
 ```bash
 # Disable memory search (saves context for small models)
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='config set agents.defaults.memorySearch.enabled false'"
 
 # Reduce bootstrap injection size
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='config set agents.defaults.bootstrapMaxChars 12000'"
 
 # Enable context pruning
-ansible-playbook -i $VM_HOST, collections/ansible_collections/sbnb/compute/playbooks/openclaw-cli.yml \
+ansible-playbook -i $VM_HOST, collections/ansible_collections/reefy/compute/playbooks/openclaw-cli.yml \
   -e "cmd='config set agents.defaults.contextPruning.mode cache-ttl'"
 ```
 

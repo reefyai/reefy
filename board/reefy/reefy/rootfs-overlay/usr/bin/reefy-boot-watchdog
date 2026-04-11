@@ -1,0 +1,27 @@
+#!/bin/sh
+# reefy-boot-watchdog: Safety net for A/B firmware updates.
+# If reefy-boot-confirm doesn't stop us within TIMEOUT, reboot via sysrq.
+# UEFI then falls back to old slot (BootNext was already consumed).
+#
+# Only activates when BootCurrent != BootOrder[0] (pending A/B update).
+# Hardware watchdog is managed by systemd (RuntimeWatchdogSec) — not here.
+
+TIMEOUT=360  # 6 minutes (must be longer than boot-confirm's 300s wait)
+
+CURRENT=$(efibootmgr 2>/dev/null | grep '^BootCurrent:' | awk '{print $2}')
+DEFAULT=$(efibootmgr 2>/dev/null | grep '^BootOrder:' | awk '{print $2}' | cut -d, -f1)
+
+# Normal boot — nothing to watch
+if [ "$CURRENT" = "$DEFAULT" ]; then
+    exit 0
+fi
+
+echo "[boot-watchdog] Watching Boot${CURRENT} (non-default), will reboot in ${TIMEOUT}s if not confirmed"
+
+# Sleep in background so SIGTERM from boot-confirm is handled promptly
+sleep $TIMEOUT &
+wait $!
+
+# If we get here, boot-confirm never stopped us — reboot via sysrq
+echo "[boot-watchdog] Boot confirmation timed out after ${TIMEOUT}s, rebooting"
+echo b > /proc/sysrq-trigger

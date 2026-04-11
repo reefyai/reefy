@@ -1,0 +1,15 @@
+---
+# Configure Reefy host system (storage, networking, Docker)
+# This playbook configures the bare-metal host with storage (LVM), bridge networking, and Docker.
+#
+# Usage:
+#   ansible-playbook reefy.compute.configure-system -i <hostname>,
+
+- hosts: all
+  gather_facts: false
+  ignore_unreachable: true
+
+  roles:
+    - role: reefy.compute.storage
+    - role: reefy.compute.networking
+    - role: reefy.compute.docker

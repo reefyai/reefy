@@ -1,0 +1,14 @@
+[Unit]
+Description=reefy MQTT terminal bridge
+After=network-online.target reefy-init.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/reefy-terminal-bridge
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

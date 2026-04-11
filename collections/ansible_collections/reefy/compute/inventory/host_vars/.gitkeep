@@ -1,0 +1,9 @@
+# Host-specific variables go here
+# Example: inventory/host_vars/worker-gpu-01.yml
+#
+# ---
+# reefy_vm_name: ml-trainer-01
+# reefy_vm_vcpu: 64
+# reefy_vm_mem: "128G"
+# reefy_vm_data_disk_name: datasets
+# reefy_vm_data_disk_size: "1T"

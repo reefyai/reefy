@@ -1,0 +1,40 @@
+---
+# Stop or remove an Reefy VM
+#
+# Usage:
+#   Stop VM (can restart later):
+#     ansible-playbook -i host, playbooks/stop-vm.yml -e reefy_vm_name=my-vm
+#
+#   Remove VM (delete container, keep boot disk):
+#     ansible-playbook -i host, playbooks/stop-vm.yml -e reefy_vm_name=my-vm -e reefy_vm_remove=true
+#
+#   Remove VM and delete boot disk:
+#     ansible-playbook -i host, playbooks/stop-vm.yml -e reefy_vm_name=my-vm -e reefy_vm_remove=true -e reefy_vm_persist_boot_image=false
+
+- name: Stop/Remove Reefy VM
+  hosts: "{{ target_hosts | default('all') }}"
+  gather_facts: false
+
+  tasks:
+    - name: Validate VM name is provided
+      ansible.builtin.assert:
+        that:
+          - reefy_vm_name is defined
+          - reefy_vm_name | length > 0
+        fail_msg: "reefy_vm_name must be provided with -e reefy_vm_name=..."
+        quiet: true
+
+    - name: Stop/Remove VM
+      reefy.compute.qemu_vm:
+        name: "{{ reefy_vm_name }}"
+        state: "{{ 'absent' if (reefy_vm_remove | default(false) | bool) else 'stopped' }}"
+        persist_boot_image: "{{ reefy_vm_persist_boot_image | default(true) }}"
+        storage_path: "{{ reefy_storage_mount | default('/mnt/reefy-data') }}"
+      register: vm_result
+
+    - name: Display result
+      ansible.builtin.debug:
+        msg: >-
+          VM {{ reefy_vm_name }}
+          {{ 'removed' if (reefy_vm_remove | default(false) | bool) else 'stopped' }}.
+          {{ 'Boot disk deleted.' if (reefy_vm_remove | default(false) | bool) and not (reefy_vm_persist_boot_image | default(true) | bool) else '' }}

@@ -1,0 +1,326 @@
+---
+# OpenClaw role - runs OpenClaw gateway as Docker container
+# Docker must be installed before this role runs (use reefy.compute.docker_vm or install-docker provisioner)
+
+- name: Ensure data directory exists
+  ansible.builtin.file:
+    path: "{{ reefy_openclaw_data_path }}"
+    state: directory
+    mode: '0755'
+  when: reefy_openclaw_state == 'started'
+
+- name: Fix data directory ownership for container user
+  ansible.builtin.command:
+    cmd: "chown -R 1000:1000 {{ reefy_openclaw_data_path }}"
+  changed_when: true
+  when: reefy_openclaw_state == 'started'
+
+- name: Check if OpenClaw config exists
+  ansible.builtin.stat:
+    path: "{{ reefy_openclaw_data_path }}/openclaw.json"
+  register: openclaw_config_stat
+  when: reefy_openclaw_state == 'started'
+
+- name: Read existing OpenClaw config
+  ansible.builtin.slurp:
+    src: "{{ reefy_openclaw_data_path }}/openclaw.json"
+  register: existing_openclaw_config
+  when:
+    - reefy_openclaw_state == 'started'
+    - openclaw_config_stat.stat.exists
+
+- name: Parse existing OpenClaw config
+  ansible.builtin.set_fact:
+    openclaw_config: "{{ existing_openclaw_config.content | b64decode | from_json }}"
+  when:
+    - reefy_openclaw_state == 'started'
+    - openclaw_config_stat.stat.exists
+
+- name: Initialize empty config if not exists
+  ansible.builtin.set_fact:
+    openclaw_config: {}
+  when:
+    - reefy_openclaw_state == 'started'
+    - not openclaw_config_stat.stat.exists
+
+- name: Use existing gateway token from config
+  ansible.builtin.set_fact:
+    reefy_openclaw_token: "{{ openclaw_config.gateway.auth.token }}"
+  when:
+    - reefy_openclaw_state == 'started'
+    - reefy_openclaw_token is not defined
+    - openclaw_config.gateway.auth.token is defined
+
+- name: Generate gateway token if not available
+  ansible.builtin.set_fact:
+    reefy_openclaw_token: "{{ lookup('community.general.random_string', length=64, special=false, upper=false) }}"
+  when:
+    - reefy_openclaw_state == 'started'
+    - reefy_openclaw_token is not defined
+
+- name: Merge gateway config
+  ansible.builtin.set_fact:
+    openclaw_config: >-
+      {{ openclaw_config | combine({
+        'gateway': {
+          'auth': {
+            'mode': 'token',
+            'allowTailscale': reefy_openclaw_tailscale_serve | bool
+          },
+          'controlUi': {
+            'allowedOrigins': reefy_openclaw_allowed_origins | default([]),
+            'dangerouslyAllowHostHeaderOriginFallback': (reefy_openclaw_allowed_origins | default([])) | length == 0,
+            'allowInsecureAuth': reefy_openclaw_allow_insecure_auth | bool
+          }
+        }
+      }, recursive=True) }}
+  when: reefy_openclaw_state == 'started'
+
+- name: Write OpenClaw config file
+  ansible.builtin.copy:
+    dest: "{{ reefy_openclaw_data_path }}/openclaw.json"
+    owner: '1000'
+    group: '1000'
+    mode: '0644'
+    content: "{{ openclaw_config | to_nice_json }}"
+  when: reefy_openclaw_state == 'started'
+
+- name: Restore OpenClaw backup from local file
+  when:
+    - reefy_openclaw_state == 'started'
+    - reefy_openclaw_backup_local_file | length > 0
+  block:
+    - name: Copy backup file from local to remote
+      ansible.builtin.copy:
+        src: "{{ reefy_openclaw_backup_local_file }}"
+        dest: "/tmp/openclaw-backup.tgz"
+        mode: '0644'
+
+    - name: Extract backup to data directory
+      ansible.builtin.unarchive:
+        src: "/tmp/openclaw-backup.tgz"
+        dest: "{{ reefy_openclaw_data_path }}"
+        remote_src: true
+        extra_opts:
+          - --strip-components=1
+
+    - name: Remove temporary backup file
+      ansible.builtin.file:
+        path: "/tmp/openclaw-backup.tgz"
+        state: absent
+
+    - name: Display backup restore status
+      ansible.builtin.debug:
+        msg: "Restored OpenClaw backup from {{ reefy_openclaw_backup_local_file }}"
+
+- name: Restore OpenClaw backup from remote file
+  when:
+    - reefy_openclaw_state == 'started'
+    - reefy_openclaw_backup_local_file | length == 0
+    - reefy_openclaw_backup_file | length > 0
+  block:
+    - name: Check if backup file exists
+      ansible.builtin.stat:
+        path: "{{ reefy_openclaw_backup_file }}"
+      register: backup_stat
+
+    - name: Fail if backup file not found
+      ansible.builtin.fail:
+        msg: "Backup file not found: {{ reefy_openclaw_backup_file }}"
+      when: not backup_stat.stat.exists
+
+    - name: Extract backup to data directory
+      ansible.builtin.unarchive:
+        src: "{{ reefy_openclaw_backup_file }}"
+        dest: "{{ reefy_openclaw_data_path }}"
+        remote_src: true
+        extra_opts:
+          - --strip-components=1
+
+    - name: Display backup restore status
+      ansible.builtin.debug:
+        msg: "Restored OpenClaw backup from {{ reefy_openclaw_backup_file }}"
+
+- name: Re-read gateway token from restored backup config
+  when:
+    - reefy_openclaw_state == 'started'
+    - (reefy_openclaw_backup_local_file | length > 0) or (reefy_openclaw_backup_file | length > 0)
+  block:
+    - name: Read restored OpenClaw config
+      ansible.builtin.slurp:
+        src: "{{ reefy_openclaw_data_path }}/openclaw.json"
+      register: restored_openclaw_config
+
+    - name: Update gateway token from restored config
+      ansible.builtin.set_fact:
+        reefy_openclaw_token: "{{ (restored_openclaw_config.content | b64decode | from_json).gateway.auth.token }}"
+      when: (restored_openclaw_config.content | b64decode | from_json).gateway.auth.token is defined
+
+- name: Build base container environment
+  ansible.builtin.set_fact:
+    openclaw_container_env:
+      OPENCLAW_GATEWAY_TOKEN: "{{ reefy_openclaw_token }}"
+  when: reefy_openclaw_state == 'started'
+
+- name: Add Ollama environment variables
+  ansible.builtin.set_fact:
+    openclaw_container_env: "{{ openclaw_container_env | combine({'OLLAMA_BASE_URL': 'http://' + reefy_openclaw_ollama_container + ':' + (reefy_openclaw_ollama_port | string), 'OLLAMA_API_KEY': 'ollama-local', 'NODE_OPTIONS': '--dns-result-order=ipv4first'}) }}"
+  when:
+    - reefy_openclaw_state == 'started'
+    - reefy_openclaw_ollama_network | length > 0
+
+- name: Add debug environment variables
+  ansible.builtin.set_fact:
+    openclaw_container_env: "{{ openclaw_container_env | combine({'OPENCLAW_LOG_LEVEL': reefy_openclaw_log_level}) }}"
+  when:
+    - reefy_openclaw_state == 'started'
+    - reefy_openclaw_log_level != 'info'
+
+- name: Add diagnostics environment variable
+  ansible.builtin.set_fact:
+    openclaw_container_env: "{{ openclaw_container_env | combine({'OPENCLAW_DIAGNOSTICS': reefy_openclaw_diagnostics}) }}"
+  when:
+    - reefy_openclaw_state == 'started'
+    - reefy_openclaw_diagnostics | length > 0
+
+- name: Start OpenClaw container (default network)
+  community.docker.docker_container:
+    name: "{{ reefy_openclaw_container_name }}"
+    image: "{{ reefy_openclaw_image }}"
+    state: "{{ reefy_openclaw_state }}"
+    pull: "{{ reefy_openclaw_pull }}"
+    recreate: "{{ reefy_openclaw_recreate }}"
+    restart_policy: unless-stopped
+    volumes:
+      - "{{ reefy_openclaw_data_path }}:/home/node/.openclaw"
+    ports:
+      - "{{ reefy_openclaw_port }}:{{ reefy_openclaw_port }}"
+    env: "{{ openclaw_container_env }}"
+    command: "node dist/index.js gateway --bind {{ reefy_openclaw_bind }} --port {{ reefy_openclaw_port }}{{ ' --allow-unconfigured' if reefy_openclaw_allow_unconfigured | bool else '' }}"
+  register: container_result
+  retries: 10
+  delay: 5
+  until: container_result is succeeded
+  when:
+    - reefy_openclaw_state == 'started'
+    - reefy_openclaw_ollama_network | length == 0
+
+- name: Start OpenClaw container (with Ollama network)
+  community.docker.docker_container:
+    name: "{{ reefy_openclaw_container_name }}"
+    image: "{{ reefy_openclaw_image }}"
+    state: "{{ reefy_openclaw_state }}"
+    pull: "{{ reefy_openclaw_pull }}"
+    recreate: "{{ reefy_openclaw_recreate }}"
+    restart_policy: unless-stopped
+    networks:
+      - name: "{{ reefy_openclaw_ollama_network }}"
+    volumes:
+      - "{{ reefy_openclaw_data_path }}:/home/node/.openclaw"
+    ports:
+      - "{{ reefy_openclaw_port }}:{{ reefy_openclaw_port }}"
+    env: "{{ openclaw_container_env }}"
+    command: "node dist/index.js gateway --bind {{ reefy_openclaw_bind }} --port {{ reefy_openclaw_port }}{{ ' --allow-unconfigured' if reefy_openclaw_allow_unconfigured | bool else '' }}"
+  register: container_result
+  retries: 10
+  delay: 5
+  until: container_result is succeeded
+  when:
+    - reefy_openclaw_state == 'started'
+    - reefy_openclaw_ollama_network | length > 0
+
+- name: Wait for OpenClaw gateway to be ready
+  ansible.builtin.uri:
+    url: "http://localhost:{{ reefy_openclaw_port }}/health"
+    method: GET
+  register: openclaw_health
+  retries: 30
+  delay: 2
+  until: openclaw_health.status == 200
+  ignore_errors: true
+  when: reefy_openclaw_state == 'started'
+
+- name: Setup Tailscale Serve for HTTPS access
+  ansible.builtin.command:
+    cmd: "tailscale serve --bg --https {{ reefy_openclaw_https_port }} http://localhost:{{ reefy_openclaw_port }}"
+  register: tailscale_serve_result
+  changed_when: true
+  when:
+    - reefy_openclaw_state == 'started'
+    - reefy_openclaw_tailscale_serve | bool
+
+- name: Display Tailscale Serve status
+  ansible.builtin.debug:
+    msg: "Tailscale Serve configured: HTTPS on port {{ reefy_openclaw_https_port }} -> localhost:{{ reefy_openclaw_port }}"
+  when:
+    - reefy_openclaw_state == 'started'
+    - reefy_openclaw_tailscale_serve | bool
+
+- name: Stop Tailscale Serve
+  ansible.builtin.command:
+    cmd: "tailscale serve --https {{ reefy_openclaw_https_port }} off"
+  register: tailscale_serve_stop
+  changed_when: true
+  failed_when: false
+  when:
+    - reefy_openclaw_state == 'absent'
+    - reefy_openclaw_tailscale_serve | bool
+
+- name: Stop OpenClaw container
+  community.docker.docker_container:
+    name: "{{ reefy_openclaw_container_name }}"
+    state: absent
+  when: reefy_openclaw_state == 'absent'
+
+- name: Get Tailscale hostname
+  ansible.builtin.command:
+    cmd: tailscale status --self --json
+  register: tailscale_status
+  changed_when: false
+  when: reefy_openclaw_state == 'started'
+
+- name: Set Tailscale hostname fact
+  ansible.builtin.set_fact:
+    tailscale_hostname: "{{ (tailscale_status.stdout | from_json).Self.DNSName | regex_replace('\\.$', '') }}"
+  when: reefy_openclaw_state == 'started'
+
+- name: Display OpenClaw status
+  vars:
+    ollama_info: "{{ 'http://' + reefy_openclaw_ollama_container + ':' + (reefy_openclaw_ollama_port | string) if reefy_openclaw_ollama_network | length > 0 else 'not configured' }}"
+    status_msg: |-
+
+      ════════════════════════════════════════════════════════════════
+      OpenClaw Container:
+        Name: {{ reefy_openclaw_container_name }}
+        State: {{ reefy_openclaw_state }}
+        Image: {{ reefy_openclaw_image }}
+        Port: {{ reefy_openclaw_port }}
+        Bind: {{ reefy_openclaw_bind }}
+        Data: {{ reefy_openclaw_data_path }}
+        Ollama: {{ ollama_info }}
+
+      Web UI URL: https://{{ tailscale_hostname }}:{{ reefy_openclaw_https_port }}/#token={{ reefy_openclaw_token }}
+      ════════════════════════════════════════════════════════════════
+  ansible.builtin.debug:
+    msg: "{{ status_msg.split('\n') }}"
+  when: reefy_openclaw_state == 'started'
+
+- name: Set app outputs for platform
+  ansible.builtin.set_fact:
+    reefy_outputs: "{{ reefy_outputs | default([]) + outputs }}"
+  vars:
+    outputs:
+      - name: web_ui_url
+        value: "https://{{ tailscale_hostname }}:{{ reefy_openclaw_https_port }}/#token={{ reefy_openclaw_token }}"
+        label: "Web UI"
+        show_to_user: true
+      - name: gateway_token
+        value: "{{ reefy_openclaw_token }}"
+        label: "Gateway Token"
+        show_to_user: false
+  when: reefy_openclaw_state == 'started'
+
+- name: Report outputs to platform
+  ansible.builtin.debug:
+    msg: "REEFY_OUTPUTS={{ reefy_outputs | to_json }}"
+  when: reefy_outputs is defined and reefy_outputs | length > 0
