@@ -1,0 +1,14 @@
+[Unit]
+Description=SBNB Log Publisher (journald → MQTT)
+After=sbnb-mqtt.service
+Wants=sbnb-mqtt.service
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/sbnb-log-publisher --units sbnb-mqtt
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

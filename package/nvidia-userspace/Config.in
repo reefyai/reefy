@@ -1,0 +1,11 @@
+config BR2_PACKAGE_NVIDIA_USERSPACE
+	bool "nvidia-userspace"
+	depends on BR2_x86_64
+	help
+	  NVIDIA userspace driver libraries and tools extracted from the
+	  official driver installer. Provides nvidia-smi, libnvidia-ml.so
+	  and libcuda.so for GPU monitoring and CUDA container support.
+
+	  Install path: /usr/lib/nvidia/ (libraries), /usr/bin/ (nvidia-smi)
+
+	  https://www.nvidia.com/en-us/drivers/unix/

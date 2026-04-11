@@ -1,0 +1,13 @@
+[Unit]
+Description=sbnb storage setup (critical path)
+Wants=dev-disk-by\x2dpartlabel-sbnb\x2da.device
+After=dev-disk-by\x2dpartlabel-sbnb\x2da.device
+Before=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/boot-sbnb-storage.sh
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target

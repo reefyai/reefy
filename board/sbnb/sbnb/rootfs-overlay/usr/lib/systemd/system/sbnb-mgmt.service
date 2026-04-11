@@ -1,0 +1,33 @@
+[Unit]
+Description=SBNB mgmt Configuration Daemon
+Documentation=https://github.com/purpleidea/mgmt
+
+# Must start after storage setup (USB mount, hostname, data partition)
+After=sbnb-storage.service network-online.target
+Wants=sbnb-storage.service network-online.target
+
+# Only start if mcl config has been deployed via MQTT
+ConditionPathExists=/etc/sbnb/mgmt/main.mcl
+
+[Service]
+Type=simple
+
+# --tmp-prefix: use temp dir for etcd data (single-node, no cluster state)
+# No --converged-timeout: run forever as daemon for continuous drift monitoring
+ExecStart=/usr/bin/mgmt run --tmp-prefix lang /etc/sbnb/mgmt/main.mcl
+
+# Auto-restart on failure
+Restart=on-failure
+RestartSec=10
+
+# Resource limits
+MemoryMax=256M
+CPUQuota=20%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sbnb-mgmt
+
+[Install]
+WantedBy=multi-user.target

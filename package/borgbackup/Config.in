@@ -1,0 +1,7 @@
+config BR2_PACKAGE_BORGBACKUP
+	bool "borgbackup"
+	help
+	  BorgBackup (Borg) — deduplicating archiver with compression
+	  and encryption. Pre-built standalone binary for x86_64.
+
+	  https://www.borgbackup.org/

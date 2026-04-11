@@ -1,2 +1,4 @@
 # We need a static BusyBox for a minimal initramfs to mount a larger SquashFS
 CONFIG_STATIC=y
+CONFIG_STAT=y
+CONFIG_FEATURE_STAT_FORMAT=y

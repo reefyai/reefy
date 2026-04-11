@@ -1,0 +1,11 @@
+config BR2_PACKAGE_NVIDIA_GSP_FIRMWARE
+	bool "nvidia-gsp-firmware"
+	depends on BR2_x86_64
+	help
+	  NVIDIA GSP (GPU System Processor) firmware for Turing and
+	  newer GPUs. Required by the open-source NVIDIA kernel modules.
+
+	  Firmware files are extracted from the official NVIDIA driver
+	  installer and installed to /lib/firmware/nvidia/<version>/.
+
+	  https://www.nvidia.com/en-us/drivers/unix/

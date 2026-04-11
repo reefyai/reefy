@@ -18,6 +18,14 @@ sbnb_openclaw_data_path: /mnt/sbnb-data/openclaw/config
 # Gateway bind mode: lan (recommended for Docker) or loopback
 sbnb_openclaw_bind: lan
 
+# Allowed origins for Control UI (when binding to lan)
+# If empty, falls back to Host-header origin mode
+# Example: ["https://myhost.tail12345.ts.net:8443"]
+sbnb_openclaw_allowed_origins: []
+
+# Skip device fingerprint pairing (still requires token auth)
+sbnb_openclaw_allow_insecure_auth: true
+
 # Optional backup file to restore (disabled by default)
 # Use sbnb_openclaw_backup_local_file for local file (will be copied to remote)
 # Use sbnb_openclaw_backup_file for file already on remote host

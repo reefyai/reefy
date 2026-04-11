@@ -1,0 +1,9 @@
+{
+    "data-root": "/mnt/sbnb-data/docker",
+    "builder": {
+        "gc": {
+            "defaultKeepStorage": "0",
+            "enabled": true
+        }
+    }
+}

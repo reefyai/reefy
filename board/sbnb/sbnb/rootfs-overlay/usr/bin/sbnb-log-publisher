@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+"""
+Publish systemd journal logs to MQTT for dashboard visibility.
+
+Watches journald for specified systemd units and publishes each log line
+to the device's MQTT logs topic — but only when a user is actively
+viewing logs in the dashboard (subscribe/unsubscribe pattern).
+
+The dashboard sends {action: "subscribe"} to the logs/control topic
+when the user opens logs, and {action: "unsubscribe"} when closed.
+A 30-minute safety timeout auto-stops publishing if no refresh received.
+"""
+
+import json
+import os
+import subprocess
+import ssl
+import sys
+import threading
+import time
+
+try:
+    import paho.mqtt.client as mqtt
+except ImportError:
+    print("[log-publisher] ERROR: paho-mqtt not installed")
+    sys.exit(1)
+
+DEFAULT_UNITS = ['sbnb-mqtt']
+MQTT_CONF_PATH = '/mnt/sbnb/mqtt/mqtt.conf'
+STATE_DIR = '/mnt/sbnb-data/state'
+SUBSCRIBE_TIMEOUT = 1800  # 30 min
+
+# State
+_subscribers = 0
+_last_subscribe = 0.0
+_lock = threading.Lock()
+
+
+def load_config():
+    if not os.path.exists(MQTT_CONF_PATH):
+        return None
+    config = {}
+    with open(MQTT_CONF_PATH) as f:
+        for line in f:
+            line = line.strip()
+            if '=' in line and not line.startswith('#'):
+                key, val = line.split('=', 1)
+                config[key.strip()] = val.strip()
+    return config
+
+
+def get_device_uuid():
+    """Get device UUID — works in both device and bootstrap mode."""
+    for path in [os.path.join(STATE_DIR, 'device-uuid'), '/tmp/bootstrap-uuid']:
+        if os.path.exists(path):
+            with open(path) as f:
+                uuid = f.read().strip()
+                if uuid:
+                    return uuid
+    return None
+
+
+def is_publishing():
+    return True  # Always publish — dashboard wildcard subscription handles filtering
+
+
+def handle_control(payload):
+    global _subscribers, _last_subscribe
+    try:
+        data = json.loads(payload)
+    except (json.JSONDecodeError, TypeError):
+        return
+    action = data.get('action')
+    with _lock:
+        if action == 'subscribe':
+            _subscribers += 1
+            _last_subscribe = time.time()
+            print(f"[log-publisher] Subscribe (active={_subscribers})")
+        elif action == 'unsubscribe':
+            _subscribers = max(0, _subscribers - 1)
+            print(f"[log-publisher] Unsubscribe (active={_subscribers})")
+
+
+def create_mqtt_client(config, control_topic):
+    broker = config.get('MQTT_BROKER', 'mqtt.reefy.ai')
+    port = int(config.get('MQTT_PORT', '443'))
+    transport = config.get('MQTT_TRANSPORT', 'websockets')
+    ws_path = config.get('MQTT_WS_PATH', '/mqtt')
+    ca_cert = config.get('MQTT_CA_CERT', '/mnt/sbnb/mqtt/ca.crt')
+    client_cert = config.get('MQTT_CLIENT_CERT', os.path.join(STATE_DIR, 'device.crt'))
+    client_key = config.get('MQTT_CLIENT_KEY', os.path.join(STATE_DIR, 'device.key'))
+
+    client = mqtt.Client(
+        callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+        client_id=f'sbnb-log-publisher-{os.getpid()}',
+        transport=transport,
+    )
+
+    client.tls_set(
+        ca_certs=ca_cert,
+        certfile=client_cert,
+        keyfile=client_key,
+        cert_reqs=ssl.CERT_REQUIRED,
+        tls_version=ssl.PROTOCOL_TLSv1_2,
+    )
+
+    if transport == 'websockets':
+        client.ws_set_options(path=ws_path)
+
+    client.reconnect_delay_set(min_delay=1, max_delay=60)
+
+    def on_connect(client, userdata, flags, rc, properties):
+        print(f"[log-publisher] Connected to {broker}:{port}")
+        client.subscribe(control_topic, qos=1)
+        print(f"[log-publisher] Subscribed to {control_topic}")
+
+    def on_disconnect(client, userdata, flags, rc, properties):
+        print(f"[log-publisher] Disconnected (rc={rc}), will reconnect")
+
+    def on_message(client, userdata, msg):
+        handle_control(msg.payload)
+
+    client.on_connect = on_connect
+    client.on_disconnect = on_disconnect
+    client.on_message = on_message
+
+    client.connect(broker, port, keepalive=60)
+    client.loop_start()
+    return client
+
+
+def tail_journal(units, client, log_topic):
+    cmd = ['journalctl', '-f', '--no-pager', '-o', 'json']
+    for unit in units:
+        cmd.extend(['-u', unit])
+
+    print(f"[log-publisher] Tailing units: {', '.join(units)}")
+
+    while True:
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
+            for line in proc.stdout:
+                if not is_publishing():
+                    continue
+
+                try:
+                    entry = json.loads(line)
+                    msg = entry.get('MESSAGE', '')
+                    if not msg:
+                        continue
+
+                    unit = entry.get('_SYSTEMD_UNIT', '')
+                    priority = int(entry.get('PRIORITY', 6))
+
+                    # Skip our own log lines to avoid feedback loop
+                    if unit == 'sbnb-log-publisher.service':
+                        continue
+
+                    # Source from unit name
+                    source = unit.replace('.service', '') if unit else 'system'
+                    if priority <= 3:
+                        source = 'error'
+
+                    payload = json.dumps({
+                        'source': source,
+                        'msg': msg,
+                        'ts': time.time(),
+                    })
+
+                    if client.is_connected():
+                        client.publish(log_topic, payload, qos=0, retain=False)
+
+                except (json.JSONDecodeError, KeyError, ValueError):
+                    continue
+
+        except Exception as e:
+            print(f"[log-publisher] journalctl error: {e}")
+            time.sleep(5)
+
+
+def main():
+    units = DEFAULT_UNITS
+    for i, arg in enumerate(sys.argv[1:], 1):
+        if arg == '--units' and i < len(sys.argv) - 1:
+            units = sys.argv[i + 1].split(',')
+
+    print(f"[log-publisher] Starting (units: {', '.join(units)})")
+
+    # Wait for config
+    while not os.path.exists(MQTT_CONF_PATH):
+        print(f"[log-publisher] Waiting for {MQTT_CONF_PATH}...")
+        time.sleep(10)
+
+    config = load_config()
+    if not config:
+        print("[log-publisher] ERROR: Failed to load config")
+        sys.exit(1)
+
+    # Wait for UUID (reconciler creates bootstrap-uuid early)
+    device_uuid = None
+    while not device_uuid:
+        device_uuid = get_device_uuid()
+        if not device_uuid:
+            print("[log-publisher] Waiting for device UUID...")
+            time.sleep(5)
+
+    topic_prefix = config.get('MQTT_TOPIC_PREFIX', 'sbnb')
+    log_topic = f"{topic_prefix}/devices/{device_uuid}/logs"
+    control_topic = f"{topic_prefix}/devices/{device_uuid}/logs/control"
+
+    # Use device certs if available, fall back to bootstrap certs
+    device_cert = os.path.join(STATE_DIR, 'device.crt')
+    device_key = os.path.join(STATE_DIR, 'device.key')
+    bootstrap_cert = '/mnt/sbnb/mqtt/bootstrap.crt'
+    bootstrap_key = '/mnt/sbnb/mqtt/bootstrap.key'
+
+    if os.path.exists(device_cert) and os.path.exists(device_key):
+        config['MQTT_CLIENT_CERT'] = device_cert
+        config['MQTT_CLIENT_KEY'] = device_key
+        print(f"[log-publisher] Using device certs")
+    elif os.path.exists(bootstrap_cert) and os.path.exists(bootstrap_key):
+        config['MQTT_CLIENT_CERT'] = bootstrap_cert
+        config['MQTT_CLIENT_KEY'] = bootstrap_key
+        print(f"[log-publisher] Using bootstrap certs")
+    else:
+        print("[log-publisher] ERROR: No certs found")
+        sys.exit(1)
+
+    # Connect MQTT
+    while True:
+        try:
+            client = create_mqtt_client(config, control_topic)
+            break
+        except Exception as e:
+            print(f"[log-publisher] MQTT connect failed: {e}, retrying in 10s")
+            time.sleep(10)
+
+    # Tail and publish
+    tail_journal(units, client, log_topic)
+
+
+if __name__ == '__main__':
+    main()

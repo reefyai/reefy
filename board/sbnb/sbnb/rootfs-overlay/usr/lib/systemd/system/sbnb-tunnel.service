@@ -1,7 +1,7 @@
 [Unit]
 Description=sbnb tunnel service
-After=sbnb.service
-Requires=sbnb.service
+After=sbnb-storage.service
+Wants=sbnb-storage.service
 ConditionPathExists=/mnt/sbnb/tunnel-start.sh
 
 [Service]

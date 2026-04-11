@@ -69,63 +69,23 @@
     state: present
   when: sbnb_nvidia_install_container_toolkit | bool
 
-- name: Check if NVIDIA runtime already configured in Docker
-  ansible.builtin.shell:
-    cmd: docker info 2>/dev/null | grep -q 'Runtimes:.*nvidia'
-  register: nvidia_runtime_check
-  changed_when: false
-  failed_when: false
+- name: Generate NVIDIA CDI specification
+  ansible.builtin.command:
+    cmd: nvidia-ctk cdi generate --output=/var/run/cdi/nvidia.yaml
+  changed_when: true
   when: sbnb_nvidia_install_container_toolkit | bool
 
-- name: Configure Docker runtime for NVIDIA (preserving existing settings)
-  when: sbnb_nvidia_install_container_toolkit | bool and nvidia_runtime_check.rc != 0
-  block:
-    - name: Read existing daemon.json before nvidia-ctk
-      ansible.builtin.slurp:
-        src: /etc/docker/daemon.json
-      register: daemon_json_before
-      failed_when: false
-
-    - name: Parse existing daemon.json
-      ansible.builtin.set_fact:
-        existing_daemon_config: "{{ (daemon_json_before.content | b64decode | from_json) if daemon_json_before.content is defined else {} }}"
-
-    - name: Run nvidia-ctk runtime configure
-      ansible.builtin.command:
-        cmd: nvidia-ctk runtime configure --runtime=docker
-
-    - name: Read daemon.json after nvidia-ctk
-      ansible.builtin.slurp:
-        src: /etc/docker/daemon.json
-      register: daemon_json_after
-
-    - name: Merge existing settings back into daemon.json
-      ansible.builtin.copy:
-        content: "{{ (daemon_json_after.content | b64decode | from_json) | combine(existing_daemon_config) | to_nice_json }}"
-        dest: /etc/docker/daemon.json
-        mode: '0644'
-      when: existing_daemon_config | length > 0
-      notify: Restart Docker for NVIDIA
-
-    - name: Notify Docker restart when no merge needed
-      ansible.builtin.debug:
-        msg: "NVIDIA runtime configured"
-      changed_when: true
-      when: existing_daemon_config | length == 0
-      notify: Restart Docker for NVIDIA
-
-- name: Reset Docker systemd failure counter before restart
+- name: Verify CDI devices are available
   ansible.builtin.command:
-    cmd: systemctl reset-failed docker
+    cmd: nvidia-ctk cdi list
+  register: cdi_list
   changed_when: false
-  failed_when: false
-  when: sbnb_nvidia_install_container_toolkit | bool and nvidia_runtime_check.rc != 0
+  when: sbnb_nvidia_install_container_toolkit | bool
 
-- name: Restart Docker to activate NVIDIA runtime
-  ansible.builtin.systemd:
-    name: docker
-    state: restarted
-  when: sbnb_nvidia_install_container_toolkit | bool and nvidia_runtime_check.rc != 0
+- name: Show CDI devices
+  ansible.builtin.debug:
+    msg: "{{ cdi_list.stdout_lines }}"
+  when: sbnb_nvidia_install_container_toolkit | bool
 
 - name: Display NVIDIA installation summary
   ansible.builtin.debug:

@@ -10,7 +10,7 @@ STUB=/usr/lib/systemd/boot/efi/linuxx64.efi.stub
 KERNEL="${BINARIES_DIR}/bzImage"
 INITRD="${BINARIES_DIR}/rootfs-sbnb.cpio"
 OS_RELEASE="${TARGET_DIR}/etc/os-release"
-CMDLINE="console=ttyS0 console=tty0 earlyprintk verbose intel_iommu=on module_blacklist=nouveau,nvidiafb,snd_hda_intel dyndbg=\"module firmware_class +p; module microcode +p; module ccp +p\""
+CMDLINE="console=tty0 quiet panic=10 intel_iommu=on module_blacklist=nouveau,nvidiafb,snd_hda_intel,r8169"
 CMDLINE_TMP=$(mktemp)
 OUTPUT=sbnb.efi
 

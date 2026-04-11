@@ -1,0 +1,19 @@
+[Unit]
+Description=Apply saved WiFi config early in boot
+After=sbnb-storage.service
+Wants=sbnb-storage.service
+Before=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/sbnb-wifi-early
+RemainAfterExit=true
+TimeoutStartSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sbnb-wifi-early
+
+[Install]
+WantedBy=multi-user.target

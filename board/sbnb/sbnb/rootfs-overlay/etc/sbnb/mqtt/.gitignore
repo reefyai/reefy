@@ -1,0 +1,10 @@
+# Ignore all certificate and key files (security sensitive)
+*.crt
+*.key
+*.pem
+
+# Ignore configuration files that may contain credentials
+mqtt.conf
+
+# Allow this .gitignore file itself
+!.gitignore

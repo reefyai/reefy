@@ -57,6 +57,16 @@
       when: daemon_config['data-root'] is not defined or daemon_config['data-root'] != sbnb_docker_vm_data_root
       notify: Restart Docker
 
+- name: Check if containerd config exists
+  ansible.builtin.stat:
+    path: /etc/containerd/config.toml
+  register: containerd_config_stat
+
+- name: Generate default containerd config if missing
+  ansible.builtin.shell:
+    cmd: mkdir -p /etc/containerd && containerd config default > /etc/containerd/config.toml
+  when: not containerd_config_stat.stat.exists
+
 - name: Check if containerd root is already configured
   ansible.builtin.shell:
     cmd: grep -q '^root = "{{ sbnb_docker_vm_containerd_root }}"' /etc/containerd/config.toml

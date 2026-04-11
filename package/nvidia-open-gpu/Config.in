@@ -1,0 +1,21 @@
+comment "nvidia-open-gpu needs a Linux kernel to be built"
+	depends on !BR2_LINUX_KERNEL
+
+config BR2_PACKAGE_NVIDIA_OPEN_GPU
+	bool "nvidia-open-gpu"
+	depends on BR2_LINUX_KERNEL
+	depends on BR2_x86_64 || BR2_aarch64
+	depends on BR2_TOOLCHAIN_USES_GLIBC
+	select BR2_LINUX_NEEDS_MODULES
+	help
+	  NVIDIA open-source GPU kernel modules (nvidia.ko,
+	  nvidia-modeset.ko, nvidia-drm.ko, nvidia-uvm.ko).
+
+	  Supports Turing (RTX 20xx) and newer GPU architectures.
+	  Requires matching GSP firmware (nvidia-gsp-firmware).
+
+	  https://github.com/NVIDIA/open-gpu-kernel-modules
+
+comment "nvidia-open-gpu needs a glibc toolchain"
+	depends on BR2_x86_64 || BR2_aarch64
+	depends on !BR2_TOOLCHAIN_USES_GLIBC

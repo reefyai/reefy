@@ -87,7 +87,14 @@
         src: daemon.json.j2
         dest: "{{ sbnb_docker_config_path }}"
         mode: '0644'
-      notify: Restart Docker
+      register: docker_config_written
+
+    - name: Restart Docker after config change
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted
+        daemon_reload: true
+      when: docker_config_written.changed
 
     - name: Display Docker configuration
       ansible.builtin.debug:
@@ -99,11 +106,11 @@
   register: docker_data_root_stat
 
 - name: Restart Docker if data-root is missing (storage mounted after Docker started)
-  ansible.builtin.debug:
-    msg: "Docker data-root {{ sbnb_docker_data_root }} does not exist - Docker needs restart after storage mount"
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
+    daemon_reload: true
   when: not docker_data_root_stat.stat.exists
-  changed_when: true
-  notify: Restart Docker
 
 - name: Display skip message if already configured
   ansible.builtin.debug:

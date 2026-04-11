@@ -58,9 +58,22 @@
     - sbnb_openclaw_state == 'started'
     - sbnb_openclaw_token is not defined
 
-- name: Merge gateway auth config
+- name: Merge gateway config
   ansible.builtin.set_fact:
-    openclaw_config: "{{ openclaw_config | combine({'gateway': {'auth': {'mode': 'token', 'allowTailscale': sbnb_openclaw_tailscale_serve | bool}}}, recursive=True) }}"
+    openclaw_config: >-
+      {{ openclaw_config | combine({
+        'gateway': {
+          'auth': {
+            'mode': 'token',
+            'allowTailscale': sbnb_openclaw_tailscale_serve | bool
+          },
+          'controlUi': {
+            'allowedOrigins': sbnb_openclaw_allowed_origins | default([]),
+            'dangerouslyAllowHostHeaderOriginFallback': (sbnb_openclaw_allowed_origins | default([])) | length == 0,
+            'allowInsecureAuth': sbnb_openclaw_allow_insecure_auth | bool
+          }
+        }
+      }, recursive=True) }}
   when: sbnb_openclaw_state == 'started'
 
 - name: Write OpenClaw config file

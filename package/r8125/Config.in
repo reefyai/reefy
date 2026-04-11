@@ -1,0 +1,13 @@
+comment "r8125 needs a Linux kernel to be built"
+	depends on !BR2_LINUX_KERNEL
+
+config BR2_PACKAGE_R8125
+	bool "r8125"
+	depends on BR2_LINUX_KERNEL
+	depends on BR2_x86_64
+	select BR2_LINUX_NEEDS_MODULES
+	help
+	  Realtek r8125 2.5 Gigabit Ethernet driver for RTL8125
+	  series controllers. Replaces the in-kernel r8169 driver.
+
+	  https://github.com/openwrt/rtl8125

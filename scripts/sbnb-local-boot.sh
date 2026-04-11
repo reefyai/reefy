@@ -11,16 +11,18 @@
 #   -r, --readonly      Boot image read-only (no copy, use snapshot)
 #   -n, --network MODE  Network mode: user (default), bridge, tap, none
 #   -g, --graphics      Enable VNC graphics on :0
+#   -s, --disk-size SIZE  Resize boot disk (default: 32G, simulates USB dongle)
 #   -d, --disk FILE     Attach additional disk
 #   -v, --verbose       Verbose output (set -x)
 #   --                  Pass remaining args to QEMU
 #
 # Examples:
-#   boot_in_qemu.sh                          # Quick test (4G RAM, 2 CPUs)
-#   boot_in_qemu.sh -m 16G -c 4              # More resources
-#   boot_in_qemu.sh -r                       # Read-only (fast, no disk changes)
-#   boot_in_qemu.sh -d data.qcow2            # Attach data disk
-#   boot_in_qemu.sh -- -serial mon:stdio     # Custom QEMU args
+#   sbnb-local-boot.sh                        # Quick test (4G RAM, 2 CPUs, 32G disk)
+#   sbnb-local-boot.sh -m 16G -c 4            # More resources
+#   sbnb-local-boot.sh -r                     # Read-only (fast, no disk changes)
+#   sbnb-local-boot.sh -s 64G                 # Larger disk (simulates bigger USB)
+#   sbnb-local-boot.sh -d data.qcow2          # Attach data disk
+#   sbnb-local-boot.sh -- -serial mon:stdio   # Custom QEMU args
 
 set -euo pipefail
 
@@ -31,6 +33,7 @@ READONLY=false
 NETWORK="user"
 GRAPHICS=false
 VERBOSE=false
+DISK_SIZE="32G"
 EXTRA_DISKS=()
 QEMU_EXTRA_ARGS=()
 
@@ -60,6 +63,10 @@ while [[ $# -gt 0 ]]; do
         -g|--graphics)
             GRAPHICS=true
             shift
+            ;;
+        -s|--disk-size)
+            DISK_SIZE="$2"
+            shift 2
             ;;
         -d|--disk)
             EXTRA_DISKS+=("$2")
@@ -129,10 +136,12 @@ if $READONLY; then
     DISK_ARGS="-drive file=${IMG_FILE},if=virtio,format=raw,snapshot=on"
     echo "Booting in READ-ONLY mode (snapshot, no disk changes)"
 else
-    # Copy image for read-write access
+    # Copy image for read-write access and resize to simulate USB dongle
     IMG_FILE="${IMG_DIR}/sbnb-qemu.raw"
     echo "Copying image for read-write access..."
     cp "${IMG_FILE_SRC}" "${IMG_FILE}"
+    echo "Resizing disk to ${DISK_SIZE} (simulates USB dongle)..."
+    qemu-img resize "${IMG_FILE}" "${DISK_SIZE}"
     DISK_ARGS="-drive file=${IMG_FILE},if=virtio,format=raw"
 fi
 
@@ -184,6 +193,7 @@ echo "Image:    ${IMG_FILE}"
 echo "OVMF:     ${OVMF_BIOS}"
 echo "Memory:   ${MEMORY}"
 echo "CPUs:     ${CPUS}"
+echo "Disk:     ${DISK_SIZE}"
 echo "Network:  ${NETWORK}"
 echo "Graphics: $(${GRAPHICS} && echo 'VNC :0' || echo 'none (serial console only)')"
 [[ ${#EXTRA_DISKS[@]} -gt 0 ]] && echo "Disks:    ${EXTRA_DISKS[*]}"

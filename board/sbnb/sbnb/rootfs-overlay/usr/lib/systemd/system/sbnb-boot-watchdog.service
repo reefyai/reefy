@@ -1,0 +1,10 @@
+[Unit]
+Description=sbnb boot watchdog (A/B update safety)
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/sbnb-boot-watchdog
+
+[Install]
+WantedBy=multi-user.target

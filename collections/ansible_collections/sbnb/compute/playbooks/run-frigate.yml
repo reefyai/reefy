@@ -32,4 +32,5 @@
   roles:
     - role: sbnb.compute.docker_vm
     - role: sbnb.compute.nvidia
+      when: ansible_os_family == "Debian"
     - role: sbnb.compute.frigate

@@ -1,0 +1,40 @@
+#!/bin/sh
+# Apply saved WiFi config early in boot, before network-online.target.
+# Ensures WiFi connectivity is available even if ethernet is not connected.
+# The reconciler will re-apply WiFi config later (idempotent).
+
+STATE_FILE="/mnt/sbnb-data/state/desired-state.json"
+
+if [ ! -f "$STATE_FILE" ]; then
+    echo "[wifi-early] No saved desired state, skipping"
+    exit 0
+fi
+
+# Extract WiFi SSID and password from desired-state.json
+SSID=$(python3 -c "
+import json, sys
+try:
+    s = json.load(open('$STATE_FILE'))
+    w = s.get('wifi', {})
+    print(w.get('ssid', ''))
+except Exception:
+    pass
+" 2>/dev/null)
+
+if [ -z "$SSID" ]; then
+    echo "[wifi-early] No WiFi config in desired state, skipping"
+    exit 0
+fi
+
+PASSWORD=$(python3 -c "
+import json, sys
+try:
+    s = json.load(open('$STATE_FILE'))
+    w = s.get('wifi', {})
+    print(w.get('password', ''))
+except Exception:
+    pass
+" 2>/dev/null)
+
+echo "[wifi-early] Applying saved WiFi config: $SSID"
+exec wifi-setup "$SSID" "$PASSWORD"

@@ -1,0 +1,31 @@
+# MQTT Broker Configuration Example
+# Copy this file to your USB flash drive: /mnt/sbnb/mqtt/mqtt.conf
+# Customize the values below for your MQTT broker setup
+
+# MQTT Broker hostname or IP address
+MQTT_BROKER=mqtt.example.com
+
+# MQTT Broker port (8883 is standard for MQTT over TLS)
+MQTT_PORT=8883
+
+# Keepalive interval in seconds (recommended: 60)
+MQTT_KEEPALIVE=60
+
+# Certificate paths (these are copied from USB to /etc/sbnb/mqtt/ at boot)
+# After provisioning, device cert will be in /mnt/sbnb-data/state/
+MQTT_CA_CERT=/etc/sbnb/mqtt/ca.crt
+MQTT_CLIENT_CERT=/etc/sbnb/mqtt/bootstrap.crt
+MQTT_CLIENT_KEY=/etc/sbnb/mqtt/bootstrap.key
+
+# Topic prefix (optional, defaults to "sbnb")
+# Useful for multi-tenant or development/production separation
+# MQTT_TOPIC_PREFIX=sbnb-dev
+
+# QoS levels (optional, defaults shown)
+# MQTT_QOS=1
+
+# Connection timeout in seconds (optional, defaults to 30)
+# MQTT_CONNECT_TIMEOUT=30
+
+# Enable debug logging (optional, uncomment for troubleshooting)
+# MQTT_DEBUG=true

@@ -1,0 +1,12 @@
+[Unit]
+Description=sbnb device init (credentials, banner)
+After=sbnb-storage.service
+Wants=sbnb-storage.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/boot-sbnb-init.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

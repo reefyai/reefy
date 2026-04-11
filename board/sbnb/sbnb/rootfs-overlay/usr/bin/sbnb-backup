@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+"""
+sbnb-backup — Borg backup for app instances.
+
+Reads config from /mnt/sbnb-data/state/backup/config.json
+For each instance: docker pause → borg create → docker unpause → borg prune
+Reports status via sbnb-mqtt-pub.
+
+Usage:
+    sbnb-backup                     # backup all instances
+    sbnb-backup <instance_uuid>     # backup single instance
+"""
+
+import json
+import os
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+
+BACKUP_DIR = '/mnt/sbnb-data/state/backup'
+CONFIG_FILE = os.path.join(BACKUP_DIR, 'config.json')
+
+
+def publish_status(payload):
+    """Report backup status via MQTT."""
+    try:
+        subprocess.run(
+            ['sbnb-mqtt-pub', 'backup/status', json.dumps(payload)],
+            capture_output=True, timeout=15
+        )
+    except Exception:
+        pass
+
+
+def run_borg(args, env, timeout=21600, retries=10, retry_delay=60):
+    """Run a borg command with retries. Returns (success, stdout, stderr)."""
+    # Errors that won't resolve with retries — fail fast
+    FATAL_PATTERNS = ('passphrase', 'key', 'quota', 'no space left', 'permission denied')
+    for attempt in range(retries):
+        result = subprocess.run(
+            ['borg'] + args,
+            capture_output=True, text=True,
+            timeout=timeout, env=env
+        )
+        if result.returncode == 0:
+            return True, result.stdout, result.stderr
+        err_lower = (result.stderr or '').lower()
+        # Don't retry on fatal errors
+        if any(p in err_lower for p in FATAL_PATTERNS):
+            print(f"[backup] borg {args[0]} failed (fatal, no retry): {result.stderr.strip()[:200]}")
+            return False, result.stdout, result.stderr
+        if attempt < retries - 1:
+            print(f"[backup] borg {args[0]} failed (attempt {attempt + 1}/{retries}), retrying in {retry_delay}s: {result.stderr.strip()[:100]}")
+            time.sleep(retry_delay)
+    return False, result.stdout, result.stderr
+
+
+def unpause_container(container_name):
+    """Unpause a Docker container if it's paused."""
+    try:
+        # Check if container is actually paused before trying to unpause
+        r = subprocess.run(
+            ['docker', 'inspect', '-f', '{{.State.Paused}}', container_name],
+            capture_output=True, text=True, timeout=10
+        )
+        if r.returncode == 0 and r.stdout.strip() == 'true':
+            r = subprocess.run(
+                ['docker', 'unpause', container_name],
+                capture_output=True, text=True, timeout=30
+            )
+            if r.returncode != 0:
+                print(f"[backup] Unpause failed for {container_name}: {r.stderr.strip()}")
+    except Exception as e:
+        print(f"[backup] Unpause error for {container_name}: {e}")
+
+
+def backup_instance(inst, keep_last):
+    """Backup a single app instance. Returns True on success."""
+    iuuid = inst['instance_uuid']
+    archive_prefix = inst['archive_prefix']
+    repo_path = inst['repo_path']
+    passphrase = inst['passphrase']
+    container_name = inst['container_name']
+    paths = inst['paths']
+
+    key_path = os.path.join(BACKUP_DIR, iuuid, 'id_ed25519')
+    if not os.path.exists(key_path):
+        print(f"[backup] No SSH key for {iuuid}, skipping")
+        return False
+
+    env = os.environ.copy()
+    env['BORG_PASSPHRASE'] = passphrase
+    env['BORG_RSH'] = f'ssh -i {key_path} -o StrictHostKeyChecking=accept-new -o BatchMode=yes'
+    env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes'
+    env['BORG_LOCK_WAIT'] = '21600'  # 6 hours — wait for repo lock (shared repo across devices)
+
+    archive_name = f"{archive_prefix}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+    start_time = time.monotonic()
+    paused = False
+
+    try:
+        # Check repo exists (with retries for lock contention / transient SSH errors)
+        ok, _, stderr = run_borg(['info', repo_path], env)
+        if not ok:
+            # Only init if repo truly doesn't exist
+            if 'not a valid repository' in stderr or 'does not exist' in stderr or 'Repository' not in stderr:
+                print(f"[backup] Initializing borg repo for {iuuid}")
+                ok, _, stderr = run_borg(
+                    ['init', '--encryption=repokey-blake2', repo_path], env
+                )
+                if not ok:
+                    print(f"[backup] Failed to init repo: {stderr}")
+                    publish_status({
+                        'instance_uuid': iuuid, 'status': 'error',
+                        'message': 'repo init failed',
+                    })
+                    return False
+            else:
+                print(f"[backup] Cannot access repo after retries: {stderr.strip()[:200]}")
+                publish_status({
+                    'instance_uuid': iuuid, 'status': 'error',
+                    'message': 'repo access failed',
+                })
+                return False
+
+        # Pause container for consistency snapshot
+        try:
+            r = subprocess.run(
+                ['docker', 'inspect', container_name],
+                capture_output=True, timeout=10
+            )
+            if r.returncode == 0:
+                print(f"[backup] Pausing {container_name}")
+                r = subprocess.run(
+                    ['docker', 'pause', container_name],
+                    capture_output=True, timeout=10
+                )
+                if r.returncode == 0:
+                    paused = True
+                else:
+                    print(f"[backup] Container not running, proceeding without pause")
+        except Exception as e:
+            print(f"[backup] Pause error: {e}")
+
+        # Create backup
+        print(f"[backup] Creating archive {archive_name}")
+        ok, stdout, stderr = run_borg(
+            ['create', '--compression', 'zstd', '--json', f'{repo_path}::{archive_name}'] + paths,
+            env
+        )
+        if not ok:
+            print(f"[backup] borg create failed: {stderr}")
+            err_msg = (stderr or '').strip()[:500] or 'borg create failed'
+            publish_status({
+                'instance_uuid': iuuid, 'status': 'error',
+                'message': err_msg,
+            })
+            return False
+
+        # Parse archive size from borg JSON output
+        archive_size = None
+        try:
+            borg_result = json.loads(stdout)
+            archive_size = borg_result.get('archive', {}).get('stats', {}).get('compressed_size')
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+    finally:
+        # Always try to unpause container (safety net)
+        print(f"[backup] Unpausing {container_name}")
+        unpause_container(container_name)
+
+    print(f"[backup] Archive created: {archive_name}")
+
+    # Prune old archives, skipping pinned ones
+    pinned = set(inst.get('pinned_archives', []))
+    if pinned:
+        # Manual prune: list archives, skip pinned, delete old unpinned
+        print(f"[backup] Pruning (keep-last={keep_last}, {len(pinned)} pinned)")
+        ok, stdout, _ = run_borg(
+            ['list', '--prefix', f'{archive_prefix}-', '--format', '{name}{NL}', repo_path],
+            env, timeout=120
+        )
+        if ok and stdout.strip():
+            all_archives = sorted(stdout.strip().split('\n'))
+            unpinned = [a for a in all_archives if a not in pinned]
+            to_delete = unpinned[:-keep_last] if len(unpinned) > keep_last else []
+            for old_archive in to_delete:
+                print(f"[backup] Deleting {old_archive}")
+                run_borg(['delete', f'{repo_path}::{old_archive}'], env, timeout=120)
+    else:
+        # No pins — use standard borg prune
+        print(f"[backup] Pruning (keep-last={keep_last})")
+        run_borg(
+            ['prune', '--prefix', f'{archive_prefix}-', '--keep-last', str(keep_last), repo_path],
+            env, timeout=300
+        )
+
+    # Compact repo
+    run_borg(['compact', repo_path], env, timeout=300)
+
+    duration = int(time.monotonic() - start_time)
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')
+
+    print(f"[backup] Complete: {iuuid} ({duration}s, size={archive_size})")
+    status_payload = {
+        'instance_uuid': iuuid,
+        'status': 'success',
+        'archive': archive_name,
+        'duration_s': duration,
+        'timestamp': timestamp,
+    }
+    if archive_size is not None:
+        status_payload['size_bytes'] = archive_size
+    publish_status(status_payload)
+    return True
+
+
+def main():
+    if not os.path.exists(CONFIG_FILE):
+        print(f"[backup] No config file at {CONFIG_FILE}")
+        return
+
+    with open(CONFIG_FILE) as f:
+        config = json.load(f)
+
+    keep_last = config.get('retention', {}).get('keep_last', 30)
+    instances = config.get('instances', [])
+    filter_uuid = sys.argv[1] if len(sys.argv) > 1 else None
+
+    for inst in instances:
+        iuuid = inst.get('instance_uuid', '')
+        if filter_uuid and iuuid != filter_uuid:
+            continue
+        try:
+            backup_instance(inst, keep_last)
+        except Exception as e:
+            print(f"[backup] Instance {iuuid} failed: {e}")
+
+    print("[backup] All backups complete")
+
+
+if __name__ == '__main__':
+    main()

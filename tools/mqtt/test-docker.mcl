@@ -1,0 +1,26 @@
+# SBNB mgmt Docker Test
+#
+# Runs an nginx container with port mapping.
+# Uses Meta:reverse so the container is auto-removed when this
+# resource is removed from config via 'mgmt deploy'.
+
+docker:image "nginx" {
+	state => "exists",
+	Meta:reverse => true,
+}
+
+docker:container "sbnb-nginx" {
+	state => "running",
+	image => "nginx",
+	cmd => ["nginx", "-g", "daemon off;",],
+	ports => {"tcp" => {8080 => 80,},},
+	force => true,
+	Meta:reverse => true,
+}
+
+file "/tmp/sbnb-mgmt-test.txt" {
+	content => "SBNB mgmt with docker container active\n",
+	state => $const.res.file.state.exists,
+	mode => "0644",
+	Meta:reverse => true,
+}

@@ -1,0 +1,15 @@
+comment "r8168 needs a Linux kernel to be built"
+	depends on !BR2_LINUX_KERNEL
+
+config BR2_PACKAGE_R8168
+	bool "r8168"
+	depends on BR2_LINUX_KERNEL
+	depends on BR2_x86_64
+	select BR2_LINUX_NEEDS_MODULES
+	help
+	  Realtek r8168 Gigabit Ethernet driver for RTL8111/RTL8168
+	  series controllers. Replaces the in-kernel r8169 driver
+	  which has known TX watchdog timeout issues on certain
+	  hardware revisions.
+
+	  https://github.com/openwrt/rtl8168

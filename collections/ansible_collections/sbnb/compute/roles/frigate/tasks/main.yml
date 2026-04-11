@@ -107,7 +107,6 @@
     name: "{{ sbnb_frigate_container_name }}"
     image: "{{ sbnb_frigate_image }}"
     state: started
-    runtime: nvidia
     shm_size: "{{ sbnb_frigate_shm_size }}"
     stop_timeout: 30
     restart_policy: unless-stopped
@@ -120,11 +119,9 @@
       - "{{ sbnb_frigate_config_path }}:/config"
       - /etc/localtime:/etc/localtime:ro
     device_requests:
-      - driver: nvidia
-        count: -1
-        capabilities:
-          - - gpu
-            - nvidia
+      - driver: cdi
+        device_ids:
+          - "nvidia.com/gpu=all"
   register: container_result
   retries: 40
   delay: 15

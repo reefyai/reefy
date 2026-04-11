@@ -3,3 +3,10 @@ Name=en*
 
 [Network]
 DHCP=yes
+# Fallback DNS alongside DHCP-provided DNS
+DNS=1.1.1.1
+DNS=8.8.8.8
+
+[DHCP]
+RouteMetric=100
+UseDNS=yes

@@ -1,0 +1,13 @@
+config BR2_PACKAGE_MGMT
+	bool "mgmt"
+	depends on BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_GO
+	help
+	  Next generation distributed, event-driven, parallel config
+	  management. Runs as a daemon with real-time drift correction
+	  via inotify. Includes docker container resource support.
+
+	  https://github.com/purpleidea/mgmt
+
+comment "mgmt needs a toolchain w/ Go support"
+	depends on !BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS

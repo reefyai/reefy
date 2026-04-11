@@ -1,0 +1,38 @@
+---
+- name: SBNB MQTT Transport Test
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  tasks:
+    - name: Show system info
+      debug:
+        msg: "Hello from {{ ansible_hostname }} running {{ ansible_distribution | default('unknown') }} {{ ansible_distribution_version | default('') }}"
+
+    - name: Show kernel info
+      command: uname -a
+      register: kernel_info
+      changed_when: false
+
+    - name: Display kernel info
+      debug:
+        msg: "{{ kernel_info.stdout }}"
+
+    - name: Create MQTT test marker
+      copy:
+        content: |
+          SBNB MQTT Provisioning Test
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          Hostname: {{ ansible_hostname }}
+          Kernel: {{ ansible_kernel }}
+        dest: /tmp/sbnb-mqtt-test.txt
+        mode: '0644'
+
+    - name: Verify marker file
+      command: cat /tmp/sbnb-mqtt-test.txt
+      register: marker
+      changed_when: false
+
+    - name: Show result
+      debug:
+        msg: "{{ marker.stdout }}"

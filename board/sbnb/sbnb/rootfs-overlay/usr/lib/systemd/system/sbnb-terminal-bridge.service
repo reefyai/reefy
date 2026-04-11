@@ -1,0 +1,14 @@
+[Unit]
+Description=sbnb MQTT terminal bridge
+After=network-online.target sbnb-init.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/sbnb-terminal-bridge
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

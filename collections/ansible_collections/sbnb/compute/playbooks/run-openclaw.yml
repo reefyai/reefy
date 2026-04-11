@@ -17,5 +17,5 @@
       ansible.builtin.setup:
 
   roles:
-    - role: sbnb.compute.docker_vm
+    - role: sbnb.compute.docker
     - role: sbnb.compute.openclaw

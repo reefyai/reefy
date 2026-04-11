@@ -4,6 +4,10 @@ Type=wlan
 [Network]
 DHCP=yes
 IgnoreCarrierLoss=3s
+# Fallback DNS alongside DHCP-provided DNS
+DNS=1.1.1.1
+DNS=8.8.8.8
 
 [DHCP]
 RouteMetric=600
+UseDNS=yes
