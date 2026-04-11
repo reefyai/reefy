@@ -1,0 +1,3 @@
+# Locally computed (identical content to upstream tailscale-1.94.2)
+sha256  7679024fcd21b6021e80fd5d9695004e3172a35d035a965db7b1c0e0c100a48b  tailscale-reefy-1.94.2-go2.tar.gz
+sha256  d1ee1c7947d4b2c1963ea214d5324f1d4c89f2f1d0f0224889b4dfb868dad725  LICENSE

@@ -1,0 +1,22 @@
+config BR2_PACKAGE_TAILSCALE_REEFY
+	bool "tailscale-reefy"
+	depends on BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS
+	depends on !BR2_PACKAGE_TAILSCALE
+	select BR2_PACKAGE_HOST_GO
+	help
+	  Local fork of upstream's tailscale package, carrying two
+	  changes that haven't been upstreamed:
+
+	  1. Omits the broken TAILSCALE_INSTALL_SYMLINK hook. Upstream
+	     creates /usr/sbin/tailscaled as a symlink to ../bin/tailscaled.
+	     With BR2_ROOTFS_MERGED_USR=y (required by systemd),
+	     /usr/sbin -> /usr/bin, so the ln -f follows the symlink and
+	     overwrites the real binary at /usr/bin/tailscaled with a
+	     circular symlink, destroying tailscaled.
+
+	  2. Pins a newer tailscale version than upstream buildroot.
+
+	  Delete this package and switch back to BR2_PACKAGE_TAILSCALE
+	  once upstream catches up.
+
+	  https://github.com/tailscale/tailscale
