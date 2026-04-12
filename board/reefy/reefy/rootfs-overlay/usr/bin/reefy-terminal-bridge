@@ -220,6 +220,9 @@ def main():
                 _last_activity = time.time()
                 print(f"[terminal-bridge] Terminal opened (subscribers={_subscribers})")
                 fd = ensure_pty()
+                # Force tmux to redraw screen so new subscriber sees existing content
+                if _child_pid:
+                    os.kill(_child_pid, signal.SIGWINCH)
             elif action == 'unsubscribe':
                 _subscribers = max(0, _subscribers - 1)
                 print(f"[terminal-bridge] Terminal closed (subscribers={_subscribers})")
