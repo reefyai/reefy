@@ -58,17 +58,15 @@ setup_device_credentials() {
 # Display ASCII banner and hostname/interface IP summary
 display_banner() {
     {
-        echo "   ____  _           _       _     _"
-        echo "  / ___|| |__  _ __ | |__   | |   (_)_ __  _   ___  __"
-        echo "  \___ \| '_ \| '_ \| '_ \  | |   | | '_ \| | | \ \/ /"
-        echo "   ___) | |_) | | | | |_) | | |___| | | | | |_| |>  <"
-        echo "  |____/|_.__/|_| |_|_.__/  |_____|_|_| |_|\__,_/_/\_\\"
+        echo " ____            __       "
+        echo "|  _ \ ___  ___ / _|_   _ "
+        echo "| |_) / _ \/ _ \ |_| | | |"
+        echo "|  _ <  __/  __/  _| |_| |"
+        echo "|_| \_\___|\___|_|  \__, |"
+        echo "                    |___/ "
         echo ""
-        echo "  Welcome to Reefy Linux!"
+        echo "  Welcome to Reefy!"
         echo "  Version:" $(. /etc/os-release; echo ${IMAGE_VERSION})
-        echo ""
-        echo "  Just an ASCII banner for now."
-        echo "  Animations will arrive right after Linux is rewritten in JavaScript."
         echo ""
         echo "Hostname: $(hostname)"
         echo "Interface IPs:"
