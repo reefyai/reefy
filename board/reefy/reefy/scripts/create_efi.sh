@@ -10,7 +10,17 @@ STUB=/usr/lib/systemd/boot/efi/linuxx64.efi.stub
 KERNEL="${BINARIES_DIR}/bzImage"
 INITRD="${BINARIES_DIR}/rootfs-reefy.cpio"
 OS_RELEASE="${TARGET_DIR}/etc/os-release"
-CMDLINE="console=tty0 quiet panic=10 intel_iommu=on module_blacklist=nouveau,nvidiafb,snd_hda_intel,r8169"
+# Kernel cmdline for the UKI. The default is the production cmdline (silent
+# boot via VGA). Override for debugging:
+#   CMDLINE_OVERRIDE="console=ttyS0,115200 debug" make
+#   CMDLINE_EXTRA="debug loglevel=8"             make   # appended to default
+DEFAULT_CMDLINE="console=tty0 quiet panic=10 intel_iommu=on module_blacklist=nouveau,nvidiafb,snd_hda_intel,r8169"
+if [[ -n "${CMDLINE_OVERRIDE:-}" ]]; then
+    CMDLINE="${CMDLINE_OVERRIDE}"
+else
+    CMDLINE="${DEFAULT_CMDLINE}${CMDLINE_EXTRA:+ ${CMDLINE_EXTRA}}"
+fi
+echo "create_efi.sh: kernel cmdline = ${CMDLINE}"
 CMDLINE_TMP=$(mktemp)
 OUTPUT=reefy.efi
 

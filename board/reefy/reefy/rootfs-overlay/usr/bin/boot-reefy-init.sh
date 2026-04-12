@@ -25,6 +25,14 @@ setup_device_credentials() {
         echo "[reefy] Generated device password"
     fi
 
+    # Dev-mode: print the password to kmsg/serial console if the kernel cmdline
+    # requests it. Opt-in via `reefy.dev_shell=1` — production builds default to
+    # `quiet` without this flag, so the password is never exposed.
+    if grep -q 'reefy.dev_shell=1' /proc/cmdline 2>/dev/null; then
+        DEV_PASSWORD=$(cat "${PASSWORD_FILE}" 2>/dev/null)
+        echo "[reefy] DEV: root/reefy password=${DEV_PASSWORD}" > /dev/kmsg
+    fi
+
     # Read password
     PASSWORD=$(cat "${PASSWORD_FILE}" 2>/dev/null) || return 0
     [ -z "${PASSWORD}" ] && return 0
