@@ -33,7 +33,7 @@ def publish_status(payload):
         pass
 
 
-def run_borg(args, env, timeout=21600, retries=10, retry_delay=60):
+def run_borg(args, env, timeout=21600, retries=10, retry_delay=60, cwd=None):
     """Run a borg command with retries. Returns (success, stdout, stderr)."""
     # Errors that won't resolve with retries — fail fast
     FATAL_PATTERNS = ('passphrase', 'key', 'quota', 'no space left', 'permission denied')
@@ -41,7 +41,7 @@ def run_borg(args, env, timeout=21600, retries=10, retry_delay=60):
         result = subprocess.run(
             ['borg'] + args,
             capture_output=True, text=True,
-            timeout=timeout, env=env
+            timeout=timeout, env=env, cwd=cwd
         )
         if result.returncode == 0:
             return True, result.stdout, result.stderr
@@ -143,11 +143,14 @@ def backup_instance(inst, keep_last):
         except Exception as e:
             print(f"[backup] Pause error: {e}")
 
-        # Create backup
-        print(f"[backup] Creating archive {archive_name}")
+        # Create backup using relative paths (just volume names like data/, config/).
+        # Archives are portable across mount renames and instance UUIDs.
+        instance_dir = os.path.commonpath(paths)
+        rel_paths = [os.path.relpath(p, instance_dir) for p in paths]
+        print(f"[backup] Creating archive {archive_name} (cwd={instance_dir}, vols={rel_paths})")
         ok, stdout, stderr = run_borg(
-            ['create', '--compression', 'zstd', '--json', f'{repo_path}::{archive_name}'] + paths,
-            env
+            ['create', '--compression', 'zstd', '--json', f'{repo_path}::{archive_name}'] + rel_paths,
+            env, cwd=instance_dir
         )
         if not ok:
             print(f"[backup] borg create failed: {stderr}")

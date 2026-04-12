@@ -2402,34 +2402,45 @@ Environment=MQTT_PORT={self.port}
                     shutil.rmtree(restore_tmp, ignore_errors=True)
                     continue
 
-                # Find extracted instance dir: restore_tmp/mnt/reefy-data/apps/<old-uuid>/
-                extracted_apps = os.path.join(restore_tmp, 'mnt', 'reefy-data', 'apps')
-                if not os.path.isdir(extracted_apps):
-                    log('mqtt', f'Unexpected archive structure, no apps dir found')
-                    failed.add(iuuid)
-                    shutil.rmtree(restore_tmp, ignore_errors=True)
-                    continue
-
-                old_dirs = [d for d in os.listdir(extracted_apps)
-                            if os.path.isdir(os.path.join(extracted_apps, d))]
-                if not old_dirs:
-                    log('mqtt', f'No instance dir in archive')
-                    failed.add(iuuid)
-                    shutil.rmtree(restore_tmp, ignore_errors=True)
-                    continue
-
-                old_inst_dir = os.path.join(extracted_apps, old_dirs[0])
+                # Find extracted volume dirs. Supports three archive formats:
+                # 1. Relative (new): restore_tmp/data/, restore_tmp/config/
+                # 2. Absolute (renamed): restore_tmp/mnt/reefy-data/apps/<uuid>/
+                # 3. Absolute (legacy): restore_tmp/mnt/sbnb-data/apps/<uuid>/
                 new_inst_dir = f'/mnt/reefy-data/apps/{iuuid}'
+                vol_source_dir = None
 
-                # Move each volume subdir from extracted old path to new instance path
-                for vol_name in os.listdir(old_inst_dir):
-                    src = os.path.join(old_inst_dir, vol_name)
+                # Check for absolute-path archives (old formats)
+                for data_dir in ('reefy-data', 'sbnb-data'):
+                    apps_dir = os.path.join(restore_tmp, 'mnt', data_dir, 'apps')
+                    if os.path.isdir(apps_dir):
+                        sub_dirs = [d for d in os.listdir(apps_dir)
+                                    if os.path.isdir(os.path.join(apps_dir, d))]
+                        if sub_dirs:
+                            vol_source_dir = os.path.join(apps_dir, sub_dirs[0])
+                            break
+
+                # Check for relative-path archives (new format: volumes at top level)
+                if not vol_source_dir:
+                    top_dirs = [d for d in os.listdir(restore_tmp)
+                                if os.path.isdir(os.path.join(restore_tmp, d))]
+                    if top_dirs:
+                        vol_source_dir = restore_tmp
+
+                if not vol_source_dir:
+                    log('mqtt', f'Unexpected archive structure, no volume dirs found')
+                    failed.add(iuuid)
+                    shutil.rmtree(restore_tmp, ignore_errors=True)
+                    continue
+
+                # Move each volume subdir to the new instance path
+                for vol_name in os.listdir(vol_source_dir):
+                    src = os.path.join(vol_source_dir, vol_name)
                     dst = os.path.join(new_inst_dir, vol_name)
                     if os.path.isdir(src):
                         if os.path.exists(dst):
                             shutil.rmtree(dst)
                         os.rename(src, dst)
-                        log('mqtt', f'Restored volume {vol_name}: {old_dirs[0]} -> {iuuid}')
+                        log('mqtt', f'Restored volume {vol_name} -> {iuuid}')
 
             except subprocess.TimeoutExpired:
                 log('mqtt', f'borg extract timed out for {iuuid}')

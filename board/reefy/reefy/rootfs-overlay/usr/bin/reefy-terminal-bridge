@@ -71,6 +71,23 @@ def get_device_uuid():
 
 def spawn_pty(session_id, container=None, name=None):
     """Spawn a PTY shell. If container specified, docker exec into it."""
+    # For app containers: write a wrapper script so tmux's default-command
+    # can reuse it for new panes (all panes exec into the same container).
+    # Mirrors sidecar-ttyd/app-shell.sh: whoami@name prompt, bash fallback sh.
+    wrapper_path = None
+    if container:
+        wrapper_path = f'/tmp/reefy-term-{session_id}'
+        display = name or container
+        # Single-quoted sh -c body: no escaping needed. $(whoami) and
+        # ${REEFY_APP} are expanded by the container's sh, not the host.
+        with open(wrapper_path, 'w') as f:
+            f.write("#!/bin/sh\n"
+                    f"exec docker exec -e REEFY_APP='{display}' -it {container} sh -c '\n"
+                    '    export "PS1=$(whoami 2>/dev/null || echo user)@${REEFY_APP}# "\n'
+                    "    if command -v bash >/dev/null; then exec bash --norc --noprofile; else exec sh; fi\n"
+                    "'\n")
+        os.chmod(wrapper_path, 0o755)
+
     master_fd, slave_fd = pty.openpty()
     pid = os.fork()
     if pid == 0:
@@ -84,14 +101,19 @@ def spawn_pty(session_id, container=None, name=None):
         if slave_fd > 2:
             os.close(slave_fd)
         os.environ['TERM'] = 'xterm-256color'
-        if container:
-            # App container terminal via tmux + docker exec
-            prompt = f'{name or container}# ' if name else f'{container}# '
-            shell_cmd = f'export PS1="{prompt}"; exec bash --norc --noprofile 2>/dev/null || exec sh'
-            os.execvp('tmux', [
-                'tmux', 'new-session', '-A', '-s', session_id, '--',
-                'docker', 'exec', '-it', container, 'sh', '-c', shell_cmd,
-            ])
+        if wrapper_path:
+            # App container: create/attach tmux session with docker exec wrapper.
+            # - Dead sessions (docker exec exited) are killed and recreated
+            # - Alive sessions are reused (multiple subscribers share)
+            # - default-command ensures new panes also exec into the container
+            os.execvp('sh', ['sh', '-c',
+                f'tmux has-session -t {session_id} 2>/dev/null && '
+                f'  tmux list-panes -t {session_id} -F "#{{pane_dead}}" 2>/dev/null | grep -q 1 && '
+                f'  tmux kill-session -t {session_id} 2>/dev/null; '
+                f'tmux has-session -t {session_id} 2>/dev/null || '
+                f'  tmux new-session -d -s {session_id} {wrapper_path}; '
+                f'tmux set-option -t {session_id} default-command {wrapper_path} 2>/dev/null; '
+                f'exec tmux attach-session -t {session_id}'])
         else:
             # Host terminal
             os.execvp('tmux', ['tmux', 'new-session', '-A', '-s', 'host'])

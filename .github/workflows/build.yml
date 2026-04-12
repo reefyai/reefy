@@ -41,9 +41,11 @@ jobs:
 
     - name: Install dependencies
       run: |
-        # Need for /usr/lib/systemd/boot/efi/linuxx64.efi.stub, qemu-img
+        # systemd-boot-efi: /usr/lib/systemd/boot/efi/linuxx64.efi.stub (UKI creation)
+        # qemu-utils: qemu-img (VHD conversion)
+        # ragel: parser generator (required by mgmt package)
         sudo apt-get update
-        sudo apt-get install -y systemd-boot-efi qemu-utils
+        sudo apt-get install -y systemd-boot-efi qemu-utils ragel
     
     - name: git submodule init and update
       run: |
