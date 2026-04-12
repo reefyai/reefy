@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 """
-MQTT terminal bridge — exposes a PTY shell over MQTT topics.
+MQTT terminal bridge — exposes PTY shells over MQTT topics.
 
-Allows remote terminal access for bootstrap (non-adopted) devices via
-the dashboard. The browser sends keystrokes to terminal/input and
-receives output from terminal/output.
+Supports multiple sessions: one host terminal and per-app container terminals.
+
+Topic structure:
+  reefy/{public_id}/devices/{uuid}/terminal/{session_id}/input
+  reefy/{public_id}/devices/{uuid}/terminal/{session_id}/output
+  reefy/{public_id}/devices/{uuid}/terminal/{session_id}/control
+
+session_id = "host" for the host shell, or an app instance UUID for
+container terminals. The control subscribe message may include a
+"container" field to exec into a specific docker container.
 
 Uses subscribe/unsubscribe gating: PTY is only spawned when a dashboard
 user opens the terminal. Idle timeout kills the PTY after 30 minutes.
@@ -34,11 +41,9 @@ MQTT_CONF_PATH = '/mnt/reefy/mqtt/mqtt.conf'
 STATE_DIR = '/mnt/reefy-data/state'
 IDLE_TIMEOUT = 1800  # 30 min with no subscribers
 
-_master_fd = None
-_child_pid = None
+# Multi-session state: session_id -> {master_fd, child_pid, subscribers, last_activity}
+_sessions = {}
 _lock = threading.Lock()
-_subscribers = 0
-_last_activity = 0.0
 
 
 def load_config():
@@ -64,8 +69,8 @@ def get_device_uuid():
     return None
 
 
-def spawn_pty():
-    """Spawn a bash shell with a PTY. Returns (master_fd, child_pid)."""
+def spawn_pty(session_id, container=None, name=None):
+    """Spawn a PTY shell. If container specified, docker exec into it."""
     master_fd, slave_fd = pty.openpty()
     pid = os.fork()
     if pid == 0:
@@ -79,77 +84,103 @@ def spawn_pty():
         if slave_fd > 2:
             os.close(slave_fd)
         os.environ['TERM'] = 'xterm-256color'
-        os.execvp('tmux', ['tmux', 'new-session', '-A', '-s', 'host'])
+        if container:
+            # App container terminal via tmux + docker exec
+            prompt = f'{name or container}# ' if name else f'{container}# '
+            shell_cmd = f'export PS1="{prompt}"; exec bash --norc --noprofile 2>/dev/null || exec sh'
+            os.execvp('tmux', [
+                'tmux', 'new-session', '-A', '-s', session_id, '--',
+                'docker', 'exec', '-it', container, 'sh', '-c', shell_cmd,
+            ])
+        else:
+            # Host terminal
+            os.execvp('tmux', ['tmux', 'new-session', '-A', '-s', 'host'])
     else:
         # Parent
         os.close(slave_fd)
         return master_fd, pid
 
 
-def kill_pty():
-    """Kill the PTY child process."""
-    global _master_fd, _child_pid
+def get_session(session_id):
+    """Get or create session dict."""
+    if session_id not in _sessions:
+        _sessions[session_id] = {
+            'master_fd': None,
+            'child_pid': None,
+            'subscribers': 0,
+            'last_activity': 0.0,
+            'container': None,
+            'name': None,
+        }
+    return _sessions[session_id]
+
+
+def kill_session(session_id):
+    """Kill a PTY session."""
     with _lock:
-        if _child_pid:
+        s = _sessions.get(session_id)
+        if not s:
+            return
+        if s['child_pid']:
             try:
-                os.kill(_child_pid, signal.SIGTERM)
-                os.waitpid(_child_pid, os.WNOHANG)
+                os.kill(s['child_pid'], signal.SIGTERM)
+                os.waitpid(s['child_pid'], os.WNOHANG)
             except (OSError, ChildProcessError):
                 pass
-        if _master_fd:
+        if s['master_fd']:
             try:
-                os.close(_master_fd)
+                os.close(s['master_fd'])
             except OSError:
                 pass
-        _master_fd = None
-        _child_pid = None
+        s['master_fd'] = None
+        s['child_pid'] = None
 
 
-def ensure_pty():
-    """Ensure PTY is running. Returns master_fd or None."""
-    global _master_fd, _child_pid
+def ensure_session_pty(session_id):
+    """Ensure PTY is running for session. Returns master_fd or None."""
     with _lock:
-        if _master_fd is not None:
+        s = get_session(session_id)
+
+        if s['master_fd'] is not None:
             # Check if child still alive
             try:
-                pid, status = os.waitpid(_child_pid, os.WNOHANG)
+                pid, status = os.waitpid(s['child_pid'], os.WNOHANG)
                 if pid != 0:
-                    # Child exited
                     try:
-                        os.close(_master_fd)
+                        os.close(s['master_fd'])
                     except OSError:
                         pass
-                    _master_fd = None
-                    _child_pid = None
+                    s['master_fd'] = None
+                    s['child_pid'] = None
             except ChildProcessError:
                 try:
-                    os.close(_master_fd)
+                    os.close(s['master_fd'])
                 except OSError:
                     pass
-                _master_fd = None
-                _child_pid = None
+                s['master_fd'] = None
+                s['child_pid'] = None
 
-        if _master_fd is None:
-            _master_fd, _child_pid = spawn_pty()
-            print(f"[terminal-bridge] Spawned PTY pid={_child_pid}")
+        if s['master_fd'] is None:
+            s['master_fd'], s['child_pid'] = spawn_pty(
+                session_id, container=s['container'], name=s['name'])
+            target = s['container'] or 'host'
+            print(f"[terminal-bridge] Spawned PTY session={session_id} target={target} pid={s['child_pid']}")
 
-        return _master_fd
+        return s['master_fd']
 
 
-def resize_pty(cols, rows):
-    """Resize the PTY."""
+def resize_session(session_id, cols, rows):
+    """Resize the PTY for a session."""
     with _lock:
-        if _master_fd is not None:
+        s = _sessions.get(session_id)
+        if s and s['master_fd'] is not None:
             winsize = struct.pack('HHHH', rows, cols, 0, 0)
-            fcntl.ioctl(_master_fd, termios.TIOCSWINSZ, winsize)
+            fcntl.ioctl(s['master_fd'], termios.TIOCSWINSZ, winsize)
 
 
 def main():
-    global _subscribers, _last_activity
-
     config = load_config()
     if not config:
-        # Retry in bootstrap mode with bootstrap certs
         time.sleep(5)
         config = load_config()
         if not config:
@@ -162,12 +193,9 @@ def main():
         sys.exit(1)
 
     public_id = config.get('MQTT_USER_ID', '')
-    topic_prefix = f"reefy/{public_id}/devices/{uuid}"
-    input_topic = f"{topic_prefix}/terminal/input"
-    output_topic = f"{topic_prefix}/terminal/output"
-    control_topic = f"{topic_prefix}/terminal/control"
+    topic_base = f"reefy/{public_id}/devices/{uuid}/terminal"
 
-    print(f"[terminal-bridge] UUID={uuid} topics={topic_prefix}/terminal/...")
+    print(f"[terminal-bridge] UUID={uuid} topics={topic_base}/+/...")
 
     broker = config.get('MQTT_BROKER', 'mqtt.reefy.ai')
     port = int(config.get('MQTT_PORT', '443'))
@@ -175,7 +203,6 @@ def main():
     ws_path = config.get('MQTT_WS_PATH', '/mqtt')
     ca_cert = config.get('MQTT_CA_CERT', '/mnt/reefy/mqtt/ca.crt')
 
-    # Use device certs if available, fall back to bootstrap certs
     client_cert = os.path.join(STATE_DIR, 'device.crt')
     client_key = os.path.join(STATE_DIR, 'device.key')
     if not os.path.exists(client_cert):
@@ -203,45 +230,68 @@ def main():
 
     def on_connect(cl, userdata, flags, rc, properties):
         print(f"[terminal-bridge] Connected to {broker}:{port}")
-        cl.subscribe(input_topic, qos=0)
-        cl.subscribe(control_topic, qos=1)
+        # Subscribe to wildcard for all sessions
+        cl.subscribe(f"{topic_base}/+/input", qos=0)
+        cl.subscribe(f"{topic_base}/+/control", qos=1)
 
     def on_message(cl, userdata, msg):
-        global _subscribers, _last_activity
+        # Parse session_id and message type from topic
+        # topic = "reefy/.../terminal/{session_id}/{input|control}"
+        parts = msg.topic.rsplit('/', 2)
+        if len(parts) < 3:
+            return
+        session_id = parts[-2]
+        msg_type = parts[-1]
 
-        if msg.topic == control_topic:
+        if msg_type == 'control':
             try:
                 data = json.loads(msg.payload)
             except (json.JSONDecodeError, TypeError):
                 return
             action = data.get('action')
             if action == 'subscribe':
-                _subscribers += 1
-                _last_activity = time.time()
-                print(f"[terminal-bridge] Terminal opened (subscribers={_subscribers})")
-                fd = ensure_pty()
-                # Force tmux to redraw screen so new subscriber sees existing content
-                if _child_pid:
-                    os.kill(_child_pid, signal.SIGWINCH)
+                with _lock:
+                    s = get_session(session_id)
+                    s['subscribers'] += 1
+                    s['last_activity'] = time.time()
+                    # Store container/name from first subscribe (for spawn)
+                    if data.get('container'):
+                        s['container'] = data['container']
+                    if data.get('name'):
+                        s['name'] = data['name']
+                target = data.get('container', 'host')
+                print(f"[terminal-bridge] Terminal opened session={session_id} target={target} (subscribers={s['subscribers']})")
+                ensure_session_pty(session_id)
+                # Force tmux redraw so new subscriber sees existing content
+                with _lock:
+                    s = _sessions.get(session_id)
+                    if s and s['child_pid']:
+                        os.kill(s['child_pid'], signal.SIGWINCH)
             elif action == 'unsubscribe':
-                _subscribers = max(0, _subscribers - 1)
-                print(f"[terminal-bridge] Terminal closed (subscribers={_subscribers})")
-                if _subscribers == 0:
-                    kill_pty()
+                with _lock:
+                    s = get_session(session_id)
+                    s['subscribers'] = max(0, s['subscribers'] - 1)
+                    subs = s['subscribers']
+                print(f"[terminal-bridge] Terminal closed session={session_id} (subscribers={subs})")
+                if subs == 0:
+                    kill_session(session_id)
             elif action == 'resize':
                 cols = data.get('cols', 80)
                 rows = data.get('rows', 24)
-                resize_pty(cols, rows)
+                resize_session(session_id, cols, rows)
             return
 
-        if msg.topic == input_topic:
-            _last_activity = time.time()
-            fd = ensure_pty()
+        if msg_type == 'input':
+            with _lock:
+                s = _sessions.get(session_id)
+                if s:
+                    s['last_activity'] = time.time()
+            fd = ensure_session_pty(session_id)
             if fd is not None:
                 try:
                     os.write(fd, msg.payload)
                 except OSError:
-                    kill_pty()
+                    kill_session(session_id)
 
     def on_disconnect(cl, userdata, flags, rc, properties):
         print(f"[terminal-bridge] Disconnected (rc={rc})")
@@ -253,36 +303,56 @@ def main():
     client.connect(broker, port, keepalive=60)
     client.loop_start()
 
-    # Main loop: read PTY output and publish to MQTT
+    # Main loop: read PTY output from all sessions and publish to MQTT
     try:
         while True:
+            fd_to_session = {}
             with _lock:
-                fd = _master_fd
+                for sid, s in _sessions.items():
+                    if s['master_fd'] is not None:
+                        fd_to_session[s['master_fd']] = sid
 
-            if fd is not None:
+            if fd_to_session:
                 try:
-                    r, _, _ = select.select([fd], [], [], 0.05)
-                    if r:
-                        data = os.read(fd, 4096)
-                        if data:
-                            client.publish(output_topic, data, qos=0)
-                        else:
-                            kill_pty()
-                except OSError:
-                    kill_pty()
+                    readable, _, _ = select.select(list(fd_to_session.keys()), [], [], 0.05)
+                    for fd in readable:
+                        sid = fd_to_session[fd]
+                        try:
+                            data = os.read(fd, 4096)
+                            if data:
+                                output_topic = f"{topic_base}/{sid}/output"
+                                client.publish(output_topic, data, qos=0)
+                            else:
+                                kill_session(sid)
+                        except OSError:
+                            kill_session(sid)
+                except (ValueError, OSError):
+                    # fd closed between lock release and select
+                    pass
             else:
                 time.sleep(0.1)
 
-            # Idle timeout
-            if _subscribers > 0 and _last_activity > 0:
-                if time.time() - _last_activity > IDLE_TIMEOUT:
-                    print("[terminal-bridge] Idle timeout, killing PTY")
-                    _subscribers = 0
-                    kill_pty()
+            # Idle timeout per session
+            now = time.time()
+            with _lock:
+                expired = []
+                for sid, s in _sessions.items():
+                    if s['subscribers'] > 0 and s['last_activity'] > 0:
+                        if now - s['last_activity'] > IDLE_TIMEOUT:
+                            expired.append(sid)
+            for sid in expired:
+                print(f"[terminal-bridge] Idle timeout session={sid}")
+                with _lock:
+                    s = _sessions.get(sid)
+                    if s:
+                        s['subscribers'] = 0
+                kill_session(sid)
+
     except KeyboardInterrupt:
         pass
     finally:
-        kill_pty()
+        for sid in list(_sessions.keys()):
+            kill_session(sid)
         client.loop_stop()
         client.disconnect()
 
