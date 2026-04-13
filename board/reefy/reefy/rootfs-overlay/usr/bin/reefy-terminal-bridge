@@ -284,6 +284,11 @@ def main():
                 target = data.get('container', 'host')
                 print(f"[terminal-bridge] Terminal opened session={session_id} target={target} (subscribers={s['subscribers']})")
                 ensure_session_pty(session_id)
+                # Apply initial size from subscriber (avoids tmux rendering at default 80x24)
+                cols = data.get('cols', 0)
+                rows = data.get('rows', 0)
+                if cols and rows:
+                    resize_session(session_id, cols, rows)
                 # Force tmux redraw so new subscriber sees existing content
                 with _lock:
                     s = _sessions.get(session_id)

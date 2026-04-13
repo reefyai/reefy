@@ -1081,38 +1081,95 @@ class MQTTReconciler:
         subprocess.run(['systemctl', 'restart', 'reefy-mqtt.service'])
         return "Identity reset"
 
-    def _reset_to_bootstrap(self, payload=None, cmd_id=None):
-        """Secure wipe and restart in bootstrap mode.
+    def _find_usb_disk(self):
+        """Find the reefy/sbnb USB dongle block device (e.g. /dev/sda)."""
+        disk, _ = self._find_reefy_disk()
+        return disk
 
-        1. Overwrite LUKS key partition (p3) with random data (makes data unreadable)
-        2. Delete data (p4) and key (p3) partitions from USB dongle
-        3. Hard reboot via sysrq-b (instant, no graceful shutdown needed)
+    def _find_data_dir(self):
+        """Find the persistent data mount (reefy-data or sbnb-data)."""
+        for d in ('/mnt/reefy-data', '/mnt/sbnb-data'):
+            if os.path.ismount(d):
+                return d
+        return None
+
+    def _hard_reboot(self):
+        """Hard reboot via sysrq-b (bypasses init/systemd)."""
+        self.client.disconnect()
+        time.sleep(1)
+        try:
+            with open('/proc/sysrq-trigger', 'w') as f:
+                f.write('b')
+        except Exception:
+            subprocess.run(['reboot', '-f'])
+
+    def _reset_to_bootstrap(self, payload=None, cmd_id=None):
+        """Factory reset: optional USB re-flash + secure wipe + hard reboot.
+
+        If payload includes reflash=true and image_url, the device downloads
+        a fresh personalized image and dd's it onto the USB dongle before
+        wiping. This handles partition layout changes and firmware updates.
+
+        Without reflash, performs the existing secure wipe:
+        1. Overwrite LUKS key partition (p3) with random data
+        2. Delete data (p4) and key (p3) partitions
+        3. Hard reboot via sysrq-b
 
         On next boot, device has no persistent storage → tmpfs bootstrap.
-        Persistent storage is created during adoption by the reconciler.
         """
-        print("[mqtt] Reset command received — secure wipe starting")
+        reflash = payload.get('reflash', False) if payload else False
+        image_url = payload.get('image_url', '') if payload else ''
+        expected_size = payload.get('size', 0) if payload else 0
 
-        # Find reefy USB disk (A/B layout: look for reefy-a or reefy-b labels)
-        reefy_disk = None
-        try:
-            reefy_dev = subprocess.run(
-                ['sh', '-c', 'blkid -L reefy-a 2>/dev/null || blkid -L reefy-b 2>/dev/null'],
-                capture_output=True, text=True, timeout=5
-            ).stdout.strip()
-            if reefy_dev:
-                parent = subprocess.run(
-                    ['lsblk', '-no', 'PKNAME', reefy_dev],
-                    capture_output=True, text=True, timeout=5
-                ).stdout.strip()
-                if parent:
-                    reefy_disk = f'/dev/{parent}'
-        except Exception as e:
-            log('mqtt', f'Error finding reefy disk: {e}')
+        log('mqtt', f'Factory reset starting (reflash={reflash})')
 
-        # Secure wipe: overwrite key partition and delete partitions
-        if reefy_disk:
-            key_part = f'{reefy_disk}3'
+        usb_disk = self._find_usb_disk()
+        if not usb_disk:
+            log('mqtt', 'WARNING: Could not find USB dongle')
+
+        # Re-flash USB if requested
+        if reflash and image_url and usb_disk:
+            data_dir = self._find_data_dir()
+            if not data_dir:
+                log('mqtt', 'No persistent storage for reflash download, skipping reflash')
+            else:
+                # Check free space
+                stat = os.statvfs(data_dir)
+                free = stat.f_bavail * stat.f_frsize
+                if expected_size and free < expected_size * 1.1:
+                    log('mqtt', f'Not enough space for reflash: {free} free, need {expected_size}')
+                else:
+                    download_path = os.path.join(data_dir, 'reefy-reflash.raw')
+
+                    # Download
+                    self._publish_stage('downloading', f'Downloading firmware ({expected_size // 1048576} MB)')
+                    log('mqtt', f'Downloading image to {download_path}')
+                    result = subprocess.run(
+                        ['curl', '-fSL', '--retry', '3', '-o', download_path, image_url],
+                        capture_output=True, text=True, timeout=3600)
+                    if result.returncode != 0:
+                        log('mqtt', f'Reflash download failed: {result.stderr}')
+                    elif expected_size and os.path.getsize(download_path) != expected_size:
+                        log('mqtt', f'Size mismatch: got {os.path.getsize(download_path)}, expected {expected_size}')
+                    else:
+                        # Flash USB
+                        self._publish_stage('flashing', 'Writing to USB — DO NOT POWER OFF')
+                        log('mqtt', f'Flashing {usb_disk} from {download_path}')
+                        result = subprocess.run(
+                            ['dd', f'if={download_path}', f'of={usb_disk}', 'bs=1M', 'conv=fsync'],
+                            capture_output=True, text=True, timeout=3600)
+                        if result.returncode != 0:
+                            log('mqtt', f'dd failed: {result.stderr}')
+                        else:
+                            log('mqtt', f'USB re-flashed successfully')
+                            # Skip partition wipe — USB is completely overwritten
+                            self._publish_stage('rebooting', 'USB re-flashed, rebooting')
+                            self._hard_reboot()
+                            return
+
+        # Regular factory reset: secure wipe
+        if usb_disk:
+            key_part = f'{usb_disk}3'
             if os.path.exists(key_part):
                 try:
                     subprocess.run(
@@ -1127,32 +1184,22 @@ class MQTTReconciler:
             for part_num in [4, 3]:
                 try:
                     subprocess.run(
-                        ['parted', '-s', reefy_disk, 'rm', str(part_num)],
+                        ['parted', '-s', usb_disk, 'rm', str(part_num)],
                         capture_output=True, timeout=10,
                     )
-                    log('mqtt', f'Deleted partition {part_num} from {reefy_disk}')
+                    log('mqtt', f'Deleted partition {part_num} from {usb_disk}')
                 except Exception as e:
                     log('mqtt', f'Partition {part_num} delete failed: {e}')
         else:
-            print("[mqtt] WARNING: Could not find reefy disk — skipping partition wipe")
+            log('mqtt', 'WARNING: Could not find USB dongle — skipping partition wipe')
 
         # Remove bootstrap UUID so a fresh one is generated on next boot
         if os.path.exists(self.BOOTSTRAP_UUID_PATH):
             os.remove(self.BOOTSTRAP_UUID_PATH)
             log('mqtt', f'Removed {self.BOOTSTRAP_UUID_PATH}')
 
-        # Disconnect MQTT cleanly
-        print("[mqtt] Secure wipe complete — hard rebooting...")
-        self.client.disconnect()
-        time.sleep(1)
-
-        # Hard reboot via sysrq-b (immediate, bypasses init/systemd to avoid
-        # services restarting and failing without storage)
-        try:
-            with open('/proc/sysrq-trigger', 'w') as f:
-                f.write('b')
-        except Exception:
-            subprocess.run(['reboot', '-f'])
+        log('mqtt', 'Factory reset complete — hard rebooting')
+        self._hard_reboot()
 
     def _apply_config(self, payload, cmd_id=None):
         """Download and apply configuration bundle"""
@@ -2122,22 +2169,23 @@ class MQTTReconciler:
         log('mqtt', f'Device {target} wiped successfully')
 
     def _find_reefy_disk(self):
-        """Find the reefy USB disk and return (disk, reefy_dev) tuple.
-        Supports A/B layout (reefy-a/reefy-b labels)."""
-        try:
-            reefy_dev = subprocess.run(
-                ['sh', '-c', 'blkid -L reefy-a 2>/dev/null || blkid -L reefy-b 2>/dev/null'],
-                capture_output=True, text=True, timeout=5
-            ).stdout.strip()
-            if reefy_dev:
-                parent = subprocess.run(
-                    ['lsblk', '-no', 'PKNAME', reefy_dev],
+        """Find the reefy/sbnb USB disk and return (disk, partition_dev) tuple.
+        Supports A/B layout with both reefy-a/reefy-b and legacy sbnb-a/sbnb-b labels."""
+        for label in ('reefy-a', 'reefy-b', 'sbnb-a', 'sbnb-b'):
+            try:
+                dev = subprocess.run(
+                    ['blkid', '-L', label],
                     capture_output=True, text=True, timeout=5
                 ).stdout.strip()
-                if parent:
-                    return f'/dev/{parent}', reefy_dev
-        except Exception as e:
-            log('mqtt', f'Error finding reefy disk: {e}')
+                if dev:
+                    parent = subprocess.run(
+                        ['lsblk', '-no', 'PKNAME', dev],
+                        capture_output=True, text=True, timeout=5
+                    ).stdout.strip()
+                    if parent:
+                        return f'/dev/{parent}', dev
+            except Exception:
+                continue
         return None, None
 
     def _find_reefy_key_partition(self):
