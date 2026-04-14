@@ -35,8 +35,15 @@ def publish_status(payload):
 
 def run_borg(args, env, timeout=21600, retries=10, retry_delay=60, cwd=None):
     """Run a borg command with retries. Returns (success, stdout, stderr)."""
-    # Errors that won't resolve with retries — fail fast
-    FATAL_PATTERNS = ('passphrase', 'key', 'quota', 'no space left', 'permission denied')
+    # Errors that won't resolve with retries — fail fast.
+    # 'not a valid repository' / 'does not exist' are fatal here so the
+    # caller can trigger `borg init` immediately instead of waiting ~10 min
+    # for the retry loop to exhaust on a fresh BorgBase repo. Transient
+    # SSH failures and lock contention still retry normally.
+    FATAL_PATTERNS = (
+        'passphrase', 'key', 'quota', 'no space left', 'permission denied',
+        'not a valid repository', 'does not exist',
+    )
     for attempt in range(retries):
         result = subprocess.run(
             ['borg'] + args,
