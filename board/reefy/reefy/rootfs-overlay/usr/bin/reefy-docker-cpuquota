@@ -1,0 +1,17 @@
+#!/bin/sh
+# Apply CPU quota to docker.slice (parent of all container scopes).
+# Memory limit is set declaratively in /etc/systemd/system/docker.slice
+# via MemoryMax=50%. CPU has to be set here because CPUQuota in the
+# slice unit is per-CPU (CPUQuota=90% means 90% of ONE core), and we
+# need 90% of total cores which depends on the hardware.
+
+CORES=$(nproc)
+PERIOD_US=100000                     # 100ms scheduling period
+CPU_QUOTA_US=$((CORES * 90 * 1000))  # 90% of all cores
+
+if [ -w /sys/fs/cgroup/docker.slice/cpu.max ]; then
+    echo "$CPU_QUOTA_US $PERIOD_US" > /sys/fs/cgroup/docker.slice/cpu.max
+    echo "[reefy] docker.slice CPU: ${CPU_QUOTA_US}/${PERIOD_US}us (90% of $CORES cores)"
+else
+    echo "[reefy] docker.slice cpu.max not writable (cgroup not yet created?)" >&2
+fi

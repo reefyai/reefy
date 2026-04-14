@@ -1,5 +1,6 @@
 {
     "data-root": "/mnt/reefy-data/docker",
+    "cgroup-parent": "docker.slice",
     "builder": {
         "gc": {
             "defaultKeepStorage": "0",

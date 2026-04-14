@@ -1,0 +1,10 @@
+[Unit]
+Description=Docker container slice
+Documentation=man:systemd.special(7)
+DefaultDependencies=no
+Before=slices.target
+
+# Memory protection is via system.slice MemoryMin (see system.slice.d/protect.conf)
+# — soft guarantee: containers can use all RAM when host doesn't need it,
+# but kernel reclaims from containers to keep system services running.
+# CPU protection is via the reefy-docker-cpuquota script (ExecStartPost).
