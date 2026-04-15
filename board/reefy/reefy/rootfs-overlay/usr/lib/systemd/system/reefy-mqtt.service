@@ -2,11 +2,14 @@
 Description=Reefy MQTT Reconciler
 Documentation=https://github.com/reefyai/reefy
 
-# Start after storage setup (USB mount, hostname, data partition)
-# No network-online.target dependency — reconciler applies saved state
-# offline and connects to MQTT when network becomes available.
-After=reefy-storage.service
-Wants=reefy-storage.service
+# Start after storage setup + hostname. Hostname feeds the MQTT
+# client-id and topic prefix — without it we'd register as "buildroot"
+# until reefy-hostname.service eventually ran, flapping the device's
+# identity on the backend. No network-online.target dependency —
+# reconciler applies saved state offline and connects to MQTT when
+# network becomes available.
+After=reefy-storage.service reefy-hostname.service
+Wants=reefy-storage.service reefy-hostname.service
 
 # No ConditionPathExists — reconciler starts unconditionally
 # and waits internally for config/certs to appear

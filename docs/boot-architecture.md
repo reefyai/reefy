@@ -31,11 +31,12 @@ All services in the bottom row start **in parallel** once `reefy-storage.service
 
 | Step | Function | What it does | Failure impact |
 |------|----------|-------------|----------------|
-| 1 | `set_hostname` | Set hostname from MAC via `reefy-default-hostname` | Cosmetic only |
-| 2 | `mount_reefy_usb` | Mount active ESP read-only at `/mnt/reefy` | No certs, no MQTT config |
-| 3 | `ensure_boot_entries` | Verify/fix EFI boot entries via `reefy-efi fix` | Stale boot entries |
-| 4 | `setup_internal_storage` | Open LUKS on internal drives, activate LVM VG `reefy`, mount at `/mnt/reefy-data` | Falls back to USB |
-| 5 | `setup_data_partition` | If no internal storage: open LUKS on USB partition 4, mount at `/mnt/reefy-data` | No persistent state |
+| 1 | `mount_reefy_usb` | Mount active ESP read-only at `/mnt/reefy` | No certs, no MQTT config |
+| 2 | `ensure_boot_entries` | Verify/fix EFI boot entries via `reefy-efi fix` | Stale boot entries |
+| 3 | `setup_internal_storage` | Open LUKS on internal drives, activate LVM VG `reefy`, mount at `/mnt/reefy-data` | Falls back to USB |
+| 4 | `setup_data_partition` | If no internal storage: open LUKS on USB partition 4, mount at `/mnt/reefy-data` | No persistent state |
+
+*Hostname setup* moved out of this phase — see **reefy-hostname.service** (separate unit, udev- and timer-triggered; reefy-mqtt depends on it). Background in `docs/hostname.md`.
 
 **After this completes**: `/mnt/reefy` and `/mnt/reefy-data` are mounted. Docker, MQTT, and all other services can start.
 

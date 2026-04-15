@@ -19,9 +19,11 @@ REEFY_DATA_MNT="/mnt/reefy-data"
 LUKS_NAME="reefy-data"
 LUKS_KEY_SIZE=44
 
-set_hostname() {
-    hostname "$(reefy-default-hostname)"
-}
+# Hostname-setting moved out of boot-reefy-storage.sh — it used to run
+# here before virtio_net had finished probing, causing ~25% of QEMU
+# boots to land with a random hostname (see 2026-04 investigation).
+# Now handled by reefy-hostname.service, triggered by udev on physical
+# NIC add (80-reefy-hostname.rules) with a 180s timer backstop.
 
 # Determine active boot slot from UEFI BootCurrent
 get_active_slot() {
@@ -190,7 +192,6 @@ setup_internal_storage() {
 # Main execution
 # Order matters: try internal drive first (fast), fall back to USB p4 (slow).
 # If neither exists (fresh USB), use tmpfs for bootstrap.
-set_hostname
 mount_reefy_usb
 
 if ! mountpoint -q "${REEFY_MNT}" 2>/dev/null; then

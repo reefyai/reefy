@@ -1537,7 +1537,7 @@ class MQTTReconciler:
     def _get_default_hostname():
         """Get MAC-based default hostname via shared helper script."""
         result = subprocess.run(
-            ['reefy-default-hostname'], capture_output=True, text=True
+            ['reefy-derive-hostname'], capture_output=True, text=True
         )
         return result.stdout.strip()
 

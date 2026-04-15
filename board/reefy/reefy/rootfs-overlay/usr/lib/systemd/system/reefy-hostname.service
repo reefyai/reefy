@@ -1,0 +1,15 @@
+[Unit]
+Description=reefy MAC-derived hostname
+# Pulled into boot by services that need the hostname (reefy-mqtt
+# primarily) via their Wants= + After=. Runs synchronously; the
+# script inside blocks up to 120s for a physical NIC to appear, so
+# reefy-mqtt doesn't register with "buildroot" while virtio_net is
+# still probing.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/reefy-set-hostname.sh
+RemainAfterExit=yes
+# Script polls up to 120s. Give systemd a matching ceiling so a
+# stuck probe doesn't hang boot indefinitely.
+TimeoutStartSec=150s

@@ -1,0 +1,57 @@
+#!/bin/sh
+# Output the MAC-based default hostname (reefy-<mac>).
+# Used by reefy-hostname.service (udev + timer triggered) and by
+# reefy-mqtt-reconciler to avoid divergence.
+#
+# Only considers physical NICs (ID_BUS in {pci,usb,platform,mmc,sdio}
+# per udev). Avoids docker0, veth, tailscale, bridges. If no physical
+# NIC has a MAC yet, falls back to a stable machine-id-derived ID with
+# a `mid-` marker so operators can tell the hostname didn't come from
+# a real MAC. Never generates random IDs: a random fallback gets baked
+# into SSH host keys on first boot and survives forever (see 2026-04
+# QEMU MAC investigation).
+
+PHYSICAL_BUSES="pci usb platform mmc sdio"
+
+is_physical_nic() {
+    # ID_BUS is set by udev's builtin net_id + 60-net.rules via the
+    # ancestor chain — so a virtio-net device shows ID_BUS=pci (its
+    # transport) even though its immediate subsystem is `virtio`.
+    # This matches what 80-reefy-hostname.rules uses, so the udev path
+    # and the timer-fallback path agree on which iface counts.
+    iface="$1"
+    bus=$(udevadm info --query=env --path=/sys/class/net/"${iface}" 2>/dev/null \
+          | sed -n 's/^ID_BUS=//p')
+    [ -z "${bus}" ] && return 1
+    for allowed in ${PHYSICAL_BUSES}; do
+        [ "${bus}" = "${allowed}" ] && return 0
+    done
+    return 1
+}
+
+HWID=""
+# Deterministic iface order: eth0 before enp0s2 before wlan0 — sorted
+# lexically, which matches kernel enumeration for identical hardware.
+for iface_path in $(find /sys/class/net -maxdepth 1 -mindepth 1 | sort); do
+    iface=$(basename "${iface_path}")
+    [ "${iface}" = "lo" ] && continue
+    is_physical_nic "${iface}" || continue
+    mac=$(cat "${iface_path}/address" 2>/dev/null | tr -d ':')
+    [ -z "${mac}" ] && continue
+    [ "${mac}" = "000000000000" ] && continue
+    HWID="${mac}"
+    break
+done
+
+if [ -z "${HWID}" ]; then
+    # Last resort: stable per-device ID from /etc/machine-id (generated
+    # per-boot by systemd if missing — buildroot ships it empty). The
+    # `mid-` prefix makes it obvious this isn't a MAC.
+    HWID="mid-$(head -c 12 /etc/machine-id 2>/dev/null)"
+    if [ "${HWID}" = "mid-" ]; then
+        echo "reefy-default-hostname: no NIC MAC and no /etc/machine-id" >&2
+        exit 1
+    fi
+fi
+
+echo "reefy-${HWID}"
