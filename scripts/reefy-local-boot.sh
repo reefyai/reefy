@@ -6,6 +6,7 @@
 #
 # Options:
 #   -h, --help          Show this help message
+#   -i, --image FILE    Path to the .raw image (default: ../buildroot/output/images/reefy.raw)
 #   -m, --memory SIZE   Memory size (default: 4G)
 #   -c, --cpus NUM      Number of CPUs (default: 2)
 #   -r, --readonly      Boot image read-only (no copy, use snapshot)
@@ -18,6 +19,7 @@
 #
 # Examples:
 #   reefy-local-boot.sh                        # Quick test (4G RAM, 2 CPUs, 32G disk)
+#   reefy-local-boot.sh -i ~/downloads/reefy.raw   # Boot a specific image (e.g. one downloaded from reefy.dev)
 #   reefy-local-boot.sh -m 16G -c 4            # More resources
 #   reefy-local-boot.sh -r                     # Read-only (fast, no disk changes)
 #   reefy-local-boot.sh -s 64G                 # Larger disk (simulates bigger USB)
@@ -27,6 +29,7 @@
 set -euo pipefail
 
 # Defaults
+IMAGE_OVERRIDE=""
 MEMORY="4G"
 CPUS="2"
 READONLY=false
@@ -43,6 +46,10 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             sed -n '2,/^$/p' "$0" | sed 's/^# \?//'
             exit 0
+            ;;
+        -i|--image)
+            IMAGE_OVERRIDE="$2"
+            shift 2
             ;;
         -m|--memory)
             MEMORY="$2"
@@ -90,15 +97,25 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Locate script and image directories
+# Locate script and image. Default: buildroot output next to this script.
+# --image/-I overrides, e.g. an image downloaded from a deployment.
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-IMG_DIR="${SCRIPT_DIR}/../buildroot/output/images"
-IMG_FILE_SRC="${IMG_DIR}/reefy.raw"
+if [[ -n "${IMAGE_OVERRIDE}" ]]; then
+    IMG_FILE_SRC="${IMAGE_OVERRIDE/#\~/$HOME}"
+    IMG_DIR=$( cd -- "$( dirname -- "${IMG_FILE_SRC}" )" &> /dev/null && pwd )
+    IMG_FILE_SRC="${IMG_DIR}/$( basename -- "${IMG_FILE_SRC}" )"
+else
+    IMG_DIR="${SCRIPT_DIR}/../buildroot/output/images"
+    IMG_FILE_SRC="${IMG_DIR}/reefy.raw"
+fi
 
 # Check if source image exists
 if [[ ! -f "${IMG_FILE_SRC}" ]]; then
     echo "Error: Image not found: ${IMG_FILE_SRC}" >&2
-    echo "Build the image first: cd buildroot && make" >&2
+    if [[ -z "${IMAGE_OVERRIDE}" ]]; then
+        echo "Build the image first: cd buildroot && make" >&2
+        echo "Or pass a specific image: $0 -i /path/to/reefy.raw" >&2
+    fi
     exit 1
 fi
 
