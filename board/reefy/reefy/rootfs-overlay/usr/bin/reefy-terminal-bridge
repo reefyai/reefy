@@ -69,22 +69,42 @@ def get_device_uuid():
     return None
 
 
+def _get_container_shell(container):
+    """Read APP_SHELL env var from the container (set by desired-state
+    from app.json "shell" field). Returns the shell command or None."""
+    try:
+        result = subprocess.run(
+            ['docker', 'inspect', container, '--format',
+             '{{range .Config.Env}}{{println .}}{{end}}'],
+            capture_output=True, text=True, timeout=5)
+        for line in result.stdout.splitlines():
+            if line.startswith('APP_SHELL='):
+                return line[len('APP_SHELL='):]
+    except Exception:
+        pass
+    return None
+
+
 def spawn_pty(session_id, container=None, name=None):
-    """Spawn a PTY shell. If container specified, docker exec into it."""
+    """Spawn a PTY shell. If container specified, docker exec into it.
+    Reads APP_SHELL from the container's env for custom shell commands
+    (e.g. venv activation). Falls back to bash -> sh if unset."""
     # For app containers: write a wrapper script so tmux's default-command
     # can reuse it for new panes (all panes exec into the same container).
-    # Mirrors sidecar-ttyd/app-shell.sh: whoami@name prompt, bash fallback sh.
     wrapper_path = None
     if container:
         wrapper_path = f'/tmp/reefy-term-{session_id}'
         display = name or container
-        # Single-quoted sh -c body: no escaping needed. $(whoami) and
-        # ${REEFY_APP} are expanded by the container's sh, not the host.
+        shell = _get_container_shell(container)
+        if shell:
+            shell_cmd = shell
+        else:
+            shell_cmd = 'if command -v bash >/dev/null; then exec bash --norc --noprofile; else exec sh; fi'
         with open(wrapper_path, 'w') as f:
             f.write("#!/bin/sh\n"
                     f"exec docker exec -e REEFY_APP='{display}' -it {container} sh -c '\n"
                     '    export "PS1=$(whoami 2>/dev/null || echo user)@${REEFY_APP}# "\n'
-                    "    if command -v bash >/dev/null; then exec bash --norc --noprofile; else exec sh; fi\n"
+                    f"    {shell_cmd}\n"
                     "'\n")
         os.chmod(wrapper_path, 0o755)
 
