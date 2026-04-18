@@ -270,11 +270,38 @@ def main():
 
     client.reconnect_delay_set(min_delay=1, max_delay=60)
 
+    # Subscriptions: (topic, qos)
+    subscriptions = [
+        (f"{topic_base}/+/input", 0),
+        (f"{topic_base}/+/control", 1),
+    ]
+    # Track SUBACK confirmation: paho can report on_connect after a network
+    # blip, but the broker can drop the resulting SUBSCRIBE silently. Without
+    # this, the bridge thinks it is subscribed while the broker has no subs
+    # for it and drops all input messages. Fix: track MIDs from subscribe(),
+    # mark confirmed on on_subscribe, watchdog re-subscribes if missing.
+    sub_state = {'confirmed': False, 'pending_mids': set()}
+
+    def do_subscribe(cl):
+        sub_state['confirmed'] = False
+        sub_state['pending_mids'].clear()
+        for topic, qos in subscriptions:
+            result, mid = cl.subscribe(topic, qos)
+            if result == 0:
+                sub_state['pending_mids'].add(mid)
+            else:
+                print(f"[terminal-bridge] subscribe({topic}) error rc={result}")
+        print(f"[terminal-bridge] Subscribe sent (mids={sub_state['pending_mids']})")
+
     def on_connect(cl, userdata, flags, rc, properties):
         print(f"[terminal-bridge] Connected to {broker}:{port}")
-        # Subscribe to wildcard for all sessions
-        cl.subscribe(f"{topic_base}/+/input", qos=0)
-        cl.subscribe(f"{topic_base}/+/control", qos=1)
+        do_subscribe(cl)
+
+    def on_subscribe(cl, userdata, mid, reason_codes, properties):
+        sub_state['pending_mids'].discard(mid)
+        if not sub_state['pending_mids']:
+            sub_state['confirmed'] = True
+            print(f"[terminal-bridge] All {len(subscriptions)} subscriptions confirmed")
 
     def on_message(cl, userdata, msg):
         # Parse session_id and message type from topic
@@ -346,9 +373,22 @@ def main():
     client.on_connect = on_connect
     client.on_message = on_message
     client.on_disconnect = on_disconnect
+    client.on_subscribe = on_subscribe
 
-    client.connect(broker, port, keepalive=60)
+    client.connect(broker, port, keepalive=30)
     client.loop_start()
+
+    # Watchdog: if subscriptions not confirmed within 30s of connect,
+    # re-issue subscribe. Catches silent broker SUBACK drops.
+    def subscription_watchdog():
+        while True:
+            time.sleep(30)
+            if client.is_connected() and not sub_state['confirmed']:
+                print("[terminal-bridge] Subscriptions not confirmed - re-subscribing")
+                do_subscribe(client)
+
+    threading.Thread(target=subscription_watchdog, daemon=True,
+                     name='term-sub-watchdog').start()
 
     # Main loop: read PTY output from all sessions and publish to MQTT
     try:
