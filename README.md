@@ -24,13 +24,27 @@ A $39 Intel NUC from eBay - 2-core Celeron, 8GB RAM, 128GB SSD - can run dozens 
 
 We're not replacing the cloud - we love clouds and Reefy uses them a lot under the hood! We're moving your personal work closer to you.
 
+## Control your PC from anywhere
+
+Secure tunnels to every device. No port forwarding, no VPN, no static IP needed.
+
+<p align="center">
+  <img src="images/reefy-phone-terminal.png" alt="Reefy phone terminal" width="320">
+</p>
+
+Built-in web terminal with on-screen control buttons gives you a full terminal experience even from your phone - manage your reefs on the go.
+
+<p align="center">
+  <img src="images/reefy-terminal-hermes.png" alt="Reefy terminal attached to Hermes Agent container" width="800">
+</p>
+
+Reefy gives every running app (Docker container) its own terminal, so you don't have to manually `docker exec` into your agent - just click and you're inside. All sessions run inside `tmux`, so your work is preserved: close the browser, switch devices, come back later, and pick up exactly where you left off.
+
 ## Key Features
 
 **Zero-touch setup** - Flash a USB, boot any x86 machine, see it on your [dashboard](https://reefy.ai) in 60 seconds.
 
 **15-second boot** - We optimized the Linux kernel and early boot services to eliminate ugly waits. From power button to running apps - blazing fast.
-
-**Control from anywhere** - Secure tunnels to every device. No port forwarding, no VPN, no static IP needed. Built-in web terminal with on-screen control buttons gives you a full terminal experience even from your phone - manage your reefs on the go.
 
 **Can't brick it** - A/B firmware with hardware watchdog. Bad update? Device automatically rolls back to the previous working version. Critical for devices in closets, attics, and remote locations.
 
