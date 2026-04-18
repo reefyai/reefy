@@ -12,7 +12,7 @@ This document describes the architecture for adding MQTT+mTLS as an optional com
 - ✅ Non-breaking: Existing Tailscale deployments continue to work
 - ✅ Additive: MQTT is a parallel option, not a replacement
 - ✅ Open source friendly: Base image contains no vendor-specific credentials
-- ✅ Simple UX: Users download pre-configured image from console.reefy.io
+- ✅ Simple UX: Users download pre-configured image from console.reefy.ai
 - ✅ Self-hostable: Users can run their own MQTT broker
 
 ---
@@ -40,7 +40,7 @@ This document describes the architecture for adding MQTT+mTLS as an optional com
     (push-mode)          (pull-mode)
           ↓                    ↓
 ┌──────────────────────────────────────────┐
-│       console.reefy.io                     │
+│       console.reefy.ai                     │
 ├──────────────────────────────────────────┤
 │  SSH via Tailscale (optional)            │
 │  MQTT Broker (mTLS)                      │
@@ -64,7 +64,7 @@ This document describes the architecture for adding MQTT+mTLS as an optional com
 ### 1. User Registration & Download
 
 ```
-1. User registers at console.reefy.io
+1. User registers at console.reefy.ai
    ↓
 2. Console generates customer-specific bootstrap certificate
    ↓
@@ -90,7 +90,7 @@ This document describes the architecture for adding MQTT+mTLS as an optional com
    ↓
 4. Device reads embedded bootstrap certificate
    ↓
-5. Device connects to MQTT broker (console.reefy.io:8883)
+5. Device connects to MQTT broker (console.reefy.ai:8883)
    ↓
 6. Device generates RSA-2048 keypair + CSR (private key stays on device)
    ↓
@@ -134,7 +134,7 @@ This document describes the architecture for adding MQTT+mTLS as an optional com
    Payload: {
      "uuid": "550e8400-...",
      "device_cert": "-----BEGIN CERTIFICATE-----...",
-     "bundle_url": "https://console.reefy.io/api/bundles/customer"
+     "bundle_url": "https://console.reefy.ai/api/bundles/customer"
    }
    Note: No private key transmitted — device generated it locally via CSR
    ↓
@@ -172,7 +172,7 @@ board/reefy/reefy/rootfs-overlay/
 **mqtt.conf.example:**
 ```ini
 # MQTT Broker Configuration
-MQTT_BROKER=console.reefy.io
+MQTT_BROKER=console.reefy.ai
 MQTT_PORT=8883
 
 # Certificate paths
@@ -255,7 +255,7 @@ start_mqtt() {
         echo "[reefy] Using injected MQTT config"
     else
         # Defaults
-        MQTT_BROKER="console.reefy.io"
+        MQTT_BROKER="console.reefy.ai"
         MQTT_PORT="8883"
         echo "[reefy] Using default MQTT config"
     fi
@@ -376,7 +376,7 @@ import ssl
 class MQTTReconciler:
     def __init__(self):
         # Read configuration
-        self.broker = os.getenv('MQTT_BROKER', 'console.reefy.io')
+        self.broker = os.getenv('MQTT_BROKER', 'console.reefy.ai')
         self.port = int(os.getenv('MQTT_PORT', '8883'))
         self.hostname = os.uname().nodename  # reefy-{MAC}
 
@@ -671,13 +671,13 @@ if __name__ == '__main__':
 1. `/mnt/reefy-data/state/mqtt.conf` - Persistent user override
 2. `/etc/reefy/mqtt.conf` - Injected at download time
 3. Environment variables - Systemd service overrides
-4. Built-in defaults - `console.reefy.io:8883`
+4. Built-in defaults - `console.reefy.ai:8883`
 
 **Example configuration file:**
 
 ```ini
 # /etc/reefy/mqtt.conf (injected by console)
-MQTT_BROKER=console.reefy.io
+MQTT_BROKER=console.reefy.ai
 MQTT_PORT=8883
 MQTT_CA_CERT=/etc/reefy/mqtt/ca.crt
 MQTT_CLIENT_CERT=/etc/reefy/mqtt/client.crt
@@ -735,10 +735,10 @@ openssl x509 -new -force_pubkey device.pub \
 
 ## Deployment Scenarios
 
-### Scenario 1: Managed Service (console.reefy.io)
+### Scenario 1: Managed Service (console.reefy.ai)
 
 **User perspective:**
-1. Register at console.reefy.io
+1. Register at console.reefy.ai
 2. Download reefy.raw (credentials pre-injected)
 3. Flash USB and boot
 4. Device appears in dashboard
@@ -748,7 +748,7 @@ openssl x509 -new -force_pubkey device.pub \
 **What's injected:**
 - Bootstrap certificate (customer-specific or shared)
 - CA certificate
-- Broker URL: `console.reefy.io:8883`
+- Broker URL: `console.reefy.ai:8883`
 
 ### Scenario 2: Self-Hosted (Open Source)
 
@@ -777,7 +777,7 @@ openssl x509 -new -force_pubkey device.pub \
 
 ### Scenario 3: Hybrid
 
-**Use console.reefy.io services but point to own MQTT broker:**
+**Use console.reefy.ai services but point to own MQTT broker:**
 
 ```bash
 # Download image from console, then modify broker URL
@@ -924,7 +924,7 @@ vms: []
 
 ### Phase 2: Console Integration
 
-- [ ] Implement image injection endpoint on console.reefy.io
+- [ ] Implement image injection endpoint on console.reefy.ai
 - [ ] Create dashboard device registration view
 - [ ] Implement MQTT broker with mTLS
 - [ ] Create device provisioning UI
@@ -957,9 +957,9 @@ vms: []
 
 Reefy supports MQTT+mTLS for efficient pull-based configuration management.
 
-## Quick Start (console.reefy.io)
+## Quick Start (console.reefy.ai)
 
-1. Register at console.reefy.io
+1. Register at console.reefy.ai
 2. Download pre-configured image
 3. Flash and boot - device appears in dashboard automatically
 

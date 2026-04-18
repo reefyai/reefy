@@ -4,14 +4,14 @@ An Reefy App is a packaged application that runs on Reefy bare metal infrastruct
 
 ## Overview
 
-An Reefy App is an Ansible role with a playbook entrypoint. Apps can be developed by the Reefy team or by third-party developers. When a user deploys an app through [console.reefy.io](https://console.reefy.io), the platform provisions a VM on a bare metal host and executes the app's Ansible playbook against it. The execution log is streamed to the console web UI in real time.
+An Reefy App is an Ansible role with a playbook entrypoint. Apps can be developed by the Reefy team or by third-party developers. When a user deploys an app through [console.reefy.ai](https://console.reefy.ai), the platform provisions a VM on a bare metal host and executes the app's Ansible playbook against it. The execution log is streamed to the console web UI in real time.
 
 All Reefy Apps run as Docker containers. The platform handles VM provisioning, Docker setup, secret injection, volume management, backup, and HTTPS exposure. App developers focus on their application logic.
 
 ### Lifecycle
 
 ```
-User configures app in console.reefy.io
+User configures app in console.reefy.ai
         ↓
 Platform provisions VM on bare metal host
         ↓
@@ -174,7 +174,7 @@ reefy_requirements:
   gpu: true
 ```
 
-The `logo_url` is displayed in the console.reefy.io app catalog. Use a square image, minimum 128x128 pixels.
+The `logo_url` is displayed in the console.reefy.ai app catalog. Use a square image, minimum 128x128 pixels.
 
 The `reefy_requirements` section is optional. When specified, the platform uses it to validate that the target machine meets minimum requirements before deployment and to display hardware requirements in the app catalog. All fields are optional — omit any that are not applicable.
 
@@ -200,7 +200,7 @@ reefy_myapp_port: 8080
 
 ### Secrets
 
-Secrets (API keys, tokens, passwords) must never be hardcoded in the app. Users define their secrets in console.reefy.io, and the platform injects them at execution time using template placeholders.
+Secrets (API keys, tokens, passwords) must never be hardcoded in the app. Users define their secrets in console.reefy.ai, and the platform injects them at execution time using template placeholders.
 
 **How it works:**
 
@@ -221,7 +221,7 @@ Secrets (API keys, tokens, passwords) must never be hardcoded in the app. Users 
         reefy_myapp_bot_token: "{MYAPP_BOT_TOKEN}"
 ```
 
-2. The user sets the actual secret values in console.reefy.io (e.g., `MYAPP_API_KEY = sk-abc123...`).
+2. The user sets the actual secret values in console.reefy.ai (e.g., `MYAPP_API_KEY = sk-abc123...`).
 
 3. The platform replaces `{MYAPP_API_KEY}` with the real value before executing the playbook. This keeps secrets out of version control.
 
@@ -310,7 +310,7 @@ Each volume has:
 | `name` | yes | Volume name, unique within the app. Used for backup naming. |
 | `container_path` | yes | Mount path inside the container. |
 | `backup` | no | `true` to enable platform-managed backup. Default: `false`. |
-| `description` | no | Human-readable description for console.reefy.io. |
+| `description` | no | Human-readable description for console.reefy.ai. |
 
 **Platform behavior:**
 - The platform creates host directories and mounts them into the container automatically. App developers do not need to create directories or construct volume mounts.
@@ -329,9 +329,9 @@ Each volume has:
 
 ## Outputs
 
-Outputs are information returned to the platform after app execution. The platform displays selected outputs to the user in the console.reefy.io web UI.
+Outputs are information returned to the platform after app execution. The platform displays selected outputs to the user in the console.reefy.ai web UI.
 
-> **Important:** Outputs with `show_to_user: true` are displayed prominently in the console.reefy.io web UI — on the app instance detail page and in the deployment success screen. Use this for URLs, credentials, and getting-started instructions that the user needs immediately after deployment. Keep `show_to_user: false` for internal/debug values like container IDs.
+> **Important:** Outputs with `show_to_user: true` are displayed prominently in the console.reefy.ai web UI — on the app instance detail page and in the deployment success screen. Use this for URLs, credentials, and getting-started instructions that the user needs immediately after deployment. Keep `show_to_user: false` for internal/debug values like container IDs.
 
 ### Output Format
 
@@ -374,7 +374,7 @@ Each output has:
 | `label` | yes | Human-readable label for display. |
 | `show_to_user` | no | `true` to display in console web UI. Default: `false`. |
 
-Only outputs with `show_to_user: true` are displayed in the console.reefy.io web UI. Other outputs are available in the execution log for debugging.
+Only outputs with `show_to_user: true` are displayed in the console.reefy.ai web UI. Other outputs are available in the execution log for debugging.
 
 ### HTTPS Exposure
 
@@ -606,8 +606,8 @@ reefy_myapp_volumes:
 
 There are two ways to make an app available to users:
 
-- **Reefy App Catalog.** [console.reefy.io](https://console.reefy.io) offers a curated catalog of vetted apps that have passed security review by the Reefy team. To include your app in the catalog, submit a request to the Reefy team with your `git_url`, `git_ref`, and `playbook_path`.
-- **Custom app.** Users can deploy any app they trust by providing `git_url`, `git_ref`, and `playbook_path` in the console.reefy.io web UI. The repository must be publicly accessible (or accessible with credentials configured by the user). Custom apps are not reviewed by the Reefy team — the user assumes responsibility for the app's behavior and security.
+- **Reefy App Catalog.** [console.reefy.ai](https://console.reefy.ai) offers a curated catalog of vetted apps that have passed security review by the Reefy team. To include your app in the catalog, submit a request to the Reefy team with your `git_url`, `git_ref`, and `playbook_path`.
+- **Custom app.** Users can deploy any app they trust by providing `git_url`, `git_ref`, and `playbook_path` in the console.reefy.ai web UI. The repository must be publicly accessible (or accessible with credentials configured by the user). Custom apps are not reviewed by the Reefy team — the user assumes responsibility for the app's behavior and security.
 
 ## Changelog
 
