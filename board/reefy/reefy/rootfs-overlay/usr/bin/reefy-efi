@@ -108,8 +108,11 @@ fix_entries() {
         else
             EXPECTED_GUID="$GUID_B"
         fi
+        # `[[:space:]]+` between Boot#### and label — inactive entries
+        # have two spaces where active entries have `* ` (asterisk +
+        # space), so a literal single space would miss them.
         efibootmgr -v 2>/dev/null \
-            | grep -E "^Boot[0-9A-Fa-f]+\*? ${REEFY_LABEL}[[:space:]]" \
+            | grep -E "^Boot[0-9A-Fa-f]+\*?[[:space:]]+${REEFY_LABEL}[[:space:]]" \
             | while IFS= read -r REEFY_ENTRY; do
                 REEFY_NUM=$(echo "$REEFY_ENTRY" | sed -E 's/^Boot([0-9A-Fa-f]+)\*?.*/\1/')
                 if ! echo "$REEFY_ENTRY" | grep -qi "${EXPECTED_GUID}" 2>/dev/null; then
