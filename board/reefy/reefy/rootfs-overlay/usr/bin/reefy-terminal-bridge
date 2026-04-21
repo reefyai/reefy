@@ -39,9 +39,18 @@ except ImportError:
 
 MQTT_CONF_PATH = '/mnt/reefy/mqtt/mqtt.conf'
 STATE_DIR = '/mnt/reefy-data/state'
-IDLE_TIMEOUT = 1800  # 30 min with no subscribers
+# Cleanup horizon for orphaned PTYs (browser tabs that die without firing
+# beforeunload). Long enough that a watching user never trips it, short
+# enough that genuinely abandoned sessions don't accumulate for weeks.
+# Real work inside the PTY (tmux server + children) is unaffected — this
+# only kills the tmux *client* bridging to the browser; the server and
+# session survive and reattach on the next subscribe.
+IDLE_TIMEOUT = 86400  # 24h
 
-# Multi-session state: session_id -> {master_fd, child_pid, subscribers, last_activity}
+# Multi-session state: session_id -> {master_fd, child_pid, subscribers,
+# last_activity, container, name, cols, rows}. cols/rows are stored on
+# every subscribe/resize so when the PTY is respawned (after idle kill,
+# tmux crash, etc.) we can restore dims instead of defaulting to 80x24.
 _sessions = {}
 _lock = threading.Lock()
 
@@ -153,6 +162,8 @@ def get_session(session_id):
             'last_activity': 0.0,
             'container': None,
             'name': None,
+            'cols': 0,
+            'rows': 0,
         }
     return _sessions[session_id]
 
@@ -207,15 +218,33 @@ def ensure_session_pty(session_id):
                 session_id, container=s['container'], name=s['name'])
             target = s['container'] or 'host'
             print(f"[terminal-bridge] Spawned PTY session={session_id} target={target} pid={s['child_pid']}")
+            # Restore last-known dims BEFORE tmux reads its startup winsize.
+            # Without this, a PTY respawned after IDLE_TIMEOUT (or any other
+            # kill path) would default to 80x24 and visibly shrink the
+            # user's terminal until the next browser resize event.
+            if s['cols'] and s['rows']:
+                winsize = struct.pack('HHHH', s['rows'], s['cols'], 0, 0)
+                try:
+                    fcntl.ioctl(s['master_fd'], termios.TIOCSWINSZ, winsize)
+                except OSError:
+                    pass
 
         return s['master_fd']
 
 
 def resize_session(session_id, cols, rows):
-    """Resize the PTY for a session."""
+    """Resize the PTY for a session AND remember the dims.
+
+    Stored dims are re-applied whenever the PTY is respawned
+    (ensure_session_pty), so an idle-timeout kill no longer leaves
+    the next shell stuck at 80x24."""
     with _lock:
         s = _sessions.get(session_id)
-        if s and s['master_fd'] is not None:
+        if not s:
+            return
+        s['cols'] = cols
+        s['rows'] = rows
+        if s['master_fd'] is not None:
             winsize = struct.pack('HHHH', rows, cols, 0, 0)
             fcntl.ioctl(s['master_fd'], termios.TIOCSWINSZ, winsize)
 
