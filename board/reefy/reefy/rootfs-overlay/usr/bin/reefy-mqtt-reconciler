@@ -269,10 +269,20 @@ class MQTTReconciler:
                 result, mid = client.subscribe(topic)
                 log('mqtt', f'Subscribe sent: topic={topic}, result={result}, mid={mid}')
 
-                # Publish online status after subscribe is queued
+                # Publish online status after subscribe is queued. Include
+                # /etc/os-release so the dashboard can extract IMAGE_VERSION
+                # immediately — otherwise fw_version only lands ~30s later
+                # when _apply_and_publish finishes and emits a full status.
                 status_topic = self._get_status_topic()
+                try:
+                    with open('/etc/os-release') as f:
+                        os_release = f.read()
+                except OSError:
+                    os_release = ''
                 client.publish(status_topic, json.dumps({
-                    "status": "online", "hostname": self.hostname
+                    "status": "online",
+                    "hostname": self.hostname,
+                    "hw": {"os_release": os_release},
                 }), qos=1, retain=True)
 
                 self._run_in_background(
