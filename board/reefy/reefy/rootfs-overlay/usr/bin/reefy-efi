@@ -78,24 +78,32 @@ fix_entries() {
 
     mount -o remount,rw /sys/firmware/efi/efivars 2>/dev/null || true
 
-    # Remove UEFI auto-created entries that point to our partitions but aren't reefy-a/reefy-b
-    efibootmgr 2>/dev/null | grep '^Boot[0-9A-F]*\*' | while read -r line; do
-        BOOTNUM=$(echo "$line" | sed 's/Boot\([0-9A-F]*\)\*.*/\1/')
-        LABEL=$(echo "$line" | sed 's/Boot[0-9A-F]*\* //' | awk '{print $1}')
+    # Remove UEFI auto-created entries that point to our partitions but aren't reefy-a/reefy-b.
+    # Asterisk on the Boot#### line marks entry as "active"; some firmwares
+    # leave stale entries inactive and efibootmgr renders them without '*'.
+    # Match both forms so leftover inactive entries can be cleaned up.
+    efibootmgr 2>/dev/null | grep -E '^Boot[0-9A-Fa-f]+\*?[[:space:]]' | while read -r line; do
+        BOOTNUM=$(echo "$line" | sed -E 's/^Boot([0-9A-Fa-f]+)\*?.*/\1/')
+        LABEL=$(echo "$line" | sed -E 's/^Boot[0-9A-Fa-f]+\*?[[:space:]]+//' | awk '{print $1}')
         [ "$LABEL" = "reefy-a" ] && continue
         [ "$LABEL" = "reefy-b" ] && continue
-        ENTRY_DETAIL=$(efibootmgr -v 2>/dev/null | grep "^Boot${BOOTNUM}\*")
+        ENTRY_DETAIL=$(efibootmgr -v 2>/dev/null | grep -E "^Boot${BOOTNUM}\*?[[:space:]]")
         if echo "$ENTRY_DETAIL" | grep -qi "${GUID_A}\|${GUID_B}" 2>/dev/null; then
             efibootmgr -b "$BOOTNUM" -B 2>/dev/null || true
             echo "[reefy-efi] Removed duplicate entry: Boot${BOOTNUM} (${LABEL})"
         fi
     done
 
-    # Remove stale reefy-a/reefy-b entries that don't point to current disk
+    # Remove stale reefy-a/reefy-b entries whose device path doesn't match
+    # the current disk's PARTUUIDs. This covers both "wrong disk" (USB
+    # swap) and "no device path at all" — entries where the path was
+    # silently stripped or never set, leaving a VenHw-only stub that
+    # firmware can't actually boot.
     for REEFY_LABEL in reefy-a reefy-b; do
-        REEFY_ENTRY=$(efibootmgr -v 2>/dev/null | grep "^Boot[0-9A-F]*\* ${REEFY_LABEL}[[:space:]]" || true)
+        REEFY_ENTRY=$(efibootmgr -v 2>/dev/null \
+            | grep -E "^Boot[0-9A-Fa-f]+\*? ${REEFY_LABEL}[[:space:]]" || true)
         if [ -n "$REEFY_ENTRY" ]; then
-            REEFY_NUM=$(echo "$REEFY_ENTRY" | sed 's/Boot\([0-9A-F]*\)\*.*/\1/')
+            REEFY_NUM=$(echo "$REEFY_ENTRY" | sed -E 's/^Boot([0-9A-Fa-f]+)\*?.*/\1/')
             if ! echo "$REEFY_ENTRY" | grep -qi "${GUID_A}\|${GUID_B}" 2>/dev/null; then
                 efibootmgr -b "$REEFY_NUM" -B 2>/dev/null || true
                 echo "[reefy-efi] Removed stale entry: Boot${REEFY_NUM} (${REEFY_LABEL})"
