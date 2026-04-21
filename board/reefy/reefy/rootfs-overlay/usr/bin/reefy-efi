@@ -95,20 +95,28 @@ fix_entries() {
     done
 
     # Remove stale reefy-a/reefy-b entries whose device path doesn't match
-    # the current disk's PARTUUIDs. This covers both "wrong disk" (USB
-    # swap) and "no device path at all" — entries where the path was
-    # silently stripped or never set, leaving a VenHw-only stub that
-    # firmware can't actually boot.
+    # the expected PARTUUID for that label. Detects three pathologies:
+    #   - Wrong disk (USB swap): device path points at some other PARTUUID
+    #   - Label/partition mismatch: entry labeled reefy-a but pointing at
+    #     reefy-b's partition (or vice versa). Usually leftover from a
+    #     failed/interrupted fix_entries run.
+    #   - No device path at all: VenHw-only stub that firmware can't boot.
+    # Iterates over ALL entries with the label so duplicates get cleaned up.
     for REEFY_LABEL in reefy-a reefy-b; do
-        REEFY_ENTRY=$(efibootmgr -v 2>/dev/null \
-            | grep -E "^Boot[0-9A-Fa-f]+\*? ${REEFY_LABEL}[[:space:]]" || true)
-        if [ -n "$REEFY_ENTRY" ]; then
-            REEFY_NUM=$(echo "$REEFY_ENTRY" | sed -E 's/^Boot([0-9A-Fa-f]+)\*?.*/\1/')
-            if ! echo "$REEFY_ENTRY" | grep -qi "${GUID_A}\|${GUID_B}" 2>/dev/null; then
-                efibootmgr -b "$REEFY_NUM" -B 2>/dev/null || true
-                echo "[reefy-efi] Removed stale entry: Boot${REEFY_NUM} (${REEFY_LABEL})"
-            fi
+        if [ "$REEFY_LABEL" = "reefy-a" ]; then
+            EXPECTED_GUID="$GUID_A"
+        else
+            EXPECTED_GUID="$GUID_B"
         fi
+        efibootmgr -v 2>/dev/null \
+            | grep -E "^Boot[0-9A-Fa-f]+\*? ${REEFY_LABEL}[[:space:]]" \
+            | while IFS= read -r REEFY_ENTRY; do
+                REEFY_NUM=$(echo "$REEFY_ENTRY" | sed -E 's/^Boot([0-9A-Fa-f]+)\*?.*/\1/')
+                if ! echo "$REEFY_ENTRY" | grep -qi "${EXPECTED_GUID}" 2>/dev/null; then
+                    efibootmgr -b "$REEFY_NUM" -B 2>/dev/null || true
+                    echo "[reefy-efi] Removed stale entry: Boot${REEFY_NUM} (${REEFY_LABEL})"
+                fi
+            done
     done
 
     # Create missing entries
