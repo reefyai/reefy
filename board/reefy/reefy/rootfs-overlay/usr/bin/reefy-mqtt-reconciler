@@ -2929,6 +2929,13 @@ Environment=MQTT_PORT={self.port}
         the internal sockpair breaks and the reconnect loop hangs silently.
         This watchdog detects the stuck state and forces a clean exit so the
         outer reconnect loop in run() can recreate the client from scratch.
+
+        Spawned ONCE at startup. Runs for the process's lifetime. Must not
+        `break` on a normal reconnect — that was causing a thread leak (one
+        leaked daemon per outer-loop iteration, accumulating thousands over
+        days because the break only fired under sustained 120s+ outages).
+        `self.client` is read dynamically so client recreation in the outer
+        loop is transparent to this watchdog.
         """
         def _watchdog():
             while True:
@@ -2942,7 +2949,9 @@ Environment=MQTT_PORT={self.port}
                             self.client.disconnect()
                         except Exception:
                             pass
-                        break  # exit watchdog — will be restarted with new client
+                        # Clear the ts so we don't force-exit twice before
+                        # on_disconnect fires again in the new client cycle.
+                        self._last_disconnect_ts = 0
         threading.Thread(target=_watchdog, daemon=True).start()
 
     def _start_network_monitor(self):
@@ -3003,12 +3012,16 @@ Environment=MQTT_PORT={self.port}
         # Start metrics collector (publishes CPU/MEM/DISK/GPU every 5min)
         self._start_metrics_collector()
 
+        # Connection watchdog — single lifetime thread. Previously spawned
+        # inside the reconnect loop below, which leaked one daemon per
+        # iteration (thousands over days).
+        self._start_connection_watchdog()
+
         # Reconnect loop: if loop_forever() exits (paho bug #894: broken sockpair
         # after network disruption), recreate the client and reconnect.
         while True:
             log('mqtt', f'Connecting to {self.broker}:{self.port} (transport={self.transport})')
             self._last_disconnect_ts = 0
-            self._start_connection_watchdog()
             try:
                 self.client.connect(self.broker, self.port, keepalive=30)
                 self.client.loop_forever(retry_first_connection=True)
