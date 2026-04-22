@@ -220,6 +220,10 @@ cmd_update() {
     INACTIVE_MNT=$(mktemp -d)
     mount "${INACTIVE_DEV}" "${INACTIVE_MNT}"
     cp -a "${REEFY_MNT}/mqtt" "${INACTIVE_MNT}/" 2>/dev/null || true
+    # /reefy/ is the namespace for per-device state that must survive
+    # A/B firmware updates. New things to preserve = drop them under
+    # /reefy/ and they carry over automatically — no edit here needed.
+    cp -a "${REEFY_MNT}/reefy" "${INACTIVE_MNT}/" 2>/dev/null || true
     mkdir -p "${INACTIVE_MNT}/EFI/Boot"
     echo "Copying EFI file..."
     cp "$EFI_FILE" "${INACTIVE_MNT}/EFI/Boot/bootx64.efi"

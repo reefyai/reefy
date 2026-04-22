@@ -54,20 +54,13 @@ setup_device_credentials() {
 
     echo "[reefy] Device credentials applied"
 
-    # Dev-mode: install SSH authorized_keys for the reefy user from a
-    # well-known ESP path. Allows automation to drop a per-VM ephemeral
-    # public key onto the ESP before boot (FAT32 → writable from host
-    # via mtools) and SSH in via key auth without a password. Strictly
-    # gated on `reefy.dev_shell=1` — production images never honor this
-    # path even if the file is somehow present on the ESP.
     if grep -q 'reefy.dev_shell=1' /proc/cmdline 2>/dev/null \
-       && [ -f /mnt/reefy/dev/authorized_keys ]; then
+       && [ -f /mnt/reefy/reefy/dev/authorized_keys ]; then
         mkdir -p /home/reefy/.ssh
-        cp /mnt/reefy/dev/authorized_keys /home/reefy/.ssh/authorized_keys
+        cp /mnt/reefy/reefy/dev/authorized_keys /home/reefy/.ssh/authorized_keys
         chown -R reefy:reefy /home/reefy/.ssh
         chmod 700 /home/reefy/.ssh
         chmod 600 /home/reefy/.ssh/authorized_keys
-        echo "[reefy] DEV: installed authorized_keys for reefy user"
     fi
 }
 
