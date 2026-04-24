@@ -2895,13 +2895,25 @@ Environment=MQTT_PORT={self.port}
 
     def _run_in_background(self, target, args=(), skip_msg="apply already running"):
         """Run target in a background thread with _apply_lock.
-        Used by offline apply, on-connect apply, and MQTT command apply."""
+        Used by offline apply, on-connect apply, and MQTT command apply.
+
+        Drains `_pending_state` before releasing the lock so an
+        apply_state command that arrived while `target` held the lock
+        still runs. Without this the first adoption race strands the
+        queued payload (on_connect wins the lock, server's apply_state
+        queues, on_connect finishes and nobody drains -> stage stuck
+        on 'applying')."""
         def _wrapper():
             if not self._apply_lock.acquire(blocking=False):
                 log('mqtt', f'{skip_msg}')
                 return
             try:
                 target(*args)
+                while self._pending_state is not None:
+                    pending = self._pending_state
+                    self._pending_state = None
+                    log('mqtt', 'Applying queued pending state')
+                    self._apply_state(pending)
             except Exception as e:
                 log('mqtt', f'ERROR in background task: {e}')
                 traceback.print_exc()
