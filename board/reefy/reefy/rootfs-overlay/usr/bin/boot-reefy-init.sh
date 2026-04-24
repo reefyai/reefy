@@ -40,10 +40,13 @@ setup_device_credentials() {
     # Users to configure — keep in sync with DEVICE_USERS in reefy-mqtt-reconciler
     DEVICE_USERS="root reefy"
 
-    # Create non-root users if not exists (every boot — rootfs is in RAM)
+    # Create non-root users if not exists (every boot — rootfs is in RAM).
+    # BusyBox adduser leaves /home/<user> as root:root on some builds, so
+    # chown after creation to guarantee the user can write to their own home.
     for user in ${DEVICE_USERS}; do
         [ "${user}" = "root" ] && continue
         id "${user}" >/dev/null 2>&1 || adduser -D -s /bin/sh "${user}" 2>/dev/null || true
+        [ -d "/home/${user}" ] && chown "${user}:${user}" "/home/${user}"
     done
 
     # Set passwords using mkpasswd hash + sed (BusyBox passwd doesn't accept stdin)

@@ -31,9 +31,12 @@ ExecStart=/usr/bin/reefy-mqtt-reconciler
 Restart=always
 RestartSec=10
 
-# Resource limits
-MemoryMax=1G
-CPUQuota=10%
+# Resource limits. Soft knobs only: CPUWeight yields to user apps
+# under contention, MemoryHigh throttles page reclaim above 1G. Hard
+# caps (CPUQuota / MemoryMax) would kill or stall spawned children
+# like `borg list`/`borg extract` mid-restore on large archives.
+MemoryHigh=1G
+CPUWeight=20
 
 # Logging
 StandardOutput=journal
