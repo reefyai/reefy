@@ -361,6 +361,19 @@ class MQTTReconciler:
                     hw[name] = result.stdout
             except Exception:
                 pass
+        # Thin-pool fill percentage. Backend renders an alarm badge
+        # at >=80% so the user can free space before backups start
+        # failing. None when this device has no thin pool (legacy
+        # storage); backend treats absence as "not applicable".
+        try:
+            r = subprocess.run(
+                ['lvs', '--noheadings', '--nosuffix', '-o', 'data_percent',
+                 f'{self.STORAGE_VG}/{self.STORAGE_POOL}'],
+                capture_output=True, text=True, timeout=5)
+            if r.returncode == 0 and r.stdout.strip():
+                hw['pool_pct'] = int(float(r.stdout.strip()))
+        except Exception:
+            pass
         return hw
 
     def _read_device_password(self):
@@ -595,8 +608,10 @@ class MQTTReconciler:
         subprocess.run(['vgscan'], capture_output=True, timeout=10)
         if subprocess.run(['vgs', 'reefy'], capture_output=True, timeout=5).returncode == 0:
             subprocess.run(['vgchange', '-ay', 'reefy'], capture_output=True, timeout=10)
-            lv_path = '/dev/reefy/data'
-            if os.path.exists(lv_path):
+            # Prefer the new thin LV (reefy_default) over the legacy
+            # flat `data` LV from pre-thin-pool installs.
+            lv_path = self._active_reefy_lv_path()
+            if lv_path:
                 if _log:
                     _log('Mounting existing internal storage...')
                 subprocess.run(['cp', '-a', '/mnt/reefy-data/state', '/tmp/reefy-state'],
@@ -627,7 +642,10 @@ class MQTTReconciler:
             if mount_type and mount_type != 'tmpfs':
                 return
 
-        # Fall back to USB p4
+        # Fall back to USB p4 — wrap in LUKS + LVM (same stack as
+        # internal drives; unifies single-disk and multi-disk paths
+        # so there's one code path to maintain and USB users get
+        # snapshot-backed backups too).
         if _log:
             _log('Creating USB data partition...')
         data_part = f'{disk}4'
@@ -642,7 +660,7 @@ class MQTTReconciler:
             print("[mqtt] ERROR: USB data partition not created")
             return
 
-        # Format LUKS + f2fs (120s timeout — slow USB drives)
+        # Fresh LUKS on the USB data partition (120s for slow drives).
         subprocess.run(
             ['cryptsetup', 'luksFormat', data_part,
              '--key-file', key_part, '--keyfile-size', '44', '--batch-mode'],
@@ -651,26 +669,31 @@ class MQTTReconciler:
             ['cryptsetup', 'luksOpen', data_part, 'reefy-data',
              '--key-file', key_part, '--keyfile-size', '44'],
             capture_output=True, timeout=15)
-        subprocess.run(['modprobe', 'f2fs'], capture_output=True, timeout=5)
-        subprocess.run(
-            ['mkfs.f2fs', '-l', 'reefy-data', '-q', '/dev/mapper/reefy-data'],
-            capture_output=True, timeout=120)
+
+        # Build VG + thin pool + reefy_default LV on top of the LUKS-
+        # opened mapper. Helper handles the fresh-install path here.
+        self._ensure_lvm_stack(['/dev/mapper/reefy-data'], _log)
+        lv_path = self._active_reefy_lv_path()
+        if not lv_path:
+            print("[mqtt] ERROR: No reefy LV after USB LVM setup")
+            return
 
         # Migrate state from tmpfs, mount persistent
         subprocess.run(['cp', '-a', '/mnt/reefy-data/state', '/tmp/reefy-state'],
                        capture_output=True, timeout=10)
         subprocess.run(['umount', '/mnt/reefy-data'], capture_output=True, timeout=5)
         subprocess.run(
-            ['mount', '-o', 'noatime', '/dev/mapper/reefy-data', '/mnt/reefy-data'],
+            ['mount', '-o', 'noatime', lv_path, '/mnt/reefy-data'],
             capture_output=True, timeout=10)
         subprocess.run(['cp', '-a', '/tmp/reefy-state', '/mnt/reefy-data/state'],
                        capture_output=True, timeout=10)
         subprocess.run(['rm', '-rf', '/tmp/reefy-state'], capture_output=True, timeout=5)
         os.makedirs('/mnt/reefy-data/state/lan', exist_ok=True)
+        os.makedirs('/mnt/reefy-data/apps', exist_ok=True)
 
         if _log:
-            _log('Persistent storage ready (USB)')
-        print("[mqtt] Persistent storage created on USB")
+            _log('Persistent storage ready (USB, LVM thin)')
+        print("[mqtt] Persistent storage created on USB (LVM thin)")
 
     def _setup_internal_persistent(self, storage_config, key_part, _log=None):
         """Set up internal drives as /mnt/reefy-data during adoption."""
@@ -714,31 +737,14 @@ class MQTTReconciler:
         if not luks_pvs:
             return
 
-        # Create LVM
-        for pv in luks_pvs:
-            subprocess.run(['pvcreate', '-ff', '-y', pv],
-                           capture_output=True, text=True, timeout=15)
-
-        result = subprocess.run(
-            ['vgcreate', self.STORAGE_VG] + luks_pvs,
-            capture_output=True, text=True, timeout=15)
-        if result.returncode != 0:
+        # Build VG + thin pool + reefy_default LV (helper handles
+        # existing-VG extend / legacy-LV mount paths too).
+        self._ensure_lvm_stack(luks_pvs, _log)
+        lv_path = self._active_reefy_lv_path()
+        if not lv_path:
             if _log:
-                _log(f'VG create failed')
+                _log('No reefy_default or legacy LV after LVM setup')
             return
-
-        result = subprocess.run(
-            ['lvcreate', '-l', '100%FREE', '-n', self.STORAGE_LV, self.STORAGE_VG],
-            capture_output=True, text=True, timeout=15)
-        if result.returncode != 0:
-            return
-
-        lv_path = f'/dev/{self.STORAGE_VG}/{self.STORAGE_LV}'
-        if _log:
-            _log(f'Creating ext4 filesystem...')
-        subprocess.run(
-            ['mkfs.ext4', '-L', 'reefy-data', lv_path],
-            capture_output=True, text=True, timeout=120)
 
         # Migrate state from tmpfs, mount as /mnt/reefy-data
         subprocess.run(['cp', '-a', '/mnt/reefy-data/state', '/tmp/reefy-state'],
@@ -1625,13 +1631,22 @@ class MQTTReconciler:
         old_network = old_state.get('network') if old_state else None
         self._apply_network(network, old_network)
 
+        # Build the set of paths that should be backed by per-volume
+        # thin LVs (one LV per backup-true volume — see PLAN-backup.md
+        # §"Storage Layout"). Pulled from the backup section so dirs
+        # creation knows whether to mount an LV or just mkdir.
+        backup = state.get('backup')
+        backup_paths = set()
+        if backup:
+            for inst in backup.get('instances', []):
+                backup_paths.update(inst.get('paths', []))
+
         # Prepare app data directories (host path mounts with correct ownership)
         app_volumes = state.get('app_volumes', [])
         if app_volumes:
-            self._prepare_app_dirs(app_volumes)
+            self._prepare_app_dirs(app_volumes, backup_paths=backup_paths)
 
         # Apply backup config (SSH keys, config, systemd timer)
-        backup = state.get('backup')
         if backup:
             self._apply_backup_config(backup)
 
@@ -1775,8 +1790,188 @@ class MQTTReconciler:
         self._publish_status('online', 'Network config updated')
 
     STORAGE_VG = 'reefy'
-    STORAGE_LV = 'data'
+    STORAGE_LV = 'reefy_default'
+    STORAGE_POOL = 'reefy_pool'
+    # Legacy LV name used by pre-thin-pool installs — keep mounting it
+    # for backward compat; those devices don't get the snapshot-backed
+    # backup path until they factory-reset into the new layout.
+    LEGACY_STORAGE_LV = 'data'
     REEFY_DATA_MNT = '/mnt/reefy-data'
+
+    def _ensure_lvm_stack(self, luks_pvs, _log=None):
+        """Bring up the LVM stack on top of the given LUKS-mapped PVs.
+
+        Guarantees after return:
+          - VG `reefy` exists (creates from scratch if missing, extends
+            with any new PVs if present).
+          - Thin pool `reefy_pool` exists, occupying essentially all
+            VG free space (100%FREE).
+          - Thin LV `reefy_default` exists (ext4, mountable at
+            /mnt/reefy-data).
+
+        Legacy compat: if the VG already has the old flat `data` LV
+        (from a pre-thin-pool install) and no `reefy_default`, does
+        nothing new — caller is expected to mount `reefy/data`. Those
+        devices have backups disabled until they factory-reset into
+        the new layout; see PLAN-backup.md §"Migration".
+
+        Returns:
+          'new'     — created the pool + default LV from scratch (fresh install)
+          'existing' — pool + default LV already in place (restore/upgrade)
+          'legacy'   — only the legacy flat LV is present (caller mounts it)
+        """
+        for pv in luks_pvs:
+            subprocess.run(['pvcreate', '-ff', '-y', pv],
+                           capture_output=True, text=True, timeout=15)
+
+        vg_exists = subprocess.run(
+            ['vgs', self.STORAGE_VG], capture_output=True
+        ).returncode == 0
+        if not vg_exists:
+            result = subprocess.run(
+                ['vgcreate', self.STORAGE_VG] + luks_pvs,
+                capture_output=True, text=True, timeout=15)
+            if result.returncode != 0:
+                raise RuntimeError(f'VG create failed: {result.stderr}')
+            if _log:
+                _log(f'Created VG {self.STORAGE_VG}')
+        else:
+            # Extend VG with any not-yet-member PVs.
+            for pv in luks_pvs:
+                subprocess.run(['vgextend', self.STORAGE_VG, pv],
+                               capture_output=True, text=True, timeout=15)
+            subprocess.run(['vgchange', '-ay', self.STORAGE_VG],
+                           capture_output=True, timeout=15)
+
+        default_lv_path = f'/dev/{self.STORAGE_VG}/{self.STORAGE_LV}'
+        legacy_lv_path = f'/dev/{self.STORAGE_VG}/{self.LEGACY_STORAGE_LV}'
+
+        if os.path.exists(default_lv_path):
+            if _log:
+                _log(f'Using existing {self.STORAGE_LV} thin LV')
+            return 'existing'
+
+        if os.path.exists(legacy_lv_path):
+            if _log:
+                _log(f'Using legacy {self.LEGACY_STORAGE_LV} LV (no thin pool)')
+            return 'legacy'
+
+        # Fresh VG or upgrade from empty VG — create thin pool + default LV.
+        pool_path = f'{self.STORAGE_VG}/{self.STORAGE_POOL}'
+        pool_exists = subprocess.run(
+            ['lvs', pool_path], capture_output=True).returncode == 0
+        if not pool_exists:
+            result = subprocess.run(
+                ['lvcreate', '--type', 'thin-pool', '-l', '100%FREE',
+                 '-n', self.STORAGE_POOL, self.STORAGE_VG],
+                capture_output=True, text=True, timeout=30)
+            if result.returncode != 0:
+                raise RuntimeError(f'thin-pool create failed: {result.stderr}')
+            if _log:
+                _log(f'Created thin pool {self.STORAGE_POOL}')
+
+        # virtualsize = pool size; thin overcommit semantics mean the LV
+        # only uses physical blocks it actually writes to.
+        pool_size = subprocess.run(
+            ['lvs', '--noheadings', '--nosuffix', '--units', 'b',
+             '-o', 'lv_size', pool_path],
+            capture_output=True, text=True, timeout=10).stdout.strip()
+        result = subprocess.run(
+            ['lvcreate', '--thin', '--virtualsize', f'{pool_size}B',
+             '-n', self.STORAGE_LV, pool_path],
+            capture_output=True, text=True, timeout=15)
+        if result.returncode != 0:
+            raise RuntimeError(f'default LV create failed: {result.stderr}')
+        result = subprocess.run(
+            ['mkfs.ext4', '-L', 'reefy-data', default_lv_path],
+            capture_output=True, text=True, timeout=120)
+        if result.returncode != 0:
+            raise RuntimeError(f'mkfs.ext4 failed: {result.stderr}')
+        if _log:
+            _log(f'Created thin LV {self.STORAGE_LV} (ext4)')
+        return 'new'
+
+    def _active_reefy_lv_path(self):
+        """Return the path to mount as /mnt/reefy-data: reefy_default
+        if present, else legacy `data`, else None."""
+        for lv in (self.STORAGE_LV, self.LEGACY_STORAGE_LV):
+            p = f'/dev/{self.STORAGE_VG}/{lv}'
+            if os.path.exists(p):
+                return p
+        return None
+
+    def _has_thin_pool(self):
+        """True if the LVM thin pool is available (i.e. this device is
+        on the new storage layout, not legacy flat-LV). Backup snapshot
+        path requires this; legacy devices skip backups gracefully."""
+        return subprocess.run(
+            ['lvs', f'{self.STORAGE_VG}/{self.STORAGE_POOL}'],
+            capture_output=True
+        ).returncode == 0
+
+    def _volume_lv_name(self, path):
+        """Stable per-volume thin LV name. Hash of the absolute path
+        keeps it short, dns-safe-ish, and unique per device. Underscore
+        separator avoids dm-mapper's `--` escape in /dev/mapper paths."""
+        import hashlib
+        h = hashlib.sha1(path.encode()).hexdigest()[:12]
+        return f'reefy_backup_{h}'
+
+    def _ensure_volume_lv(self, path):
+        """Provision + mount a per-volume thin LV at `path` if not
+        already in place. No-op if:
+          - the device has no thin pool (legacy storage), OR
+          - the path is already a mount point (idempotent), OR
+          - the path already exists with files on the default LV
+            (legacy install — leave as plain dir to avoid hiding data).
+        """
+        if not self._has_thin_pool():
+            return  # legacy storage; backups are disabled anyway
+
+        # Already a mount point? Idempotent — nothing to do.
+        r = subprocess.run(
+            ['findmnt', '-n', '-o', 'SOURCE', path],
+            capture_output=True, text=True, timeout=5)
+        if r.returncode == 0 and r.stdout.strip():
+            return
+
+        # Existing dir with files on the default LV → legacy install,
+        # don't mount over the data. (Migration path: factory-reset.)
+        if os.path.isdir(path) and os.listdir(path):
+            log('mqtt', f'Legacy data at {path}, skipping per-volume LV mount')
+            return
+
+        lv_name = self._volume_lv_name(path)
+        lv_path = f'/dev/{self.STORAGE_VG}/{lv_name}'
+
+        if not os.path.exists(lv_path):
+            pool_size = subprocess.run(
+                ['lvs', '--noheadings', '--nosuffix', '--units', 'b',
+                 '-o', 'lv_size', f'{self.STORAGE_VG}/{self.STORAGE_POOL}'],
+                capture_output=True, text=True, timeout=10).stdout.strip()
+            r = subprocess.run(
+                ['lvcreate', '--thin', '--virtualsize', f'{pool_size}B',
+                 '-n', lv_name, f'{self.STORAGE_VG}/{self.STORAGE_POOL}'],
+                capture_output=True, text=True, timeout=15)
+            if r.returncode != 0:
+                log('mqtt', f'per-volume LV create failed for {path}: {r.stderr}')
+                return
+            r = subprocess.run(
+                ['mkfs.ext4', '-q', '-L', lv_name, lv_path],
+                capture_output=True, text=True, timeout=60)
+            if r.returncode != 0:
+                log('mqtt', f'mkfs.ext4 failed on {lv_path}: {r.stderr}')
+                return
+            log('mqtt', f'Created per-volume LV {lv_name} for {path}')
+
+        os.makedirs(path, mode=0o755, exist_ok=True)
+        r = subprocess.run(
+            ['mount', '-o', 'noatime', lv_path, path],
+            capture_output=True, text=True, timeout=10)
+        if r.returncode != 0:
+            log('mqtt', f'mount {lv_path} -> {path} failed: {r.stderr}')
+            return
+        log('mqtt', f'Mounted {lv_name} at {path}')
 
     def _apply_storage(self, storage):
         """Set up LUKS-encrypted internal storage with LVM, mounted at /mnt/reefy-data.
@@ -1789,16 +1984,21 @@ class MQTTReconciler:
         if not devices:
             return
 
-        lv_path = f'/dev/{self.STORAGE_VG}/{self.STORAGE_LV}'
-        lv_dm = f'/dev/mapper/{self.STORAGE_VG}-{self.STORAGE_LV}'
+        # Accept either the new thin LV or the legacy flat LV. VG and
+        # LV names use underscore separators, so /dev/mapper/<vg>-<lv>
+        # is a simple single-dash join (no dm-mapper escape hack).
+        acceptable_sources = set()
+        for lv in (self.STORAGE_LV, self.LEGACY_STORAGE_LV):
+            acceptable_sources.add(f'/dev/{self.STORAGE_VG}/{lv}')
+            acceptable_sources.add(f'/dev/mapper/{self.STORAGE_VG}-{lv}')
 
-        # If LV is already mounted at /mnt/reefy-data (by boot-reefy-storage.sh),
-        # only check for new disks to extend
+        # If reefy-data is already mounted from one of our LVs, only
+        # check whether new disks showed up that we should extend into.
         try:
             reefy_data_src = subprocess.run(
                 ['findmnt', '-n', '-o', 'SOURCE', self.REEFY_DATA_MNT],
                 capture_output=True, text=True, timeout=5).stdout.strip()
-            if reefy_data_src in (lv_path, lv_dm):
+            if reefy_data_src in acceptable_sources:
                 new_disks = self._find_new_storage_disks(devices)
                 if not new_disks:
                     log('mqtt', f'Internal storage already at {self.REEFY_DATA_MNT}')
@@ -1821,116 +2021,53 @@ class MQTTReconciler:
             ['vgs', self.STORAGE_VG], capture_output=True
         ).returncode == 0
 
-        if vg_exists:
-            log('mqtt', f'Opening existing VG {self.STORAGE_VG}')
-            for dev_name in devices:
-                target = f'/dev/{dev_name}'
-                luks_name = f'reefy-{dev_name}'
-                if os.path.exists(f'/dev/mapper/{luks_name}'):
-                    continue
-                if not os.path.exists(target):
-                    continue
-                subprocess.run(
-                    ['cryptsetup', 'luksOpen', target, luks_name,
-                     '--key-file', key_part, '--keyfile-size', str(luks_key_size)],
-                    capture_output=True, text=True, timeout=30
-                )
-            subprocess.run(['vgchange', '-ay', self.STORAGE_VG],
-                           capture_output=True, timeout=15)
+        # Open existing LUKS on each storage device, or format if fresh.
+        luks_pvs = []
+        for dev_name in devices:
+            target = f'/dev/{dev_name}'
+            if not os.path.exists(target):
+                if vg_exists:
+                    continue  # offline disk on a restore boot — skip
+                raise RuntimeError(f'Storage device {target} not found')
+            luks_name = f'reefy-{dev_name}'
+            mapper_path = f'/dev/mapper/{luks_name}'
+            if os.path.exists(mapper_path):
+                luks_pvs.append(mapper_path)
+                continue
 
-            need_format = False
-            if not os.path.exists(lv_path):
-                log('reconciler', 'Creating missing LV')
-                need_format = True
-            else:
-                vg_free = subprocess.run(
-                    ['vgs', '--noheadings', '--nosuffix', '--units', 'm',
-                     '-o', 'vg_free', self.STORAGE_VG],
-                    capture_output=True, text=True, timeout=10
-                )
-                free_mb = float(vg_free.stdout.strip() or '0')
-                if free_mb > 100:
-                    log('mqtt', f'LV undersized ({int(free_mb)}MB free in VG), recreating')
-                    subprocess.run(['umount', self.REEFY_DATA_MNT],
-                                   capture_output=True, timeout=10)
-                    subprocess.run(['lvremove', '-f', lv_path],
-                                   capture_output=True, text=True, timeout=15)
-                    need_format = True
-
-            if need_format:
-                result = subprocess.run(
-                    ['lvcreate', '-l', '100%FREE', '-n', self.STORAGE_LV,
-                     self.STORAGE_VG],
-                    capture_output=True, text=True, timeout=15
-                )
-                if result.returncode != 0:
-                    raise RuntimeError(f'LV create failed: {result.stderr}')
-                log('reconciler', f'Creating ext4 on {lv_path}')
-                result = subprocess.run(
-                    ['mkfs.ext4', '-L', 'reefy-data', lv_path],
-                    capture_output=True, text=True, timeout=120
-                )
-                if result.returncode != 0:
-                    raise RuntimeError(f'mkfs.ext4 failed: {result.stderr}')
-        else:
-            # Fresh setup: LUKS format each device, create LVM
-            luks_pvs = []
-            for dev_name in devices:
-                target = f'/dev/{dev_name}'
-                if not os.path.exists(target):
-                    raise RuntimeError(f'Storage device {target} not found')
-
-                luks_name = f'reefy-{dev_name}'
+            is_luks = subprocess.run(
+                ['cryptsetup', 'isLuks', target],
+                capture_output=True, timeout=5).returncode == 0
+            if not is_luks:
+                # Fresh disk — wipe + format.
                 self._force_wipe_device(target)
                 log('mqtt', f'LUKS formatting {target}')
-                result = subprocess.run(
+                r = subprocess.run(
                     ['cryptsetup', 'luksFormat', target,
-                     '--key-file', key_part, '--keyfile-size', str(luks_key_size),
-                     '--batch-mode'],
-                    capture_output=True, text=True, timeout=600
-                )
-                if result.returncode != 0:
-                    raise RuntimeError(f'LUKS format failed on {target}: {result.stderr}')
+                     '--key-file', key_part, '--keyfile-size',
+                     str(luks_key_size), '--batch-mode'],
+                    capture_output=True, text=True, timeout=600)
+                if r.returncode != 0:
+                    raise RuntimeError(
+                        f'LUKS format failed on {target}: {r.stderr}')
+            r = subprocess.run(
+                ['cryptsetup', 'luksOpen', target, luks_name,
+                 '--key-file', key_part, '--keyfile-size', str(luks_key_size)],
+                capture_output=True, text=True, timeout=30)
+            if r.returncode != 0:
+                raise RuntimeError(
+                    f'LUKS open failed on {target}: {r.stderr}')
+            luks_pvs.append(mapper_path)
 
-                result = subprocess.run(
-                    ['cryptsetup', 'luksOpen', target, luks_name,
-                     '--key-file', key_part, '--keyfile-size', str(luks_key_size)],
-                    capture_output=True, text=True, timeout=30
-                )
-                if result.returncode != 0:
-                    raise RuntimeError(f'LUKS open failed on {target}: {result.stderr}')
+        if not luks_pvs:
+            raise RuntimeError('No storage devices could be prepared')
 
-                luks_pvs.append(f'/dev/mapper/{luks_name}')
-
-            if not luks_pvs:
-                raise RuntimeError('No storage devices could be prepared')
-
-            for pv in luks_pvs:
-                subprocess.run(['pvcreate', '-ff', '-y', pv],
-                               capture_output=True, text=True, timeout=15)
-
-            result = subprocess.run(
-                ['vgcreate', self.STORAGE_VG] + luks_pvs,
-                capture_output=True, text=True, timeout=15
-            )
-            if result.returncode != 0:
-                raise RuntimeError(f'VG create failed: {result.stderr}')
-
-            result = subprocess.run(
-                ['lvcreate', '-l', '100%FREE', '-n', self.STORAGE_LV, self.STORAGE_VG],
-                capture_output=True, text=True, timeout=15
-            )
-            if result.returncode != 0:
-                raise RuntimeError(f'LV create failed: {result.stderr}')
-
-            log('reconciler', f'Creating ext4 on {lv_path}')
-            result = subprocess.run(
-                ['mkfs.ext4', '-L', 'reefy-data', lv_path],
-                capture_output=True, text=True, timeout=120
-            )
-            if result.returncode != 0:
-                raise RuntimeError(f'mkfs.ext4 failed: {result.stderr}')
-                return
+        # _ensure_lvm_stack handles fresh-VG-create, existing-VG-extend,
+        # and the legacy-LV mount path uniformly.
+        self._ensure_lvm_stack(luks_pvs, _log=lambda m: log('reconciler', m))
+        lv_path = self._active_reefy_lv_path()
+        if not lv_path:
+            raise RuntimeError('No reefy LV after LVM setup')
 
         # Mount at /mnt/reefy-data (migrate state from overlay if needed)
         subprocess.run(['cp', '-a', f'{self.REEFY_DATA_MNT}/state', '/tmp/reefy-state'],
@@ -2207,19 +2344,32 @@ class MQTTReconciler:
                 return key_part
         return None
 
-    def _prepare_app_dirs(self, app_volumes):
+    def _prepare_app_dirs(self, app_volumes, backup_paths=None):
         """Create host-mount directories for app volumes with correct ownership,
         then write seed files that don't already exist.
 
         app_volumes is a list of:
         {"path": "/mnt/reefy-data/apps/oc/data", "uid": 1000,
          "seed_files": {"openclaw.json": {...}}}
+
+        backup_paths (set): paths that should be backed by their own
+        thin LV (one LV per backup-true volume) so reefy-backup can
+        snapshot them. If a path is in backup_paths and the thin pool
+        is available, this provisions and mounts a per-volume LV at
+        the path before the seed step. Falls back to plain dir if the
+        thin pool is absent (legacy storage layout) or if the path
+        already has data on the default LV (legacy install). See
+        PLAN-backup.md §"Storage Layout".
         """
+        backup_paths = backup_paths or set()
         for vol in app_volumes:
             path = vol.get('path', '')
             uid = vol.get('uid', 0)
             if not path:
                 continue
+            # Per-volume thin LV provisioning (only for backup paths).
+            if path in backup_paths:
+                self._ensure_volume_lv(path)
             if not os.path.exists(path):
                 os.makedirs(path, mode=0o755, exist_ok=True)
                 log('mqtt', f'Created app dir: {path} (uid={uid})')
@@ -2438,162 +2588,96 @@ Environment=MQTT_PORT={self.port}
             # Server provides the exact archive name — use it directly
             archive_name = restore_from
 
-            # Restore via borg mount (FUSE) + rsync (resumable).
-            # - borg mount: instant, streams files on demand from remote
-            # - rsync to .restore-{iuuid}: resumable, skips already-copied files
-            # - atomic rename to final app dir when complete
-            # If interrupted, .restore-* is preserved — next attempt resumes
-            import shutil
-            restore_tmp = f'/mnt/reefy-data/apps/.restore-{iuuid}'
+            # Restore via `borg extract` straight into the pre-mounted
+            # per-volume LVs (no FUSE, no staging tmp, no double-space).
+            # We previously used `borg mount` + rsync but the mount
+            # parent daemonizes and exits 0 even when the daemon dies,
+            # so failures were invisible. `borg extract` is synchronous
+            # - rc != 0 means a real failure with stderr captured.
+            #
+            # Layout: snapshot-based archives have the volume name at
+            # the top level (`config/...`); legacy docker-pause archives
+            # bury volumes under `mnt/<reefy|sbnb>-data/apps/<old_iuuid>/
+            # <vol>/`. Detect the layout from the first archived path
+            # and pass --strip-components 4 for the legacy case so files
+            # land at new_inst_dir/<vol>/... either way.
             new_inst_dir = f'/mnt/reefy-data/apps/{iuuid}'
-            borg_mnt = f'/tmp/borg-mount-{iuuid}'
-            os.makedirs(restore_tmp, exist_ok=True)
-            os.makedirs(borg_mnt, exist_ok=True)
+            os.makedirs(new_inst_dir, mode=0o755, exist_ok=True)
 
-            log('mqtt', f'Restoring archive {archive_name} via borg mount + rsync')
+            log('mqtt', f'Restoring archive {archive_name} via borg extract')
             try:
-                # Mount archive via FUSE (runs in background)
-                mount_proc = subprocess.Popen(
-                    ['borg', 'mount', f'{repo_path}::{archive_name}', borg_mnt],
-                    env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                list_proc = subprocess.run(
+                    ['borg', 'list', '--short',
+                     f'{repo_path}::{archive_name}'],
+                    env=env, capture_output=True, text=True, timeout=120
                 )
-                # Wait for mount to be ready. borg mount forks a daemon and
-                # the parent exits 0 — we check via /proc/mounts not the proc.
-                mounted = False
-                wait_start = time.time()
-                last_wait_log = wait_start
-                MOUNT_TIMEOUT = 600  # 10 min — large archives take a while
-                while time.time() - wait_start < MOUNT_TIMEOUT:
-                    # Check if mountpoint is actually mounted (FUSE daemon ready)
-                    try:
-                        with open('/proc/mounts') as f:
-                            for line in f:
-                                if borg_mnt in line and 'fuse' in line:
-                                    mounted = True
-                                    break
-                    except Exception:
-                        pass
-                    if mounted:
-                        break
-                    # If parent borg mount process died with non-zero exit, that's a real error
-                    rc = mount_proc.poll()
-                    if rc is not None and rc != 0:
-                        stderr = mount_proc.stderr.read().decode('utf-8', errors='replace')
-                        log('mqtt', f'borg mount failed (rc={rc}): {stderr}')
-                        break
-                    if time.time() - last_wait_log > 30:
-                        elapsed = int(time.time() - wait_start)
-                        log('mqtt', f'Waiting for borg mount ({elapsed}s elapsed)')
-                        last_wait_log = time.time()
-                    time.sleep(2)
-                if not mounted:
-                    log('mqtt', f'borg mount not ready after {MOUNT_TIMEOUT}s')
+                if list_proc.returncode != 0:
+                    log('mqtt',
+                        f'borg list failed (rc={list_proc.returncode}): '
+                        f'{(list_proc.stderr or "").strip()[:500]}')
                     failed.add(iuuid)
                     continue
+                first_path = next(
+                    (l.strip() for l in list_proc.stdout.splitlines()
+                     if l.strip()), '')
+                strip_n = 0
+                parts = first_path.split('/')
+                if len(parts) >= 5 and parts[0] == 'mnt' and \
+                        parts[1] in ('reefy-data', 'sbnb-data') and \
+                        parts[2] == 'apps':
+                    strip_n = 4
 
-                log('mqtt', f'Archive mounted, starting rsync')
+                cmd = ['borg', '--log-json', 'extract', '--progress']
+                if strip_n:
+                    cmd += ['--strip-components', str(strip_n)]
+                cmd.append(f'{repo_path}::{archive_name}')
+                EXTRACT_TIMEOUT = 6 * 3600  # 6h cap for huge archives
+                extract_proc = subprocess.Popen(
+                    cmd, env=env, cwd=new_inst_dir,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                )
 
-                # Find source dir inside mount (handles all archive formats)
-                vol_source_dir = None
-                for data_dir in ('reefy-data', 'sbnb-data'):
-                    apps_dir = os.path.join(borg_mnt, 'mnt', data_dir, 'apps')
-                    if os.path.isdir(apps_dir):
-                        sub_dirs = [d for d in os.listdir(apps_dir)
-                                    if os.path.isdir(os.path.join(apps_dir, d))]
-                        if sub_dirs:
-                            vol_source_dir = os.path.join(apps_dir, sub_dirs[0])
-                            break
-                if not vol_source_dir:
-                    top_dirs = [d for d in os.listdir(borg_mnt)
-                                if os.path.isdir(os.path.join(borg_mnt, d))]
-                    if top_dirs:
-                        vol_source_dir = borg_mnt
-                if not vol_source_dir:
-                    log('mqtt', f'Unexpected archive structure in mount')
-                    failed.add(iuuid)
-                    continue
-
-                # rsync each volume to .restore-* (resumable)
-                rsync_ok = True
-                for vol_name in os.listdir(vol_source_dir):
-                    src = os.path.join(vol_source_dir, vol_name)
-                    if not os.path.isdir(src):
+                # Stream borg's --log-json stderr through to our log.
+                # Pass everything except in-flight progress_percent
+                # frames, which can fire many times per second on big
+                # archives - throttle those to one every PROGRESS_EVERY_S.
+                # log_message lines (warnings, errors) and the final
+                # `finished: true` always pass through.
+                PROGRESS_EVERY_S = 5.0
+                last_progress_t = 0.0
+                deadline = time.time() + EXTRACT_TIMEOUT
+                for raw in iter(extract_proc.stderr.readline, b''):
+                    if time.time() > deadline:
+                        extract_proc.kill()
+                        break
+                    line = raw.decode('utf-8', errors='replace').rstrip()
+                    if not line:
                         continue
-                    dst = os.path.join(restore_tmp, vol_name)
-                    os.makedirs(dst, exist_ok=True)
+                    try:
+                        obj = json.loads(line)
+                    except ValueError:
+                        log('mqtt', f'borg: {line}')
+                        continue
+                    if obj.get('type') == 'progress_percent' \
+                            and not obj.get('finished'):
+                        now = time.time()
+                        if now - last_progress_t < PROGRESS_EVERY_S:
+                            continue
+                        last_progress_t = now
+                    log('mqtt', f'borg: {line}')
 
-                    log('mqtt', f'Syncing {vol_name} -> .restore-{iuuid}/')
-                    rsync_proc = subprocess.Popen(
-                        ['rsync', '-aH', '--partial', '--append-verify',
-                         '--info=progress2', '--no-inc-recursive',
-                         f'{src}/', f'{dst}/'],
-                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT
-                    )
-                    last_log = time.time()
-                    buf = b''
-                    import select as _sel
-                    while rsync_proc.poll() is None:
-                        ready, _, _ = _sel.select([rsync_proc.stdout], [], [], 5.0)
-                        if ready:
-                            chunk = os.read(rsync_proc.stdout.fileno(), 4096)
-                            if chunk:
-                                buf += chunk
-                        if time.time() - last_log > 15 and buf:
-                            lines = buf.replace(b'\n', b'\r').split(b'\r')
-                            for line in reversed(lines):
-                                text = line.decode('utf-8', errors='replace').strip()
-                                if text:
-                                    log('mqtt', f'Restore {iuuid}/{vol_name}: {text}')
-                                    break
-                            last_log = time.time()
-                            buf = b''
-                    rsync_proc.wait()
-                    if rsync_proc.returncode not in (0, 24):  # 24 = vanished files (ok)
-                        remaining = rsync_proc.stdout.read()
-                        err = (buf + (remaining or b'')).decode('utf-8', errors='replace')
-                        log('mqtt', f'rsync failed for {vol_name}: {err}')
-                        rsync_ok = False
-                        break
-                    log('mqtt', f'Synced volume {vol_name}')
-
-                if not rsync_ok:
+                extract_proc.wait()
+                if extract_proc.returncode != 0:
+                    log('mqtt',
+                        f'borg extract failed (rc={extract_proc.returncode})')
                     failed.add(iuuid)
-                    # .restore-* preserved for resume on next attempt
                     continue
-
-                # All volumes synced — atomic rename to final dir
-                for vol_name in os.listdir(restore_tmp):
-                    src = os.path.join(restore_tmp, vol_name)
-                    dst = os.path.join(new_inst_dir, vol_name)
-                    if os.path.isdir(src):
-                        if os.path.exists(dst):
-                            shutil.rmtree(dst)
-                        os.rename(src, dst)
-                        log('mqtt', f'Restored volume {vol_name} -> {iuuid}')
-
-                # Cleanup .restore-* only on success
-                shutil.rmtree(restore_tmp, ignore_errors=True)
+                log('mqtt', f'borg extract completed for {iuuid}')
 
             except Exception as e:
                 log('mqtt', f'Restore error: {e}')
                 failed.add(iuuid)
-                # .restore-* preserved for resume
                 continue
-            finally:
-                # Always unmount borg FUSE
-                try:
-                    subprocess.run(['borg', 'umount', borg_mnt],
-                                   env=env, capture_output=True, timeout=10)
-                except Exception:
-                    try:
-                        subprocess.run(['fusermount', '-u', borg_mnt],
-                                       capture_output=True, timeout=10)
-                    except Exception:
-                        pass
-                try:
-                    os.rmdir(borg_mnt)
-                except Exception:
-                    pass
 
             # Write .restored marker
             os.makedirs(marker_dir, exist_ok=True)

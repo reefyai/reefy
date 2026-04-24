@@ -115,13 +115,33 @@ setup_data_partition() {
             if cryptsetup luksOpen "${DATA_PART}" "${LUKS_NAME}" \
                 --key-file "${KEY_PART}" --keyfile-size "${LUKS_KEY_SIZE}" 2>/dev/null; then
                 FS_TYPE=$(blkid -o value -s TYPE "/dev/mapper/${LUKS_NAME}" 2>/dev/null)
-                case "${FS_TYPE}" in
-                    f2fs)  MOUNT_OPTS="noatime" ;;
-                    *)     MOUNT_OPTS="noatime,commit=60" ;;
-                esac
-                if mount -o "${MOUNT_OPTS}" "/dev/mapper/${LUKS_NAME}" "${REEFY_DATA_MNT}" 2>/dev/null; then
-                    echo "[reefy] Mounted USB data partition (${FS_TYPE}) at ${REEFY_DATA_MNT}"
-                    return 0
+                if [ "${FS_TYPE}" = "LVM2_member" ]; then
+                    # New layout: LUKS contains a VG with a thin pool and
+                    # an LV mounted at /mnt/reefy-data. Activate the VG
+                    # and mount the right LV (new `reefy_default`, or
+                    # legacy `data` if this device pre-dates the rework).
+                    vgscan >/dev/null 2>&1
+                    vgchange -ay "${STORAGE_VG}" >/dev/null 2>&1
+                    for lv in "${STORAGE_LV}" "${LEGACY_STORAGE_LV}"; do
+                        lv_path="/dev/${STORAGE_VG}/${lv}"
+                        [ -e "${lv_path}" ] || continue
+                        if mount -o noatime,commit=60 "${lv_path}" \
+                                "${REEFY_DATA_MNT}" 2>/dev/null; then
+                            echo "[reefy] Mounted LVM LV ${lv} at ${REEFY_DATA_MNT}"
+                            return 0
+                        fi
+                    done
+                    echo "[reefy] LVM on USB p4 but no mountable LV found"
+                else
+                    case "${FS_TYPE}" in
+                        f2fs)  MOUNT_OPTS="noatime" ;;
+                        *)     MOUNT_OPTS="noatime,commit=60" ;;
+                    esac
+                    if mount -o "${MOUNT_OPTS}" "/dev/mapper/${LUKS_NAME}" \
+                            "${REEFY_DATA_MNT}" 2>/dev/null; then
+                        echo "[reefy] Mounted USB data partition (${FS_TYPE}) at ${REEFY_DATA_MNT}"
+                        return 0
+                    fi
                 fi
             else
                 echo "[reefy] USB data partition key mismatch, skipping"
@@ -137,7 +157,10 @@ setup_data_partition() {
 }
 
 STORAGE_VG="reefy"
-STORAGE_LV="data"
+# New LVM layout uses `reefy_default` (a thin LV); legacy installs had
+# a flat `data` LV. Mount whichever one is actually present.
+STORAGE_LV="reefy_default"
+LEGACY_STORAGE_LV="data"
 
 # Try to use internal drive as /mnt/reefy-data instead of slow USB.
 # Opens LUKS on all internal drives with our key, activates LVM VG,
@@ -170,11 +193,17 @@ setup_internal_storage() {
     vgscan >/dev/null 2>&1
     vgs "${STORAGE_VG}" >/dev/null 2>&1 || return 0
     vgchange -ay "${STORAGE_VG}" >/dev/null 2>&1
-    lv_path="/dev/${STORAGE_VG}/${STORAGE_LV}"
-    [ ! -e "${lv_path}" ] && return 0
+    lv_path=""
+    for lv in "${STORAGE_LV}" "${LEGACY_STORAGE_LV}"; do
+        if [ -e "/dev/${STORAGE_VG}/${lv}" ]; then
+            lv_path="/dev/${STORAGE_VG}/${lv}"
+            break
+        fi
+    done
+    [ -z "${lv_path}" ] && return 0
 
     # Mount internal drive as /mnt/reefy-data
-    echo "[reefy] Internal drive found, mounting as ${REEFY_DATA_MNT}..."
+    echo "[reefy] Internal drive found, mounting ${lv_path} as ${REEFY_DATA_MNT}..."
     mkdir -p "${REEFY_DATA_MNT}"
     mount -o noatime,commit=60 "${lv_path}" "${REEFY_DATA_MNT}" || {
         echo "[reefy] WARNING: Internal drive mount failed"
