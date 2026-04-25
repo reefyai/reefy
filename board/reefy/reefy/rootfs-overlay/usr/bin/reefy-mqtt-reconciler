@@ -599,7 +599,7 @@ class MQTTReconciler:
             result = subprocess.run(
                 ['cryptsetup', 'luksOpen', dev, luks_name,
                  '--key-file', key_part, '--keyfile-size', '44'],
-                capture_output=True, timeout=30)
+                capture_output=True, timeout=120)
             if result.returncode == 0:
                 if _log:
                     _log(f'Opened existing LUKS on {dev}')
@@ -668,7 +668,7 @@ class MQTTReconciler:
         subprocess.run(
             ['cryptsetup', 'luksOpen', data_part, 'reefy-data',
              '--key-file', key_part, '--keyfile-size', '44'],
-            capture_output=True, timeout=15)
+            capture_output=True, timeout=120)
 
         # Build VG + thin pool + reefy_default LV on top of the LUKS-
         # opened mapper. Helper handles the fresh-install path here.
@@ -728,7 +728,7 @@ class MQTTReconciler:
             result = subprocess.run(
                 ['cryptsetup', 'luksOpen', target, luks_name,
                  '--key-file', key_part, '--keyfile-size', '44'],
-                capture_output=True, text=True, timeout=30)
+                capture_output=True, text=True, timeout=120)
             if result.returncode != 0:
                 continue
 
@@ -2053,7 +2053,7 @@ class MQTTReconciler:
             r = subprocess.run(
                 ['cryptsetup', 'luksOpen', target, luks_name,
                  '--key-file', key_part, '--keyfile-size', str(luks_key_size)],
-                capture_output=True, text=True, timeout=30)
+                capture_output=True, text=True, timeout=120)
             if r.returncode != 0:
                 raise RuntimeError(
                     f'LUKS open failed on {target}: {r.stderr}')
@@ -2151,7 +2151,7 @@ class MQTTReconciler:
             result = subprocess.run(
                 ['cryptsetup', 'luksOpen', target, luks_name,
                  '--key-file', key_part, '--keyfile-size', str(luks_key_size)],
-                capture_output=True, text=True, timeout=30
+                capture_output=True, text=True, timeout=120
             )
             if result.returncode != 0:
                 log('reconciler', f'{f'LUKS open failed on {target}: {result.stderr.strip()}'}')
