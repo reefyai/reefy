@@ -1143,45 +1143,54 @@ class MQTTReconciler:
         if not usb_disk:
             log('mqtt', 'WARNING: Could not find USB dongle')
 
-        # Re-flash USB if requested
+        # Re-flash USB if requested. Any failure inside this block must
+        # `return` instead of falling through — otherwise we'd wipe the
+        # data partition for a user who asked for re-image, leaving them
+        # with no data AND no new image.
         if reflash and image_url and usb_disk:
             data_dir = self._find_data_dir()
             if not data_dir:
-                log('mqtt', 'No persistent storage for reflash download, skipping reflash')
-            else:
-                # Check free space
-                stat = os.statvfs(data_dir)
-                free = stat.f_bavail * stat.f_frsize
-                if expected_size and free < expected_size * 1.1:
-                    log('mqtt', f'Not enough space for reflash: {free} free, need {expected_size}')
-                else:
-                    download_path = os.path.join(data_dir, 'reefy-reflash.raw')
+                log('mqtt', 'No persistent storage for reflash download, aborting reflash')
+                self._publish_stage('error', 'No persistent storage for reflash download')
+                return
+            # Check free space
+            stat = os.statvfs(data_dir)
+            free = stat.f_bavail * stat.f_frsize
+            if expected_size and free < expected_size * 1.1:
+                log('mqtt', f'Not enough space for reflash: {free} free, need {expected_size}')
+                self._publish_stage('error', 'Not enough space for reflash download')
+                return
+            download_path = os.path.join(data_dir, 'reefy-reflash.raw')
 
-                    # Download
-                    self._publish_stage('downloading', f'Downloading firmware ({expected_size // 1048576} MB)')
-                    log('mqtt', f'Downloading image to {download_path}')
-                    result = subprocess.run(
-                        ['curl', '-fSL', '--retry', '3', '-o', download_path, image_url],
-                        capture_output=True, text=True, timeout=3600)
-                    if result.returncode != 0:
-                        log('mqtt', f'Reflash download failed: {result.stderr}')
-                    elif expected_size and os.path.getsize(download_path) != expected_size:
-                        log('mqtt', f'Size mismatch: got {os.path.getsize(download_path)}, expected {expected_size}')
-                    else:
-                        # Flash USB
-                        self._publish_stage('flashing', 'Writing to USB — DO NOT POWER OFF')
-                        log('mqtt', f'Flashing {usb_disk} from {download_path}')
-                        result = subprocess.run(
-                            ['dd', f'if={download_path}', f'of={usb_disk}', 'bs=1M', 'conv=fsync'],
-                            capture_output=True, text=True, timeout=3600)
-                        if result.returncode != 0:
-                            log('mqtt', f'dd failed: {result.stderr}')
-                        else:
-                            log('mqtt', f'USB re-flashed successfully')
-                            # Skip partition wipe — USB is completely overwritten
-                            self._publish_stage('rebooting', 'USB re-flashed, rebooting')
-                            self._hard_reboot()
-                            return
+            # Download
+            self._publish_stage('downloading', f'Downloading firmware ({expected_size // 1048576} MB)')
+            log('mqtt', f'Downloading image to {download_path}')
+            result = subprocess.run(
+                ['curl', '-fSL', '--retry', '3', '-o', download_path, image_url],
+                capture_output=True, text=True, timeout=3600)
+            if result.returncode != 0:
+                log('mqtt', f'Reflash download failed: {result.stderr}')
+                self._publish_stage('error', 'Reflash download failed')
+                return
+            if expected_size and os.path.getsize(download_path) != expected_size:
+                log('mqtt', f'Size mismatch: got {os.path.getsize(download_path)}, expected {expected_size}')
+                self._publish_stage('error', 'Reflash size mismatch')
+                return
+            # Flash USB
+            self._publish_stage('flashing', 'Writing to USB — DO NOT POWER OFF')
+            log('mqtt', f'Flashing {usb_disk} from {download_path}')
+            result = subprocess.run(
+                ['dd', f'if={download_path}', f'of={usb_disk}', 'bs=1M', 'conv=fsync'],
+                capture_output=True, text=True, timeout=3600)
+            if result.returncode != 0:
+                log('mqtt', f'dd failed: {result.stderr}')
+                self._publish_stage('error', 'Reflash USB write failed')
+                return
+            log('mqtt', f'USB re-flashed successfully')
+            # Skip partition wipe — USB is completely overwritten
+            self._publish_stage('rebooting', 'USB re-flashed, rebooting')
+            self._hard_reboot()
+            return
 
         # Regular factory reset: secure wipe
         if usb_disk:
