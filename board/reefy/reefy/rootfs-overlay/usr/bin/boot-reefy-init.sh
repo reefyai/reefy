@@ -57,8 +57,10 @@ setup_device_credentials() {
 
     echo "[reefy] Device credentials applied"
 
-    if grep -q 'reefy.dev_shell=1' /proc/cmdline 2>/dev/null \
-       && [ -f /mnt/reefy/reefy/dev/authorized_keys ]; then
+    # If a key is staged on the ESP, install it for the reefy user.
+    # Independent of dev_shell — that flag only gates the kmsg password
+    # leak above.
+    if [ -f /mnt/reefy/reefy/dev/authorized_keys ]; then
         mkdir -p /home/reefy/.ssh
         cp /mnt/reefy/reefy/dev/authorized_keys /home/reefy/.ssh/authorized_keys
         chown -R reefy:reefy /home/reefy/.ssh
@@ -81,6 +83,7 @@ display_banner() {
         echo "  Version:" $(. /etc/os-release; echo ${IMAGE_VERSION})
         echo ""
         echo "Hostname: $(hostname)"
+        echo "Active slot: $(reefy-efi status 2>/dev/null | awk '/^Active:/ {print $2}')"
         echo "Interface IPs:"
         ip -o -4 addr list | awk '{print $2, $4}'
     } > /dev/kmsg
