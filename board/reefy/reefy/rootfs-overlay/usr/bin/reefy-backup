@@ -43,10 +43,15 @@ POOL_FILL_FAIL_PCT = 95
 
 
 def publish_status(payload):
-    """Report backup status via MQTT."""
+    """Report backup status via MQTT on the unified instance/status
+    channel. Backend dispatches on action='backup' to update
+    backup_configs.last_backup_status and fire the
+    device.backup.completed SSE event."""
+    payload = dict(payload)
+    payload.setdefault('action', 'backup')
     try:
         subprocess.run(
-            ['reefy-mqtt-pub', 'backup/status', json.dumps(payload)],
+            ['reefy-mqtt-pub', 'instance/status', json.dumps(payload)],
             capture_output=True, timeout=15
         )
     except Exception:
@@ -250,17 +255,39 @@ def backup_instance(inst, keep_last):
     ok, _, stderr = run_borg(['info', repo_path], env)
     if not ok:
         if 'not a valid repository' in stderr or 'does not exist' in stderr or 'Repository' not in stderr:
-            print(f"[backup] Initializing borg repo for {iuuid}")
-            ok, _, stderr = run_borg(
-                ['init', '--encryption=repokey-blake2', repo_path], env
-            )
-            if not ok:
-                print(f"[backup] Failed to init repo: {stderr}")
-                publish_status({
-                    'instance_uuid': iuuid, 'status': 'error',
-                    'message': 'repo init failed',
-                })
-                return False
+            # First-attempt borg init for a fresh repo can hit
+            # "Permission denied (publickey)" or "Connection closed by
+            # remote host" if BorgBase's SSH server hasn't picked up
+            # the just-registered key yet (server side does its own
+            # pre-flight via get_repo, but the GraphQL ack and SSH
+            # server propagation aren't atomic). Try a couple of times
+            # with backoff before giving up - these errors are normally
+            # in FATAL_PATTERNS so run_borg won't retry on its own.
+            init_attempts = 3
+            for attempt in range(1, init_attempts + 1):
+                print(f"[backup] Initializing borg repo for {iuuid} "
+                      f"(attempt {attempt}/{init_attempts})")
+                ok, _, stderr = run_borg(
+                    ['init', '--encryption=repokey-blake2', repo_path], env
+                )
+                if ok:
+                    break
+                err_lower = (stderr or '').lower()
+                transient = (
+                    'permission denied' in err_lower
+                    or 'connection closed' in err_lower
+                )
+                if not transient or attempt == init_attempts:
+                    print(f"[backup] Failed to init repo: {stderr}")
+                    publish_status({
+                        'instance_uuid': iuuid, 'status': 'error',
+                        'message': 'repo init failed',
+                    })
+                    return False
+                delay = 30 * attempt
+                print(f"[backup] init transient ({stderr.strip()[:80]}); "
+                      f"retrying in {delay}s")
+                time.sleep(delay)
         else:
             print(f"[backup] Cannot access repo after retries: {stderr.strip()[:200]}")
             publish_status({

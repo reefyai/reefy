@@ -2573,11 +2573,15 @@ Environment=MQTT_PORT={self.port}
 
             if not os.path.exists(key_path):
                 log('mqtt', f'No SSH key for {iuuid}, cannot restore')
+                self._publish_restore_status(
+                    iuuid, 'error', restore_from,
+                    error='No SSH key on device')
                 failed.add(iuuid)
                 continue
 
             log('backup', f'{f'Restoring {iuuid} from backup {restore_from}'}')
             self._publish_stage('applying', f'Restoring {iuuid} from backup')
+            self._publish_restore_status(iuuid, 'started', restore_from)
             log('mqtt', f'Restoring instance {iuuid} from {restore_from}')
 
             env = os.environ.copy()
@@ -2612,9 +2616,13 @@ Environment=MQTT_PORT={self.port}
                     env=env, capture_output=True, text=True, timeout=120
                 )
                 if list_proc.returncode != 0:
+                    err_msg = (list_proc.stderr or "").strip()[:500]
                     log('mqtt',
                         f'borg list failed (rc={list_proc.returncode}): '
-                        f'{(list_proc.stderr or "").strip()[:500]}')
+                        f'{err_msg}')
+                    self._publish_restore_status(
+                        iuuid, 'error', archive_name,
+                        error=f'borg list rc={list_proc.returncode}: {err_msg}')
                     failed.add(iuuid)
                     continue
                 first_path = next(
@@ -2670,12 +2678,17 @@ Environment=MQTT_PORT={self.port}
                 if extract_proc.returncode != 0:
                     log('mqtt',
                         f'borg extract failed (rc={extract_proc.returncode})')
+                    self._publish_restore_status(
+                        iuuid, 'error', archive_name,
+                        error=f'borg extract rc={extract_proc.returncode}')
                     failed.add(iuuid)
                     continue
                 log('mqtt', f'borg extract completed for {iuuid}')
 
             except Exception as e:
                 log('mqtt', f'Restore error: {e}')
+                self._publish_restore_status(
+                    iuuid, 'error', archive_name, error=str(e))
                 failed.add(iuuid)
                 continue
 
@@ -2685,15 +2698,11 @@ Environment=MQTT_PORT={self.port}
                 f.write(archive_name + '\n')
             log('mqtt', f'Restore complete for {iuuid} (archive={archive_name})')
 
-            # Report restore completion via MQTT
-            if self.mode == 'device' and self.client:
-                topic = f"{self.topic_prefix}/devices/{self.device_uuid}/backup/status"
-                self.client.publish(topic, json.dumps({
-                    'instance_uuid': iuuid,
-                    'status': 'restore_success',
-                    'action': 'restore_complete',
-                    'archive': archive_name,
-                }), qos=1)
+            # Report restore success on the unified instance/status
+            # channel. Backend dispatches on action='restore' and
+            # clears restore_from for this instance, breaking the
+            # restore-retry loop on subsequent applies.
+            self._publish_restore_status(iuuid, 'success', archive_name)
 
         return failed
 
@@ -2706,9 +2715,19 @@ Environment=MQTT_PORT={self.port}
             json.dump(compose, f, indent=2)
         log('mqtt', f'Wrote {self.COMPOSE_PATH}')
 
+        # Per-instance health: announce 'starting' upfront so the
+        # dashboard shows a spinner badge on each card while compose
+        # is in flight. After compose returns we emit either 'running'
+        # (clears any prior failed badge) or 'failed' (sticks with the
+        # last few output lines as the error message).
+        instance_uuids = self._instance_uuids_in_compose(compose)
+        for iuuid in instance_uuids:
+            self._publish_health_status(iuuid, 'starting')
+
         max_retries = 5
         backoff = 10
         recovered = False
+        last_output = ''
         for attempt in range(1, max_retries + 1):
             output_lines = []
             try:
@@ -2725,6 +2744,8 @@ Environment=MQTT_PORT={self.port}
                 proc.wait(timeout=120)
                 if proc.returncode == 0:
                     log('mqtt', f'docker compose up OK')
+                    for iuuid in instance_uuids:
+                        self._publish_health_status(iuuid, 'running')
                     return True
                 else:
                     msg = f'docker compose up failed (attempt {attempt}/{max_retries})'
@@ -2737,10 +2758,11 @@ Environment=MQTT_PORT={self.port}
                 msg = f'docker compose up error (attempt {attempt}/{max_retries}): {e}'
                 log('mqtt', f'{msg}')
 
+            last_output = '\n'.join(output_lines)
+
             # Attempt recovery once based on error type
             if not recovered:
-                output_text = '\n'.join(output_lines)
-                recovery = self._diagnose_compose_failure(output_text)
+                recovery = self._diagnose_compose_failure(last_output)
                 if recovery:
                     recovered = True
                     continue  # skip backoff delay, recovery already took time
@@ -2751,6 +2773,11 @@ Environment=MQTT_PORT={self.port}
                 time.sleep(delay)
 
         log('mqtt', f'docker compose up failed after {max_retries} attempts')
+        # Take the last ~5 lines of compose output as the failure
+        # message - usually contains the actual error from docker.
+        tail = '\n'.join(last_output.splitlines()[-5:]) if last_output else ''
+        for iuuid in instance_uuids:
+            self._publish_health_status(iuuid, 'failed', message=tail)
         return False
 
     def _diagnose_compose_failure(self, output):
@@ -2876,6 +2903,57 @@ Environment=MQTT_PORT={self.port}
         }
         self.client.publish(topic, json.dumps(data))
         log('mqtt', f'Stage: {stage} - {message}')
+
+    def _publish_instance_event(self, iuuid, action, status, extra=None):
+        """Publish a per-instance lifecycle event on the unified
+        instance/status channel. action categorizes the subsystem
+        ('backup' | 'restore' | 'health') and status varies by action
+        - see backend's _handle_instance_event for the accepted shapes."""
+        if self.mode != 'device' or not self.client:
+            return
+        topic = f"{self.topic_prefix}/devices/{self.device_uuid}/instance/status"
+        payload = {
+            'instance_uuid': iuuid,
+            'action': action,
+            'status': status,
+        }
+        if extra:
+            payload.update(extra)
+        self.client.publish(topic, json.dumps(payload), qos=1)
+
+    def _publish_restore_status(self, iuuid, status, archive, error=None):
+        """Restore lifecycle event - status is 'started' | 'success' |
+        'error'. Backend clears restore_from on success, surfaces
+        progress on the dashboard activity strip."""
+        extra = {'archive': archive}
+        if error:
+            extra['error'] = (error or '')[:500]
+        self._publish_instance_event(iuuid, 'restore', status, extra=extra)
+
+    def _publish_health_status(self, iuuid, status, message=None):
+        """Container health status from the device's compose runs.
+        status is 'starting' | 'running' | 'failed'. Backend persists
+        'failed' to device_instances.failure_status so the warning
+        badge survives page reloads, and clears it on the next
+        'starting' or 'running' for the same instance.
+
+        Frontend renders nothing on 'running' - the green-light case
+        is the absence of a badge, to avoid stale "all good" hints if
+        the device later goes offline. 'starting' shows a transient
+        spinner, 'failed' shows a sticky orange badge."""
+        extra = {}
+        if message:
+            extra['message'] = (message or '')[:500]
+        self._publish_instance_event(iuuid, 'health', status, extra=extra)
+
+    def _instance_uuids_in_compose(self, compose):
+        """Extract user instance uuids from compose services, filtering
+        out infrastructure containers (cloudflared, reefy-proxy) and
+        the auxiliary -tty pairs."""
+        services = (compose or {}).get('services') or {}
+        return [k for k in services.keys()
+                if not k.endswith('-tty')
+                and k not in ('cloudflared', 'reefy-proxy')]
 
     # Log publishing handled by reefy-log-publisher (journald → MQTT)
     # All logging goes through log() helper → print() → journald
