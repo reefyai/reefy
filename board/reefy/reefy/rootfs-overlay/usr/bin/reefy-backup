@@ -322,9 +322,24 @@ def backup_instance(inst, keep_last):
         snap_mounts = [s[1] for s in snapshots]
         common = os.path.dirname(snap_mounts[0])
         rel_paths = [os.path.basename(m) for m in snap_mounts]
-        print(f'[backup] Creating archive {archive_name} (cwd={common}, vols={rel_paths})')
+
+        # Backup excludes (per-instance + global baseline) come from the
+        # cloud-side backup config. Each entry is a borg `sh:` pattern
+        # already prefixed with the volume name where appropriate, so we
+        # pass them through unchanged. Owning this list cloud-side means
+        # changing the baseline doesn't need a firmware rollout - devices
+        # stay dumb consumers of whatever the backend ships. See
+        # reefy-service APP-SPEC.md "Backup Excludes" for the rationale.
+        exclude_args = []
+        for pattern in inst.get('excludes', []) or []:
+            exclude_args += ['--exclude', f'sh:{pattern}']
+
+        print(f'[backup] Creating archive {archive_name} '
+              f'(cwd={common}, vols={rel_paths}, '
+              f'excludes={len(exclude_args)//2})')
         ok, stdout, stderr = run_borg(
             ['create', '--compression', 'zstd', '--json',
+             *exclude_args,
              f'{repo_path}::{archive_name}'] + rel_paths,
             env, cwd=common
         )
