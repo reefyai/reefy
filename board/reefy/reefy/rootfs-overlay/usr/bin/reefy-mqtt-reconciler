@@ -1640,6 +1640,13 @@ class MQTTReconciler:
         old_network = old_state.get('network') if old_state else None
         self._apply_network(network, old_network)
 
+        # Apply user-registered SSH public keys. The user adds them in
+        # their account settings on the cloud dashboard, the cloud
+        # ships them in desired-state, and we rewrite authorized_keys
+        # atomically each tick. Empty list = delete the file (back to
+        # password-only auth).
+        self._apply_user_ssh_keys(state.get('user_ssh_keys', []))
+
         # Build the set of paths that should be backed by per-volume
         # thin LVs (one LV per backup-true volume — see PLAN-backup.md
         # §"Storage Layout"). Pulled from the backup section so dirs
@@ -1981,6 +1988,78 @@ class MQTTReconciler:
             log('mqtt', f'mount {lv_path} -> {path} failed: {r.stderr}')
             return
         log('mqtt', f'Mounted {lv_name} at {path}')
+
+    # Dev/e2e ESP-injected key path. boot-reefy-init.sh copies this
+    # file into the reefy user's authorized_keys on every boot so e2e
+    # tests have a stable login key. Our cloud-key reconcile must keep
+    # it present alongside the user-registered keys, otherwise the
+    # first state apply would lock the e2e harness out.
+    _DEV_INJECTED_KEY_PATH = '/mnt/reefy/reefy/dev/authorized_keys'
+
+    def _apply_user_ssh_keys(self, keys):
+        """Rewrite /home/reefy/.ssh/authorized_keys atomically.
+
+        Sources, concatenated in this order:
+         1. The dev/e2e ESP-injected key (if /mnt/reefy/reefy/dev/
+            authorized_keys exists). Boot-init copies it on every
+            boot; we preserve it so a state apply doesn't kick the
+            e2e harness out.
+         2. Cloud-registered keys (`keys`) - what the user pasted in
+            their account settings on the dashboard.
+
+        The cloud is the source of truth for (2), so we always
+        overwrite (not append) - additions and removals from the
+        dashboard propagate within one reconcile tick. Empty `keys`
+        and no dev-injected key = delete the file (back to
+        password-only auth).
+
+        Atomic rename to avoid leaving a half-written authorized_keys
+        if the host loses power mid-write."""
+        ssh_dir = '/home/reefy/.ssh'
+        auth_file = os.path.join(ssh_dir, 'authorized_keys')
+
+        try:
+            import pwd
+            ent = pwd.getpwnam('reefy')
+            uid, gid = ent.pw_uid, ent.pw_gid
+        except (KeyError, ImportError):
+            log('mqtt', 'reefy user not found; skipping SSH-key apply')
+            return
+
+        cloud_keys = [k.strip() for k in (keys or []) if k and k.strip()]
+        dev_keys = []
+        try:
+            if os.path.exists(self._DEV_INJECTED_KEY_PATH):
+                with open(self._DEV_INJECTED_KEY_PATH) as f:
+                    dev_keys = [line.strip() for line in f
+                                if line.strip() and not line.startswith('#')]
+        except OSError as e:
+            log('mqtt', f'dev-injected key read failed: {e}')
+
+        all_keys = dev_keys + cloud_keys
+
+        if not all_keys:
+            try:
+                if os.path.exists(auth_file):
+                    os.remove(auth_file)
+                    log('mqtt', 'Removed authorized_keys (no SSH keys)')
+            except OSError as e:
+                log('mqtt', f'authorized_keys remove failed: {e}')
+            return
+
+        try:
+            os.makedirs(ssh_dir, mode=0o700, exist_ok=True)
+            os.chown(ssh_dir, uid, gid)
+            tmp = auth_file + '.tmp'
+            with open(tmp, 'w') as f:
+                f.write('\n'.join(all_keys) + '\n')
+            os.chown(tmp, uid, gid)
+            os.chmod(tmp, 0o600)
+            os.rename(tmp, auth_file)
+            log('mqtt', f'Wrote authorized_keys with '
+                       f'{len(dev_keys)} dev + {len(cloud_keys)} cloud key(s)')
+        except OSError as e:
+            log('mqtt', f'ERROR: authorized_keys write failed: {e}')
 
     def _apply_storage(self, storage):
         """Set up LUKS-encrypted internal storage with LVM, mounted at /mnt/reefy-data.
