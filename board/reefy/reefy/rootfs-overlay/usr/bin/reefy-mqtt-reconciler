@@ -2558,15 +2558,15 @@ class MQTTReconciler:
             'device_uuid': self.device_uuid,
             'instances': [],
         }
+        # Pass through whatever the cloud sent for this instance,
+        # minus ssh_key (already extracted to a per-instance key file
+        # above). New fields the cloud adds later (excludes,
+        # pinned_archives, retention overrides, …) flow into
+        # config.json without a code change here, and the consumer
+        # (reefy-backup) just inst.get(field, default).
         for inst in instances:
-            config['instances'].append({
-                'instance_uuid': inst['instance_uuid'],
-                'archive_prefix': inst['archive_prefix'],
-                'repo_path': inst['repo_path'],
-                'passphrase': inst['passphrase'],
-                'paths': inst['paths'],
-                'container_name': inst['container_name'],
-            })
+            config['instances'].append(
+                {k: v for k, v in inst.items() if k != 'ssh_key'})
 
         with open(self.BACKUP_CONFIG_PATH, 'w') as f:
             json.dump(config, f, indent=2)
