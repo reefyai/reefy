@@ -154,11 +154,21 @@ def volume_lv_name(path):
     return f'reefy_backup_{h}'
 
 
-def snapshot_volume(path, instance_uuid):
+def snapshot_volume(path, instance_uuid, ts):
     """Snapshot the per-volume thin LV that backs `path`, mount the
     snapshot read-only at a path whose LEAF is the volume name (so
     borg captures it as e.g. `config/...` — same shape as legacy
     docker-pause archives, which means the restore code stays unchanged).
+
+    `ts` MUST be supplied by the caller (one ts per backup run, shared
+    across every volume of the same instance). The borg-create step
+    cwd's into /snapshots/{ts}_{instance_uuid} expecting all the
+    instance's volumes to live as siblings under that single dir; if
+    we recomputed `ts = int(time.time())` per call, two snapshots
+    whose lvcreate+mount straddled a second boundary would land under
+    different parent dirs and borg would fail with `stat: No such file
+    or directory` on the second volume. Multi-volume apps with active
+    I/O (photoprism/originals on a real fleet) hit this in practice.
 
     Returns (snap_lv_name, snap_mount_path). Caller must
     release_snapshot() in a finally block — CoW grows as long as
@@ -170,13 +180,7 @@ def snapshot_volume(path, instance_uuid):
             f'no per-volume LV for {path} (expected {lv_path}); '
             f'volume may not have been provisioned with backup support')
 
-    # Snapshot LV name carries the timestamp so each backup run gets
-    # a fresh name. Mount path uses {ts}/{instance_uuid}/{volname} so
-    # borg cwd-ing to /snapshots/{ts}/{instance_uuid} can sweep all
-    # volumes for the instance with relative paths matching the
-    # legacy archive layout.
     vol_name = os.path.basename(path)
-    ts = int(time.time())
     snap_name = f'reefy_snap_{lv_name[len("reefy_backup_"):]}_{ts}'
     snap_mnt = os.path.join(SNAPSHOT_MNT_BASE,
                              f'{ts}_{instance_uuid}', vol_name)
@@ -301,8 +305,15 @@ def backup_instance(inst, keep_last):
     snapshots = []  # [(snap_name, snap_mnt, original_path)]
     try:
         try:
+            # One ts per backup run, shared across every volume of this
+            # instance. Otherwise multi-volume apps (e.g. photoprism)
+            # whose lvcreate+mount sequences straddle a second boundary
+            # land under different /snapshots/{ts}_{iuuid}/ parents and
+            # borg create fails with `stat: No such file or directory`
+            # on the second volume.
+            ts = int(time.time())
             for path in paths:
-                snap_name, snap_mnt = snapshot_volume(path, iuuid)
+                snap_name, snap_mnt = snapshot_volume(path, iuuid, ts)
                 snapshots.append((snap_name, snap_mnt, path))
                 print(f'[backup] Snapshot {snap_name} mounted at {snap_mnt}')
         except Exception as e:
