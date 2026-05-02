@@ -21,6 +21,7 @@ Exit codes:
     3 — legacy storage (no thin pool); backups disabled until migration
 """
 
+import fcntl
 import hashlib
 import json
 import os
@@ -32,6 +33,7 @@ from datetime import datetime, timezone
 BACKUP_DIR = '/mnt/reefy-data/state/backup'
 CONFIG_FILE = os.path.join(BACKUP_DIR, 'config.json')
 SNAPSHOT_MNT_BASE = '/mnt/reefy-data/snapshots'
+LOCK_FILE = '/run/reefy-backup.lock'
 
 # LVM names — underscore separator avoids dm-mapper's `--` escape
 # (see feedback_resource_naming_prefix.md).
@@ -60,9 +62,14 @@ def publish_status(payload):
 
 def run_borg(args, env, timeout=21600, retries=10, retry_delay=60, cwd=None):
     """Run a borg command with retries. Returns (success, stdout, stderr)."""
+    # Use unambiguous phrases. Bare 'key' previously matched BorgBase's
+    # SSH banner ("post-quantum key exchange") and silently disabled
+    # retries on transient failures; bare 'passphrase' could match
+    # benign mentions in help text.
     FATAL_PATTERNS = (
-        'passphrase', 'key', 'quota', 'no space left', 'permission denied',
-        'not a valid repository', 'does not exist',
+        'invalid passphrase', 'wrong passphrase',
+        'quota exceeded', 'no space left', 'permission denied',
+        'not a valid repository', 'repository does not exist',
     )
     for attempt in range(retries):
         result = subprocess.run(
@@ -417,6 +424,19 @@ def backup_instance(inst, keep_last):
 
 
 def main():
+    # Serialize concurrent runs. The reconciler spawns one reefy-backup
+    # per backup_now MQTT command, so 'backup all' fans out N parallel
+    # invocations that share one BorgBase repo + local cache - they
+    # race on the borg cache lock and most fail. flock LOCK_EX (no
+    # LOCK_NB) blocks until any prior run releases, then proceeds.
+    lock_fd = open(LOCK_FILE, 'w')
+    try:
+        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("[backup] Another backup in progress; waiting for lock")
+        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
+        print("[backup] Lock acquired, proceeding")
+
     if not os.path.exists(CONFIG_FILE):
         print(f"[backup] No config file at {CONFIG_FILE}")
         return
