@@ -99,7 +99,7 @@ Disable Secure Boot in your BIOS. Common path: *Security → Secure Boot → Dis
 ### 5. Adopt the device
 Your device shows up automatically in the [Reefy dashboard](https://reefy.ai) once it's online. Click **Adopt**, give it a name. Done.
 
-<p align="center"><video src="images/step5-adopt.mp4" autoplay muted loop playsinline width="600"></video></p>
+<p align="center"><img src="images/step5-adopt.gif" alt="Reefy dashboard adopting a new device" width="600"></p>
 
 ## Apps
 
