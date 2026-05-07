@@ -36,10 +36,6 @@ Secure tunnels to every device. No port forwarding, no VPN, no static IP needed.
 
 <p align="center"><img src="images/feature-mobile-terminal.gif" alt="Reefy web terminal on iPhone with on-screen modifier-key buttons" width="480"></p>
 
-Reefy also gives every running app its own terminal, so you don't have to manually `docker exec` into your agent. All sessions run inside `tmux` - close the browser, switch devices, come back later, and pick up exactly where you left off.
-
-<p align="center"><img src="images/reefy-terminal-hermes.png" alt="Reefy terminal attached to Hermes Agent container" width="800"></p>
-
 ### Run private AI agents
 
 Run multiple OpenClaw and Hermes agents. Spin them up for different tasks, fully isolated.
@@ -63,25 +59,6 @@ Reefy ships with NVIDIA drivers built-in - just start Ollama or any other GPU-aw
 A/B firmware with a hardware watchdog: a bad update auto-rolls back to the previous working version. Critical for devices in closets, attics, and other hard-to-reach places.
 
 <p align="center"><img src="images/feature-ab-updates.gif" alt="Reefy A/B firmware update auto-rolling back after a failed boot" width="480"></p>
-
-### And more from the app catalog
-
-Install apps from the built-in catalog with one click. Full catalog available once you adopt your first device.
-
-| App | Description |
-|-----|-------------|
-| [OpenClaw](https://github.com/openclaw/openclaw) | Personal AI assistant gateway |
-| [Hermes Agent](https://github.com/nousresearch/hermes-agent) | Autonomous AI agent |
-| [Ollama](https://ollama.ai) | Run LLMs locally (Nvidia GPU accelerated) |
-| [vLLM](https://github.com/vllm-project/vllm) | High-performance LLM inference (Nvidia GPU accelerated) |
-| [SGLang](https://github.com/sgl-project/sglang) | High-throughput LLM serving (Nvidia GPU accelerated) |
-| [Frigate](https://frigate.video) | Real-time camera NVR with object detection |
-| [PhotoPrism](https://photoprism.app) | Self-hosted photo management |
-| Dev Ubuntu | Full Ubuntu development environment |
-| Dev Fedora | Full Fedora development environment |
-| Guppy | Lightweight test app for developers |
-
-Reefy apps are regular Docker containers - bring your own image or wrap any existing one as a Reefy app.
 
 ## Key Features
 
