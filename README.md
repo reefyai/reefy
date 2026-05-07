@@ -10,9 +10,9 @@
   <img src="images/reefy-dashboard.png" alt="Reefy Dashboard" width="800">
 </p>
 
----
+<p align="center"><i>This repository contains the full source code and build for Reefy OS.</i></p>
 
-_This repository contains the full source code and build for Reefy OS._
+---
 
 ## Reimagined OS, built bottom-up for the AI era
 
