@@ -12,18 +12,6 @@
 
 ---
 
-## Why Reefy?
-
-**Why rent a cloud VPS for $10/month when the old PC under your desk can do more - for free?**
-
-A $39 Intel NUC from eBay - 2-core Celeron, 8GB RAM, 128GB SSD - can run dozens of AI agents. The hardware you already own is more powerful than most people realize. You just need the right software to unlock it.
-
-**Why send your private data to someone else's computer?** Your conversations with AI, your camera feeds, your documents - they don't need to live on a server you don't control.
-
-**Reefy gives your own PC a cloud-like experience** - automated updates, encrypted backups, remote access, one-click app installs - without the cloud. This is what drove people to the cloud in the first place: convenience, not capability. Reefy brings that convenience home.
-
-We're not replacing the cloud - we love clouds and Reefy uses them a lot under the hood! We're moving your personal work closer to you.
-
 ## Reimagined OS, built bottom-up for the AI era
 
 Reefy OS isn't another shell on top of Ubuntu or Debian with a web UI bolted on. We started from Buildroot and hand-picked every package from the kernel up: 15-second cold boot, Nvidia GPU as a first-class citizen, immutable A/B root with auto-rollback, encryption keyed to a USB dongle, and no package manager on the device so the system never drifts. The app catalog is AI-focused from day one - AI agents (OpenClaw, Hermes), local LLM inference (Ollama, vLLM, SGLang), vision pipelines - not retrofitted onto a general-purpose distro. Legacy distros weren't designed to boot fast, run GPU workloads natively, survive bad updates in remote closets, and keep your data on your side of the wire. Reefy OS was.
@@ -59,6 +47,14 @@ Reefy ships with NVIDIA drivers built-in - just start Ollama or any other GPU-aw
 A/B firmware with a hardware watchdog: a bad update auto-rolls back to the previous working version. Critical for devices in closets, attics, and other hard-to-reach places.
 
 <p align="center"><img src="images/feature-ab-updates.gif" alt="Reefy A/B firmware update auto-rolling back after a failed boot" width="480"></p>
+
+## Why Reefy?
+
+**Why rent a cloud VPS for $10/month when the old PC under your desk can do more - for free?** The hardware you already own is more powerful than most people realize. You just need the right software to unlock it.
+
+**Why send your private data to someone else's computer?** Your conversations with AI, your camera feeds, your documents - they don't need to live on a server you don't control.
+
+We're not replacing the cloud - Reefy uses clouds a lot under the hood. We're moving your personal work closer to you.
 
 ## Key Features
 
