@@ -66,16 +66,40 @@ Reefy gives every running app (Docker container) its own terminal, so you don't 
 
 ## Get Started
 
-### 1. Sign in
-Log in at [reefy.ai](https://reefy.ai) with your Google or GitHub account - one click, no signup forms.
+### 1. Bring a PC
+Old laptop, mini-PC, used NUC, or a high-end server with GPUs.
 
-### 2. Flash a USB
-Download your personalized device image from Settings and flash it to a USB drive. We recommend the amazing [balenaEtcher](https://etcher.balena.io/) flasher for Mac, Windows, and Linux.
+<p align="center"><img src="images/start-hero.jpg" alt="Mini-PC on a desk - any x86_64 box works" width="600"></p>
 
-### 3. Boot & adopt
-Plug the USB into any x86 machine. Attach an ethernet cable with internet access. Power on, select the USB as the boot source in your BIOS boot menu. The device appears on your dashboard. Click **Adopt**, give it a name, and start installing apps.
+### 2. Sign in and download your Reefy image
+Log in at [reefy.ai](https://reefy.ai) with your Google or GitHub account - one click, no signup forms. Then grab your personalized device image from Settings.
 
-That's it. No command line, no config files, no network setup.
+<p align="center"><img src="images/step2-download.jpg" alt="Reefy download dialog showing reefy.raw image" width="600"></p>
+
+### 3. Flash to a USB stick
+Use [Balena Etcher](https://etcher.balena.io/) - cross-platform, drag the `reefy.raw` file in, pick your USB, click flash.
+
+<p align="center"><img src="images/step3-balena.jpg" alt="Balena Etcher mid-flash, writing reefy.raw to a USB drive" width="600"></p>
+
+<details><summary>Command-line (Linux/macOS, no GUI)</summary>
+
+`sudo dd if=reefy.raw of=/dev/sdX bs=4M`
+
+</details>
+
+### 4. Boot the PC from USB
+Plug in the USB, power on, hit `Esc` or `Del` to open the boot menu. Pick the USB. Reefy boots in ~15 seconds.
+
+<details><summary>Optional: if boot is blocked</summary>
+
+Disable Secure Boot in your BIOS. Common path: *Security → Secure Boot → Disabled*.
+
+</details>
+
+### 5. Adopt the device
+Your device shows up automatically in the [Reefy dashboard](https://reefy.ai) once it's online. Click **Adopt**, give it a name. Done.
+
+<p align="center"><video src="images/step5-adopt.mp4" autoplay muted loop playsinline width="600"></video></p>
 
 ## Apps
 
