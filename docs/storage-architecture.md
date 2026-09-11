@@ -163,6 +163,12 @@ When actual headroom runs out, its allocations can fail too. A larger physical
 rate or response requirement increases the emergency reserve beyond the base
 cap, and an impossible budget blocks new allocation.
 
+The controller closes lower-priority grants within a 64 MiB transition window
+before opening the next band. This prevents small unusable quota fragments from
+stranding space intended for state. The physical watchdog uses the controller's
+response margin as well, so snapshot growth can trigger containment before
+that margin is consumed.
+
 ### Application and Docker behavior
 
 Frigate's own low-space maintenance can see a reduced media allowance and delete
@@ -220,6 +226,11 @@ Backup snapshots retain source inode metadata. A restored instance receives its
 own destination volume assignments; restored files must match those assignments
 before the app starts. The source app may remain installed and running. Numeric
 ID equality across different filesystems does not imply shared quota ownership.
+Imported mismatches can be repaired only while the destination is unused;
+existing destination quotas remain enforced throughout. A completed-restore
+marker does not bypass the ownership check. Boot recovery releases operation
+reservations from proven previous boots, while reservations with uncertain or
+same-boot ownership remain conservative.
 
 Legacy `cap_pct` continues to limit an LV's virtual size. It is not reinterpreted
 as a physical threshold. The catalog retains the last classless manifest for

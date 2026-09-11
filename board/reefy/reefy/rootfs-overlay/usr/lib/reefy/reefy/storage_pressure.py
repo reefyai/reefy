@@ -125,9 +125,14 @@ def allocate(sample, consumers, *, pending_bytes=0, peak_bytes_per_second=0,
               or used + margin >= bound.state)
     if unsafe:
         return Allocation(limits, bound, 'emergency', 0, True)
-    if used + margin >= bound.runtime:
+    # Do not require writers to consume the final byte of a band. Per-project
+    # fragments, filesystem reservations and idle housekeeping quotas can leave
+    # less than one application write available indefinitely. Handoff closes
+    # the lower class before opening the next band, within one startup window.
+    transition = max(64 * MIB, sample.chunk_bytes)
+    if used + margin + transition >= bound.runtime:
         stage, allowed, ceiling = 'state', {'state'}, bound.state
-    elif used + margin >= bound.bulk:
+    elif used + margin + transition >= bound.bulk:
         stage, allowed, ceiling = 'runtime', {'runtime', 'state'}, bound.runtime
     else:
         stage, allowed, ceiling = 'bulk', set(CLASSES), bound.bulk
