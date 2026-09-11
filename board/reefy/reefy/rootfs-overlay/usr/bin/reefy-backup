@@ -269,45 +269,20 @@ def pool_fill_pct():
 
 
 def gc_orphan_snapshots():
-    """Drop any reefy_snap_* LV left over from a crashed previous run.
-    Each successful per-volume backup releases its own snapshot via the
-    finally block, but SIGKILL / OOM / power loss between snapshot and
-    finally would leave an orphan whose CoW deltas grow with origin
-    writes until cleaned. This is the defense-in-depth GC at the start
-    of every backup run."""
-    r = subprocess.run(
-        ['lvs', '--noheadings', '-o', 'lv_name',
-         '--select', 'lv_name=~"^reefy_snap_"', STORAGE_VG],
-        capture_output=True, text=True, timeout=10)
-    if r.returncode != 0:
-        return
-    for line in r.stdout.split('\n'):
-        snap = line.strip()
-        if not snap:
-            continue
-        # Locate any mount point still referencing the snapshot LV
-        # (we don't know the per-instance parent dir from the LV name
-        # alone). Fall back to lvremove -- the LV has no kernel users
-        # once unmounted.
-        dev = f'/dev/{STORAGE_VG}/{snap}'
-        m = subprocess.run(
-            ['findmnt', '-n', '-o', 'TARGET', '--source', dev],
-            capture_output=True, text=True, timeout=5)
-        for snap_mnt in [t.strip() for t in m.stdout.split('\n') if t.strip()]:
-            subprocess.run(['umount', snap_mnt], capture_output=True, timeout=10)
-            parent = os.path.dirname(snap_mnt)
-            try:
-                os.rmdir(snap_mnt)
-            except OSError:
-                pass
-            if parent and parent != SNAPSHOT_MNT_BASE:
-                try:
-                    os.rmdir(parent)
-                except OSError:
-                    pass
-        subprocess.run(['lvremove', '-f', f'{STORAGE_VG}/{snap}'],
-                       capture_output=True, timeout=15)
-        print(f'[backup] GC: dropped orphan snapshot {snap}')
+    """Reclaim persistent snapshots under the backup process lock.
+
+    Unknown inventory or incomplete removal aborts the next backup. Retained
+    reservations may be reclaimed only after every owned snapshot is absent.
+    """
+    sys.path.insert(0, '/usr/lib/reefy')
+    from reefy.storage_snapshots import cleanup_orphans
+    from reefy.storage_admission import release_reclaimed_snapshot_leases
+    from reefy.storage_quota import Registry, state_lock
+    count = cleanup_orphans()
+    with state_lock():
+        release_reclaimed_snapshot_leases(Registry())
+    if count:
+        print(f'[backup] GC: verified removal of {count} orphan snapshot(s)')
 
 
 def volume_lv_name(path):
@@ -452,8 +427,10 @@ def backup_instance(inst, keep_last):
     sys.path.insert(0, '/usr/lib/reefy')
     from reefy.storage_admission import reservation
     from reefy.storage_pressure import PressureError
+    from reefy.storage_snapshots import snapshots_released
     try:
-        with reservation('backup-snapshots', 64 * 1024**2):
+        with reservation('backup-snapshots', 64 * 1024**2,
+                         release_check=snapshots_released):
             return _backup_instance_admitted(inst, keep_last)
     except PressureError as error:
         publish_status({'instance_uuid': inst['instance_uuid'], 'status': 'error',

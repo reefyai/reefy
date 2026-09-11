@@ -5,7 +5,9 @@ import unittest
 from unittest.mock import patch
 
 import _bootstrap  # noqa: F401
-from reefy.storage_admission import reservation, quiesced_reservation, release_previous_boot_leases
+from reefy.storage_admission import (reservation, quiesced_reservation,
+                                    release_previous_boot_leases,
+                                    release_reclaimed_snapshot_leases)
 from reefy.storage_pressure import (GB, Consumer, PoolSample, PressureError,
                                     allocate, admit_reservations)
 from reefy.storage_quota import Registry
@@ -63,6 +65,60 @@ class AdmissionTests(unittest.TestCase):
 
 
 class BootAdmissionTests(unittest.TestCase):
+    def test_snapshot_lease_survives_owner_boot_until_persistent_resource_is_gone(self):
+        with tempfile.TemporaryDirectory() as directory:
+            registry = Registry(str(Path(directory) / 'registry.json'))
+            registry.data['leases'] = {
+                'snapshot': {'boot_id': 'previous-boot', 'kind': 'backup-snapshots'},
+                'live': {'boot_id': 'current-boot', 'kind': 'download'},
+            }
+            registry.save()
+            with patch('reefy.storage_admission.boot_identity', return_value='current-boot'), \
+                    patch('reefy.storage_snapshots.snapshots_released', return_value=False):
+                with self.assertRaises(PressureError):
+                    release_previous_boot_leases(registry)
+                with self.assertRaises(PressureError):
+                    release_reclaimed_snapshot_leases(registry)
+            self.assertEqual(len(Registry(registry.path).data['leases']), 2)
+            with patch('reefy.storage_snapshots.snapshots_released', return_value=True):
+                self.assertEqual(release_reclaimed_snapshot_leases(registry), 1)
+            self.assertEqual(set(Registry(registry.path).data['leases']), {'live'})
+
+    def test_failed_teardown_or_unknown_inventory_retains_reservation(self):
+        for outcome in (False, PressureError('inventory unavailable')):
+            with self.subTest(outcome=outcome), tempfile.TemporaryDirectory() as directory:
+                path = str(Path(directory) / 'registry.json')
+                registry = Registry(path)
+                registry.data.update(active=True, inventory_complete=True)
+                registry.save()
+                def released():
+                    if isinstance(outcome, Exception):
+                        raise outcome
+                    return outcome
+                with patch('reefy.storage_admission.Registry', lambda: Registry(path)), \
+                        patch('reefy.storage_admission.state_lock', return_value=nullcontext()), \
+                        patch('reefy.storage_admission.wait_generation'):
+                    with self.assertRaises(PressureError), reservation(
+                            'backup-snapshots', 4096, release_check=released):
+                        pass
+                self.assertEqual(len(Registry(path).data['leases']), 1)
+
+    def test_rejected_operation_needs_no_resource_teardown(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / 'registry.json')
+            registry = Registry(path)
+            registry.data.update(active=True, inventory_complete=True)
+            registry.save()
+            with patch('reefy.storage_admission.Registry', lambda: Registry(path)), \
+                    patch('reefy.storage_admission.state_lock', return_value=nullcontext()), \
+                    patch('reefy.storage_admission.wait_generation', side_effect=PressureError('denied')), \
+                    patch('reefy.storage_snapshots.snapshots_released') as released:
+                with self.assertRaises(PressureError), reservation(
+                        'backup-snapshots', 4096, release_check=released):
+                    self.fail('rejected operation ran')
+                released.assert_not_called()
+            self.assertEqual(Registry(path).data['leases'], {})
+
     def test_only_proven_previous_boot_leases_are_reclaimed(self):
         with tempfile.TemporaryDirectory() as directory:
             registry = Registry(str(Path(directory) / 'registry.json'))
