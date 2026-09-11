@@ -85,11 +85,13 @@ def main():
                               'python3 /tmp/pressure_storage_probe.py', 'pressure-results.json', 660)
                         _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-pressure-trace.json', timeout_s=20, check=False)
                         (args.output / 'pressure-trace.json').write_text(trace)
-                    cow_ready = probe(Path(__file__).with_name('cow_storage_probe.py'),
+                    cow_probe = ('reserved_cow_storage_probe.py' if args.suite in ('all', 'thin')
+                                 else 'cow_storage_probe.py')
+                    cow_ready = probe(Path(__file__).with_name(cow_probe),
                                       ('REEFY_COW_LIMIT_DIRTY=1 ' if args.suite == 'cow-writeback' else
                                        'REEFY_COW_DISABLE_WBT=1 ' if args.suite == 'cow-nowbt' else
                                        'REEFY_COW_MEASURE_DRAIN=1 ' if args.suite == 'cow-drain' else '') +
-                                      'python3 /tmp/cow_storage_probe.py', 'cow-results.json', 180)
+                                      'python3 /tmp/' + cow_probe, 'cow-results.json', 180)
                     _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-cow-trace.json', timeout_s=20, check=False)
                     (args.output / 'cow-trace.json').write_text(trace)
                     if cow_ready:
