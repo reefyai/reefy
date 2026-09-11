@@ -214,13 +214,20 @@ def run():
     after_cleanup = time.time()
     wait_recording(db, after_cleanup)
     assert sql('PRAGMA integrity_check')[0][0] == 'ok'
-    assert sql('PRAGMA wal_checkpoint(TRUNCATE)')[0][0] == 0
+    # PASSIVE is SQLite's normal concurrent checkpoint mode. TRUNCATE can
+    # return SQLITE_BUSY while Frigate readers still use the WAL, independently
+    # of free space: https://www.sqlite.org/pragma.html#pragma_wal_checkpoint
+    checkpoint = sql('PRAGMA wal_checkpoint(PASSIVE)')[0]
+    assert checkpoint[0] == 0 and checkpoint[2] >= 0, checkpoint
     Path(ROOT / 'config/state-write-after-cleanup').write_text('config remains writable')
     row = next(row for row in Registry().data['projects'].values() if row['path'] == str(ROOT / 'media'))
     verify_tree(str(ROOT / 'media'), row['project'])
     assert read_quotas(row['mount'])[row['project']]['used'] > 0
     assert not Path('/run/reefy/storage-pressure/hold.json').exists()
     compose_run(['down'])
+    # With Frigate's readers closed, require a complete truncating checkpoint.
+    checkpoint = sql('PRAGMA wal_checkpoint(TRUNCATE)')[0]
+    assert checkpoint == [0, 0, 0], checkpoint
     command(['docker', 'rm', '--force', NAME + '-sql'])
     (ROOT / 'config/synthetic-sql.sock').unlink()
     print(json.dumps({'image': IMAGE, 'resolved_image': command(['docker', 'image', 'inspect', IMAGE, '--format', '{{.Id}}']).strip(),
