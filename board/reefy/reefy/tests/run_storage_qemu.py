@@ -16,7 +16,7 @@ def main():
     from lib.qemu_device import QemuDevice, QemuBlockDisk
     args.output.mkdir(parents=True, exist_ok=True)
     with QemuDevice(raw_image=args.firmware, log_path=args.output / 'qemu.log',
-                    extra_block_disks=(QemuBlockDisk(size='16G', serial='reefy-storage-e2e-pool'),)) as vm:
+                    extra_block_disks=(QemuBlockDisk(size='16G', serial='quota-e2e-pool'),)) as vm:
         vm.wait_for_boot(timeout_s=240)
         vm.scp_to(Path(__file__).with_name('setup_storage_probe.py'), '/tmp/setup_storage_probe.py')
         _, output, _ = vm.ssh_exec('python3 /tmp/setup_storage_probe.py', timeout_s=300)
@@ -47,6 +47,15 @@ def main():
                       'REEFY_E2E_QUOTA_GUEST=1 python3 /tmp/backup_quota_guest.py', 'backup-results.log', 600)
                 probe(Path(__file__).with_name('frigate_storage_probe.py'),
                       'python3 /tmp/frigate_storage_probe.py', 'frigate-results.json', 1500)
+                recovered = probe(Path(__file__).with_name('storage_failure_probe.py'),
+                                  'python3 /tmp/storage_failure_probe.py', 'failure-results.json', 180)
+                if recovered:
+                    from run_storage_boot import run_boot_migration
+                    try:
+                        run_boot_migration(vm, args.output)
+                    except Exception as error:
+                        print(f'Boot migration FAILED: {error}', flush=True)
+                        failures.append('boot migration')
         finally:
             _, kernel, _ = vm.ssh_exec('dmesg', timeout_s=10)
             kernel = re.sub(r'password=\S+', 'password=[redacted]', kernel)
