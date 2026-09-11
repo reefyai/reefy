@@ -56,7 +56,7 @@ def main():
                 return False
             finally:
                 _, kernel_log, _ = vm.ssh_exec('dmesg', timeout_s=10)
-                kernel_log = re.sub(r'password=\S+', 'password=[redacted]', kernel_log)
+                kernel_log = re.sub(r'(?i)password\s*[:=]\s*\S+', 'password=[redacted]', kernel_log)
                 (args.output / (source.stem + '-dmesg.log')).write_text(kernel_log)
                 if any(value in kernel_log for value in ('Filesystem has been shut down', 'out_of_data_space')):
                     failures.append(source.name + ': kernel storage failure')
@@ -145,7 +145,7 @@ def main():
                         failures.append('boot migration')
         finally:
             _, kernel, _ = vm.ssh_exec('dmesg', timeout_s=10)
-            kernel = re.sub(r'password=\S+', 'password=[redacted]', kernel)
+            kernel = re.sub(r'(?i)password\s*[:=]\s*\S+', 'password=[redacted]', kernel)
             (args.output / 'dmesg.log').write_text(kernel)
         assert not failures, failures
         assert 'Filesystem has been shut down' not in kernel

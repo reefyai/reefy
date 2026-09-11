@@ -55,6 +55,7 @@ def image_archive(path):
 
 def run():
     assert Registry().data.get('active')
+    HOST_FILE.parent.mkdir(parents=True, exist_ok=True)
     image = 'busybox:1.37.0'
     archive = '/tmp/synthetic-runtime-image.tar.gz'
     image_archive(archive)
