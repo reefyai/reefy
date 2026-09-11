@@ -5,6 +5,8 @@ Version ordering cannot prove support: a later build of an older branch may
 still lack it. No new firmware or command-payload fields are needed.
 """
 import contextlib
+import errno
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -85,6 +87,35 @@ def squashfs_extent(stream):
 
 
 @contextlib.contextmanager
+def image_loop(source, offset, size):
+    """Keep an atomic, read-only, autoclearing Linux loop attachment alive.
+
+    BusyBox mount does not guarantee autoclear for its implicit loop devices.
+    LOOP_CONFIGURE also bounds reads to the validated SquashFS extent. The open
+    descriptor owns the attachment until unmount, including exception paths.
+    Layout and constants follow include/uapi/linux/loop.h (struct loop_config).
+    """
+    with open(source, 'rb', buffering=0) as backing, open('/dev/loop-control', 'r+b', buffering=0) as control:
+        for _ in range(8):
+            number = fcntl.ioctl(control.fileno(), 0x4C82)  # LOOP_CTL_GET_FREE
+            device = f'/dev/loop{number}'
+            with open(device, 'r+b', buffering=0) as loop:
+                config = bytearray(304)
+                struct.pack_into('=I', config, 0, backing.fileno())
+                struct.pack_into('=QQ', config, 32, offset, size)
+                struct.pack_into('=I', config, 60, 1 | 4)  # READ_ONLY | AUTOCLEAR
+                try:
+                    fcntl.ioctl(loop.fileno(), 0x4C0A, config)  # LOOP_CONFIGURE
+                except OSError as error:
+                    if error.errno == errno.EBUSY:
+                        continue  # Another process claimed the free number.
+                    raise
+                yield device
+                return
+        raise PressureError('no free loop device available for firmware inspection')
+
+
+@contextlib.contextmanager
 def readonly_mount(source, *, options='ro,nodev,nosuid,noexec', filesystem=None):
     directory = tempfile.mkdtemp(prefix='reefy-firmware-check-', dir='/run')
     mounted = False
@@ -108,10 +139,9 @@ def require_compatible_image(path):
         return
     with open(path, 'rb') as stream:
         offset, size = squashfs_extent(stream)
-    # mount's loop device is autocleared on unmount; no payload is copied into
-    # the pressured pool. The target image is never executed or written.
-    with readonly_mount(path, filesystem='squashfs',
-                        options=f'loop,ro,nodev,nosuid,noexec,offset={offset},sizelimit={size}') as root:
+    # No payload is copied into the pressured pool. Never execute the image.
+    with image_loop(path, offset, size) as device, \
+            readonly_mount(device, filesystem='squashfs') as root:
         with (root / 'usr/share/reefy/compatibility.json').open('rb') as stream:
             raw = stream.read(65537)
         if len(raw) > 65536:
