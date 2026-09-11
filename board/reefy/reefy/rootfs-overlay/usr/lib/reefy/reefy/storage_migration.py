@@ -3,15 +3,17 @@
 The caller owns the boot barrier. This worker never stops apps or opens their
 startup gate itself, and it never runs as an online pre-tagging background job.
 """
+from contextlib import contextmanager
 import os
 import stat
 import time
+import tempfile
 
 from reefy.storage_pressure import PressureError, QUANTUM, boundaries
 from reefy.storage_quota import (
     FileAttributes, PROJINHERIT, Registry, assign_tree, atomic_json,
     flush_filesystem, mount_info, physical_sample, read_quotas,
-    require_enforcement, set_quota, verify_tree, owned_tree, RUN_DIR,
+    require_enforcement, set_quota, verify_tree, owned_tree, RUN_DIR, command, mount_targets,
 )
 
 
@@ -50,22 +52,70 @@ class Migration:
             if os.path.realpath(root) != root or not os.path.isdir(root):
                 raise PressureError('volume root must be a real, mounted directory')
             mount = mount_info(root)
+            if '[' in mount.get('source', ''):
+                raise PressureError('governed root is an ambiguous bind-mount alias')
             require_enforcement(mount['target'])
             quotas = read_quotas(mount['target'])
             identity, record = self.registry.register(
                 root, mount, policies[root], occupied=quotas)
             inventory.append((identity, record))
-        for identity, record in inventory:
-            self._prepare_one(identity, record, roots, force_verify)
+        # Non-recursive bind views expose hidden mountpoint inodes and old
+        # files below mounted app/state volumes. Those blocks still belong to
+        # the backing filesystem, even though the ordinary live walk cannot see
+        # them. Tag each filesystem's own contents without crossing its mounts.
+        with self._filesystem_views(inventory) as views:
+            for identity, record in inventory:
+                mount = record['mount']
+                view = views[mount]
+                walk_root = os.path.join(view, os.path.relpath(record['path'], mount))
+                excluded = [os.path.join(view, os.path.relpath(other['path'], mount))
+                            for _, other in inventory if other['mount'] == mount]
+                self._prepare_one(identity, record, excluded, force_verify,
+                                  walk_root=os.path.normpath(walk_root))
         return {identity: record for identity, record in inventory}
 
-    def _prepare_one(self, identity, record, roots, force_verify):
+    @contextmanager
+    def _filesystem_views(self, inventory):
+        os.makedirs(RUN_DIR, mode=0o700, exist_ok=True)
+        # Interrupted workers may leave a private bind view. Never delete its
+        # contents: unmount only the exact internal mount and remove its empty
+        # mountpoint directory. App writers are held throughout migration.
+        mounted = mount_targets()
+        for name in os.listdir(RUN_DIR):
+            if not name.startswith('quota-view-'):
+                continue
+            path = os.path.join(RUN_DIR, name)
+            if os.path.islink(path):
+                raise PressureError('unexpected migration view symlink')
+            if path in mounted:
+                command(['umount', path], timeout=60)
+            os.rmdir(path)
+        views = {}
+        try:
+            for _, record in inventory:
+                mount = record['mount']
+                if mount in views:
+                    continue
+                view = tempfile.mkdtemp(prefix='quota-view-', dir=RUN_DIR)
+                views[mount] = view
+                command(['mount', '--bind', mount, view], timeout=60)
+                command(['mount', '--make-private', view])
+            yield views
+        finally:
+            for view in reversed(list(views.values())):
+                if view in mount_targets():
+                    command(['umount', view], timeout=60)
+                os.rmdir(view)
+
+    def _prepare_one(self, identity, record, roots, force_verify, *, walk_root=None):
         root, project, mount = record['path'], record['project'], record['mount']
+        walk_root = walk_root or root
         info = os.lstat(root)
         flags, _, _, found, _ = self.attributes.read(root)
         quotas = read_quotas(mount)
         quota = quotas.get(project)
-        ready = (record.get('complete') and record.get('root_inode') == info.st_ino
+        ready = (record.get('complete') and record.get('ownership_version') == 2
+                 and record.get('root_inode') == info.st_ino
                  and stat.S_ISDIR(info.st_mode) and found == project
                  and flags & PROJINHERIT and quota and quota['hard'] > 0
                  and quota['soft'] == 0)
@@ -81,7 +131,7 @@ class Migration:
         # statvfs(root) may already be clamped by its old quota. Count allocated
         # blocks while writers are held, including foreign IDs awaiting retag.
         tree_bytes = 0
-        for number, (_, item) in enumerate(owned_tree(root, roots), 1):
+        for number, (_, item) in enumerate(owned_tree(walk_root, roots), 1):
             tree_bytes += item.st_blocks * 512
             if number % 25000 == 0:
                 self.checkpoint('inventory', path=root, inodes=number)
@@ -91,13 +141,13 @@ class Migration:
         if read_quotas(mount).get(project, {}).get('hard') != temporary_limit:
             raise PressureError('temporary migration quota could not be verified')
         count, changed = assign_tree(
-            root, project, roots, attributes=self.attributes,
+            walk_root, project, roots, attributes=self.attributes,
             progress=lambda count, changed: self.checkpoint(
                 'tagging', path=root, inodes=count, changed=changed))
         self.checkpoint('flushing', path=root, inodes=count, changed=changed)
         flush_filesystem(root)
         self.checkpoint('verifying', path=root)
-        verified = verify_tree(root, project, roots, attributes=self.attributes)
+        verified = verify_tree(walk_root, project, roots, attributes=self.attributes)
         quota = read_quotas(mount).get(project)
         if quota is None:
             raise PressureError('tagged project missing from quota accounting')
@@ -106,6 +156,7 @@ class Migration:
         final = read_quotas(mount).get(project, {})
         if final.get('hard') != hard or final.get('soft') != 0:
             raise PressureError('migration final quota verification failed')
+        record['ownership_version'] = 2
         record['root_inode'] = info.st_ino
         record['inodes'] = verified
         self.registry.complete(identity)

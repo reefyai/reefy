@@ -55,6 +55,9 @@ def reservation(kind, budget, *, storage_class='runtime', target=None):
         raise ValueError('reservation requires a positive KiB-aligned budget')
     if storage_class not in ('bulk', 'runtime', 'state'):
         raise ValueError('unknown admission class')
+    if not Registry().data.get('active', False):
+        yield
+        return
     identity = uuid.uuid4().hex
     registered = False
     with state_lock():

@@ -447,6 +447,21 @@ def release_snapshot(snap_name, snap_mnt):
 
 
 def backup_instance(inst, keep_last):
+    # The reservation lives with the snapshots, but never holds the monitor's
+    # mutation lock. Physical COW is also watched independently of quota usage.
+    sys.path.insert(0, '/usr/lib/reefy')
+    from reefy.storage_admission import reservation
+    from reefy.storage_pressure import PressureError
+    try:
+        with reservation('backup-snapshots', 64 * 1024**2):
+            return _backup_instance_admitted(inst, keep_last)
+    except PressureError as error:
+        publish_status({'instance_uuid': inst['instance_uuid'], 'status': 'error',
+                        'message': f'backup storage admission failed: {error}'})
+        return False
+
+
+def _backup_instance_admitted(inst, keep_last):
     """Backup one app instance via per-volume LVM snapshots. Returns
     True if every volume succeeded."""
     iuuid = inst['instance_uuid']
