@@ -145,12 +145,12 @@ bulk ceiling    = runtime ceiling - runtime headroom
 ```
 
 GB is decimal. Pool capacity is smaller than a disk's advertised capacity.
-These examples assume the measured response requirement fits within the base
-emergency reserve:
+These examples use the initial 128 MiB/s, 40-second response envelope plus
+64 MiB of in-flight work. A larger measured requirement raises the reserve:
 
 | Usable pool | Bulk ceiling | Runtime ceiling | State ceiling | Emergency |
 |---|---:|---:|---:|---:|
-| 32 GB | 21.6 GB | 24.8 GB | 28 GB | 4 GB |
+| 32 GB | 20.16 GB | 23.36 GB | 26.56 GB | 5.44 GB |
 | 128 GB | 96 GB | 108.8 GB | 121.6 GB | 6.4 GB |
 | 512 GB | 384 GB | 435.2 GB | 486.4 GB | 25.6 GB |
 | 1 TB | 750 GB | 850 GB | 950 GB | 50 GB |
