@@ -78,9 +78,9 @@ def main():
                     _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-sparse-trace.json', timeout_s=20, check=False)
                     (args.output / 'amplification-trace.json').write_text(trace)
                 if thin_ready and args.suite not in ('migration-cow', 'amplification'):
-                    # The WBT diagnostic reproduces the slower case after
+                    # Writeback diagnostics reproduce the slower case after
                     # the full priority-pressure workload on the same pool.
-                    if args.suite not in ('cow', 'cow-writeback', 'cow-memory', 'cow-drain'):
+                    if args.suite not in ('cow', 'cow-memory', 'cow-drain'):
                         probe(Path(__file__).with_name('pressure_storage_probe.py'),
                               'python3 /tmp/pressure_storage_probe.py', 'pressure-results.json', 660)
                         _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-pressure-trace.json', timeout_s=20, check=False)
