@@ -6,5 +6,10 @@
             "defaultKeepStorage": "0",
             "enabled": true
         }
+    },
+    "log-driver": "json-file",
+    "log-opts": {
+        "max-size": "20m",
+        "max-file": "3"
     }
 }
