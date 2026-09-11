@@ -18,7 +18,7 @@ from reefy.storage_guard import Guard
 from reefy.storage_quota import Registry, RUN_DIR, command, flush_filesystem, read_quotas, set_quota
 from reefy.storage_service import INITIAL_RATE, RESPONSE_SECONDS, IN_FLIGHT
 from reefy import storage_watchdog
-from reefy.storage_watchdog import Writers, check
+from reefy.storage_watchdog import Writers, check, FREEZE_SECONDS, DRAIN_SECONDS
 from thin_storage_probe import ROOT, VG, MIB, CHUNK, SERIAL, sample, write_file
 
 GROUP = 'synthetic-storage-cow'
@@ -82,6 +82,7 @@ def run():
     writers = Writers(groups=(GROUP,))
     child = subprocess.Popen([sys.executable, __file__, 'writer'])
     trace = []
+    observer_calls = []
     started = time.monotonic()
     crossed = None
     def observed_sample(*, timeout):
@@ -101,30 +102,54 @@ def run():
             check_started = time.monotonic()
             reason = check(active=True, stale_seconds=20,
                            writers=writers, status_path=STATUS)
+            observer_calls.append(time.monotonic() - check_started)
+            assert observer_calls[-1] <= 4.5, 'observer exceeded its sample budget'
             if reason:
-                assert time.monotonic() - check_started <= 7.5, 'watchdog exceeded sample-plus-freeze bound'
+                assert time.monotonic() - check_started <= 4.5, 'observer blocked on pending freeze'
                 break
             time.sleep(1)  # same independent observer cadence as firmware
         assert reason in ('physical emergency boundary reached',
                           'protection evidence unavailable: TimeoutExpired',
                           'protection evidence unavailable: TimeoutError'), (reason, initial, trace)
+        hold = json.loads(Path(RUN_DIR, 'hold.json').read_text())
+        while not hold.get('frozen'):
+            assert time.monotonic() - hold['monotonic'] <= FREEZE_SECONDS
+            time.sleep(1)
+            tick = time.monotonic()
+            check(active=True, stale_seconds=20, writers=writers, status_path=STATUS)
+            observer_calls.append(time.monotonic() - tick)
+            assert observer_calls[-1] <= 4.5, 'observer blocked on pending freeze'
+            hold = json.loads(Path(RUN_DIR, 'hold.json').read_text())
+        assert not hold.get('deadline_exceeded'), hold
         assert 'frozen 1' in (CGROUP / 'cgroup.events').read_text()
+        confirmed = time.monotonic()
         if crossed is not None:
-            assert time.monotonic() - crossed <= 4, 'freezer exceeded its declared response bound'
+            assert time.monotonic() - crossed <= FREEZE_SECONDS + 5, 'freezer exceeded its declared response bound'
         else:
             assert reason.startswith('protection evidence unavailable:'), reason
         # The predeclared emergency reserve must still exist after queued I/O
         # settles; quota usage stays flat while physical COW grows separately.
-        time.sleep(1)
+        drain_started = time.monotonic()
+        command([sys.executable, '-c',
+                 'import sys; from reefy.storage_quota import flush_filesystem; '
+                 'flush_filesystem(sys.argv[1])', ROOT], timeout=DRAIN_SECONDS)
+        drain_seconds = time.monotonic() - drain_started
         # Writer is already contained; allow queued I/O to settle for this
         # final evidence sample. The watchdog deadline above stays unchanged.
         after = sample(timeout=10)
+        assert all(row['healthy'] and row['capacity'] - row['used'] >=
+                   initial['allocation']['boundaries']['emergency'] for row in trace), trace
         assert after.healthy
         assert after.capacity - after.used >= initial['allocation']['boundaries']['emergency'], asdict(after)
         assert abs(read_quotas(ROOT)[media['project']]['used'] - quota_before) <= 4 * MIB
         assert after.used > initial['sample']['used'] + 128 * MIB
         print(json.dumps({'snapshot_cow_independent_containment': 'passed',
-                          'freeze_seconds': time.monotonic() - started, 'containment_reason': reason,
+                          'total_scenario_seconds': time.monotonic() - started,
+                          'freeze_seconds': confirmed - hold['monotonic'],
+                          'drain_seconds': drain_seconds,
+                          'observer_max_call_seconds': max(observer_calls),
+                          'response_budget_seconds': RESPONSE_SECONDS,
+                          'containment_reason': reason,
                           'writeback_limit_experiment': bool(writeback),
                           'physical_growth_bytes': after.used - initial['sample']['used'],
                           'sample': asdict(after)}))

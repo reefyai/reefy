@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 import _bootstrap  # noqa: F401
 from reefy.storage_pressure import GB, PoolSample, PressureError
-from reefy.storage_watchdog import Writers, check, unhealthy_reason
+from reefy.storage_watchdog import Writers, check, unhealthy_reason, hold_writers
 
 
 class WatchdogTests(unittest.TestCase):
@@ -49,13 +49,57 @@ class WatchdogTests(unittest.TestCase):
             status = Path(directory) / 'status.json'
             status.write_text(json.dumps(self.status()))
             writers = Mock()
-            with patch('reefy.storage_watchdog.atomic_json') as save:
+            with patch('reefy.storage_watchdog.atomic_json') as save, \
+                    patch('reefy.storage_watchdog.RUN_DIR', directory):
                 reason = check(active=True, stale_seconds=20, writers=writers,
                                sample=Mock(side_effect=TimeoutError),
                                status_path=str(status), now=100)
             self.assertIn('unavailable', reason)
-            save.assert_called_once()
-            writers.freeze.assert_called_once()
+            self.assertGreaterEqual(save.call_count, 1)
+            writers.request_freeze.assert_called_once()
+            writers.freeze.assert_not_called()
+
+    def test_pending_freeze_is_nonblocking_latched_and_deadline_survives_restart(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                patch('reefy.storage_watchdog.RUN_DIR', directory):
+            writer = Mock()
+            writer.frozen.return_value = False
+            self.assertEqual(hold_writers('physical pressure', writers=writer, now=100),
+                             'physical pressure')
+            self.assertEqual(hold_writers(None, writers=writer, now=120), 'physical pressure')
+            path = Path(directory, 'hold.json')
+            self.assertEqual(json.loads(path.read_text())['monotonic'], 100)
+            # A restarted observer has no in-memory state. Late confirmation
+            # must still fail the original deadline, rather than reset it.
+            writer = Mock()
+            writer.frozen.return_value = True
+            self.assertIn('exceeded', hold_writers(None, writers=writer, now=131))
+            result = json.loads(path.read_text())
+            self.assertTrue(result['frozen'])
+            self.assertTrue(result['deadline_exceeded'])
+            writer.thaw.assert_not_called()
+
+    def test_pending_freeze_completes_within_budget_but_does_not_auto_thaw(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                patch('reefy.storage_watchdog.RUN_DIR', directory):
+            writer = Mock()
+            writer.frozen.return_value = False
+            hold_writers('physical pressure', writers=writer, now=100)
+            writer.frozen.return_value = True
+            self.assertEqual(hold_writers(None, writers=writer, now=123), 'physical pressure')
+            result = json.loads(Path(directory, 'hold.json').read_text())
+            self.assertTrue(result['frozen'])
+            self.assertFalse(result.get('deadline_exceeded'))
+            writer.thaw.assert_not_called()
+
+    def test_corrupt_hold_still_requests_freeze_and_cannot_claim_a_met_deadline(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                patch('reefy.storage_watchdog.RUN_DIR', directory):
+            Path(directory, 'hold.json').write_text('{broken')
+            writer = Mock()
+            writer.frozen.return_value = True
+            self.assertIn('exceeded', hold_writers(writers=writer, now=100))
+            writer.request_freeze.assert_called_once()
 
     def test_cow_containment_starts_before_consuming_the_response_margin(self):
         status = dict(self.status(), physical_stop_bytes=24 * GB)

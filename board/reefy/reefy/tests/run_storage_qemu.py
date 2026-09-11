@@ -22,7 +22,7 @@ def main():
     with QemuDevice(raw_image=args.firmware, log_path=args.output / 'qemu.log',
                     memory='6G' if args.suite == 'cow-memory' else '4G',
                     boot_disk_type='nvme' if args.suite == 'core-nvme' else 'virtio',
-                    extra_block_disks=(QemuBlockDisk(size='16G', serial='quota-e2e-pool', cache='none'),)) as vm:
+                    extra_block_disks=(QemuBlockDisk(size='24G', serial='quota-e2e-pool', cache='none'),)) as vm:
         vm.wait_for_boot(timeout_s=240)
         vm.scp_to(Path(__file__).with_name('setup_storage_probe.py'), '/tmp/setup_storage_probe.py')
         _, output, _ = vm.ssh_exec('python3 /tmp/setup_storage_probe.py', timeout_s=300)

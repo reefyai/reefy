@@ -16,7 +16,7 @@ from reefy.storage_guard import Guard
 from reefy.storage_quota import Registry, RUN_DIR, command, flush_filesystem, read_quotas, set_quota
 from reefy.storage_service import INITIAL_RATE, RESPONSE_SECONDS, IN_FLIGHT
 from reefy import storage_watchdog
-from reefy.storage_watchdog import Writers, check
+from reefy.storage_watchdog import Writers, check, FREEZE_SECONDS, DRAIN_SECONDS
 from thin_storage_probe import ROOT, VG, MIB, CHUNK, sample
 
 GROUP = 'synthetic-storage-sparse'
@@ -92,18 +92,29 @@ def run():
             reason = check(active=True, stale_seconds=20,
                            writers=writers, status_path=STATUS)
             if reason or child.poll() is not None:
-                assert time.monotonic() - check_started <= 7.5
+                assert time.monotonic() - check_started <= 4.5
                 break
             time.sleep(1)
         if reason:
             assert reason in ('physical emergency boundary reached',
                               'protection evidence unavailable: TimeoutExpired',
                               'protection evidence unavailable: TimeoutError'), reason
+            hold = json.loads(Path(RUN_DIR, 'hold.json').read_text())
+            while not hold.get('frozen'):
+                assert time.monotonic() - hold['monotonic'] <= FREEZE_SECONDS
+                time.sleep(1)
+                tick = time.monotonic()
+                check(active=True, stale_seconds=20, writers=writers, status_path=STATUS)
+                assert time.monotonic() - tick <= 4.5, 'observer blocked on pending freeze'
+                hold = json.loads(Path(RUN_DIR, 'hold.json').read_text())
+            assert not hold.get('deadline_exceeded'), hold
             assert 'frozen 1' in (CGROUP / 'cgroup.events').read_text()
         else:
             assert child.poll() == 0 and RESULT.exists(), 'writer escaped bounded observation'
             assert json.loads(RESULT.read_text())['errno'] in (errno.ENOSPC, errno.EDQUOT)
-        time.sleep(1)
+        command([sys.executable, '-c',
+                 'import sys; from reefy.storage_quota import flush_filesystem; '
+                 'flush_filesystem(sys.argv[1])', ROOT], timeout=DRAIN_SECONDS)
         # Writer is already contained; allow queued I/O to settle for this
         # final evidence sample. The watchdog deadline above stays unchanged.
         final = sample(timeout=10)

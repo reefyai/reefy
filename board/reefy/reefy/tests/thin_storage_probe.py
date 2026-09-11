@@ -54,9 +54,9 @@ def run():
     assert not signatures, 'test disk must be blank'
     command(['pvcreate', '-y', device])
     command(['vgcreate', VG, device])
-    command(['lvcreate', '--type', 'thin-pool', '-L', '12G', '--poolmetadatasize', '128M',
+    command(['lvcreate', '--type', 'thin-pool', '-L', '16G', '--poolmetadatasize', '128M',
              '--chunksize', '512K', '-Zn', '-n', 'pool', VG], timeout=60)
-    command(['lvcreate', '--thin', '--virtualsize', '12G', '-n', 'data', VG + '/pool'])
+    command(['lvcreate', '--thin', '--virtualsize', '16G', '-n', 'data', VG + '/pool'])
     command(['mkfs.xfs', '-q', '/dev/' + VG + '/data'], timeout=60)
     Path(ROOT).mkdir()
     command(['mount', '-o', 'pquota,discard', '/dev/' + VG + '/data', ROOT])
