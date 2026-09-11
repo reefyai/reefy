@@ -294,11 +294,16 @@ credited until the pool reports real reclamation. Quotas are operational pressur
 controls, not exact instantaneous physical ceilings or an uninterrupted-backup
 guarantee. An independent watchdog holds unsafe writers when measurements are
 stale or physical/metadata pressure cannot be contained. Each complete physical
-sample has a two-second observer budget; the independent watchdog retries one
-transient timeout, then requires fresh healthy counters or requests a writer
-freeze. A single sampling worker isolates command cleanup that remains stuck
-in kernel I/O. Expired results are rejected, and subsequent checks do not
-launch parallel replacement commands while the previous sample is pending. The
+sample has a two-second observer budget, with one retry inside a total
+four-second call budget. During transient I/O stalls, the observer can use its
+own last verified sample until it is ten seconds old, measured from the start
+of that sample. Timeouts and fresh guard heartbeats cannot renew that deadline;
+calls near expiry use only the time remaining. With no previous verified sample,
+or once it expires, missing evidence requests a writer freeze. Known unhealthy
+counters and malformed results are acted on immediately. A single sampling
+worker isolates command cleanup that remains stuck in kernel I/O. Expired
+results are discarded, and a fresh retry starts only after that worker finishes,
+within the same call budget. Subsequent checks never launch overlapping workers. The
 request is nonblocking: the observer continues sampling and servicing systemd's
 eight-second watchdog while queued COW I/O drains. A latched hold blocks new
 writers and preserves the first deadline across observer restarts. Late freeze

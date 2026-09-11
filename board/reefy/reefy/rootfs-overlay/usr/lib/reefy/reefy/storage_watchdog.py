@@ -11,7 +11,8 @@ from reefy.storage_pressure import PressureError
 from reefy.storage_quota import RUN_DIR, atomic_json, physical_sample, state_lock, command, Registry
 
 
-# Eight seconds for systemd to detect a stuck observer, plus scheduling margin.
+# Maximum physical-evidence age; also covers systemd's eight-second observer
+# watchdog plus scheduling margin. This and drain time form the physical budget.
 DETECTION_SECONDS = 10
 QUIESCE_SECONDS = 30
 
@@ -184,12 +185,49 @@ def sample_with_retry(*, timeout=2):
         return _observer_sampler.read(timeout=remaining)
 
 
+class PhysicalObserver:
+    """Bound transient I/O stalls by the existing ten-second detection budget.
+
+    Only this observer's verified sample can bridge a timeout. An old guard
+    heartbeat cannot renew it, and its age starts before the sampling call.
+    Known unhealthy results and non-timeout errors are never delayed.
+    """
+    def __init__(self, sample=None, clock=time.monotonic, max_age=DETECTION_SECONDS):
+        self.sample = sample
+        self.clock, self.max_age = clock, max_age
+        self.reset()
+
+    def reset(self):
+        self.latest = self.sampled_at = None
+
+    def read(self):
+        started = self.clock()
+        remaining = (self.max_age if self.sampled_at is None else
+                     self.sampled_at + self.max_age - started)
+        if remaining <= 0:
+            self.latest = self.sampled_at = None
+            raise TimeoutError('physical evidence exceeded the detection window')
+        try:
+            current = (self.sample or sample_with_retry)(timeout=min(2, remaining / 2))
+        except (subprocess.TimeoutExpired, TimeoutError):
+            if self.sampled_at is None or self.clock() >= self.sampled_at + self.max_age:
+                self.latest = self.sampled_at = None
+                raise
+            return self.latest
+        self.latest, self.sampled_at = current, started
+        return current
+
+
+_physical_observer = PhysicalObserver()
+
+
 def check(*, active, stale_seconds, sample=None, writers=None,
           status_path=RUN_DIR + '/status.json', now=None):
     if not active:
+        _physical_observer.reset()
         return None
     writers = writers or Writers()
-    sample = sample or sample_with_retry
+    sample = sample or _physical_observer.read
     supplied_now = now
     try:
         with open(status_path) as source:
