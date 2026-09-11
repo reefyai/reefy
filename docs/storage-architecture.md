@@ -250,6 +250,15 @@ revision 1. The check uses the actual image, not its version string, and runs
 before changing boot entries or formatting a slot. Firmware selected outside
 Reefy's commands, such as manually through UEFI setup, is outside this guard.
 
+On older installations where `/mnt/reefy-data/state` is a directory on the
+thin default filesystem, migration assigns it an internal state project with a
+fixed bookkeeping allowance. It is at least 256 MiB, or existing allocated data
+plus 64 MiB when larger. The guard always charges the unused portion against
+the shared pool and preserves it at app/runtime pressure, so its own atomic
+registry updates cannot be starved by a runtime quota. This does not add a new
+app storage class or create a thick LV. Installations with a separate thick
+state LV retain that existing isolation.
+
 ### Limits of the mechanism
 
 Project-quota bytes differ from physical thin-pool usage. Snapshot COW, thin-chunk

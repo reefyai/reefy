@@ -115,7 +115,7 @@ class Guard:
                 self.demand[key] = rate
                 consumers.append(Consumer(
                     key, record['storage_class'], quota['used'], quota['hard'],
-                    int(rate), record.get('max_hard')))
+                    int(rate), record.get('max_hard'), record.get('minimum_hard', 0)))
                 by_key[key] = record
             # Retired and Docker-owned projects remain physical consumers. Their
             # outstanding allowances cannot disappear from the shared ledger.
@@ -151,8 +151,9 @@ class Guard:
                 peak_bytes_per_second=self.peak, response_seconds=self.response,
                 in_flight_bytes=self.in_flight)
 
+            protected = sum(max(0, c.minimum_hard - c.used) for c in consumers)
             allocation, admitted = admit_reservations(
-                allocation, sample, consumers, leases, margin=self.peak * self.response)
+                allocation, sample, consumers, leases, margin=self.peak * self.response + protected)
 
             def deadline():
                 if self.clock() - started > 20:
@@ -191,7 +192,7 @@ class Guard:
                       # that margin has already been consumed by snapshot COW.
                       'physical_stop_bytes': max(0, allocation.boundaries.state
                           - max(sample.chunk_bytes, int(self.peak * self.response))
-                          - pending_bytes - len(consumers) * sample.chunk_bytes),
+                          - pending_bytes - protected - len(consumers) * sample.chunk_bytes),
                       'generation': registry.data.get('generation', 0),
                       'admitted_leases': admitted,
                       'elapsed_seconds': finished - started, 'sample': asdict(sample),

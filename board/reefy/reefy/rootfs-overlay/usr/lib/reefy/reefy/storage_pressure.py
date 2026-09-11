@@ -74,11 +74,15 @@ class Consumer:
     hard: int
     demand: int = 0  # recent positive allocation rate, bytes/second
     max_hard: int | None = None  # an independently configured limit
+    minimum_hard: int = 0  # internal control-state runway, never app policy
 
     def __post_init__(self):
         if (not self.key or self.storage_class not in CLASSES
                 or min(self.used, self.hard, self.demand) < 0
-                or (self.max_hard is not None and self.max_hard <= 0)):
+                or (self.max_hard is not None and self.max_hard <= 0)
+                or type(self.minimum_hard) is not int or self.minimum_hard < 0
+                or self.minimum_hard % QUANTUM
+                or (self.max_hard is not None and self.minimum_hard > self.max_hard)):
             raise ValueError('invalid quota consumer')
 
 
@@ -110,7 +114,8 @@ def allocate(sample, consumers, *, pending_bytes=0, peak_bytes_per_second=0,
     consumers = tuple(consumers)
     if len({c.key for c in consumers}) != len(consumers):
         raise ValueError('duplicate consumer')
-    limits = {c.key: _charged_floor(c.used) for c in consumers}
+    limits = {c.key: max(_charged_floor(c.used), c.minimum_hard) for c in consumers}
+    protected = sum(limits[c.key] - _charged_floor(c.used) for c in consumers)
     bound = boundaries(sample.capacity,
                        peak_bytes_per_second=peak_bytes_per_second,
                        response_seconds=response_seconds,
@@ -118,7 +123,7 @@ def allocate(sample, consumers, *, pending_bytes=0, peak_bytes_per_second=0,
     # Cover empty-project floors and quota rounding at thin-chunk granularity.
     rounding = sum(sample.chunk_bytes for c in consumers
                    if limits[c.key] > c.used)
-    used = sample.used + pending_bytes + rounding
+    used = sample.used + pending_bytes + protected + rounding
     margin = max(sample.chunk_bytes, ceil(peak_bytes_per_second * response_seconds))
     unsafe = (not sample.healthy
               or sample.metadata_used * 100 >= sample.metadata_capacity * 85

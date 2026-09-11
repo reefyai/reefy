@@ -3,6 +3,8 @@
 import glob
 import json
 import os
+import shutil
+import tempfile
 from pathlib import Path
 import sys
 import time
@@ -148,12 +150,33 @@ def interrupted_download(policy):
         server.server_close()
 
 
+
+def legacy_control_state():
+    """Place control state on the default LV in this disposable VM only."""
+    state = Path('/mnt/reefy-data/state')
+    mount = json.loads(command(['findmnt', '--json', '--target', str(state),
+                                '-o', 'TARGET']))['filesystems'][0]['target']
+    assert mount == str(state)
+    command(['systemctl', 'stop', 'reefy-control.service'])
+    try:
+        with tempfile.TemporaryDirectory(prefix='synthetic-legacy-state-') as directory:
+            saved = Path(directory) / 'state'
+            shutil.copytree(state, saved, symlinks=True)
+            command(['umount', str(state)])
+            shutil.copytree(saved, state, symlinks=True, dirs_exist_ok=True)
+        assert state.stat().st_dev == Path('/mnt/reefy-data').stat().st_dev
+    finally:
+        command(['systemctl', 'start', 'reefy-control.service'])
+
+
 def run():
     results = {}
     # Fetch while still legacy. Network failure is a setup failure, never a pass.
     command(['docker', 'pull', 'busybox:1.37.0'], timeout=180)
     image = json.loads(command(['docker', 'image', 'inspect', 'busybox:1.37.0']))[0]['Id']
     command(['systemctl', 'stop', 'reefy-reconciler.service'])
+    if '--legacy-state' in sys.argv:
+        legacy_control_state()
     media = '/mnt/reefy-data/apps/synthetic-recorder/media'
     config = '/mnt/reefy-data/apps/synthetic-recorder/config'
     for path in (media, config):
@@ -172,6 +195,15 @@ def run():
         verify_tree(path, record['project'])
         assert Path(path, 'preserved').read_text() == 'synthetic contents'
     results['live_policy_activation_preserves_existing_files'] = 'passed'
+    if '--legacy-state' in sys.argv:
+        control = next(r for r in registry.data['projects'].values()
+                       if r['path'] == '/mnt/reefy-data/state')
+        assert control['control_state'] and control['minimum_hard'] >= 256 * 1024**2
+        assert control['max_hard'] == control['minimum_hard']
+        quota = read_quotas(control['mount'])[control['project']]
+        assert quota['hard'] >= control['minimum_hard']
+        verify_tree(control['path'], control['project'])
+        results['legacy_control_state_has_independent_reserved_runway'] = 'passed'
     info = json.loads(command(['docker', 'info', '--format', '{{json .}}']))
     assert info['Driver'] == 'overlay2'
     with open(RUN_DIR + '/docker.json') as source:

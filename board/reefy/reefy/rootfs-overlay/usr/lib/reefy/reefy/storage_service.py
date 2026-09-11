@@ -258,6 +258,16 @@ def activate(*, boot=False):
             raise PressureError('owned app LV is unavailable; refusing directory fallback')
         os.makedirs(path, mode=0o755, exist_ok=True)
     all_policies = {'/mnt/reefy-data': 'runtime', **policies}
+    control_state = '/mnt/reefy-data/state'
+    if os.stat(control_state).st_dev == os.stat('/mnt/reefy-data').st_dev:
+        # A separate thick state LV is already isolated from this thin pool.
+        # For a legacy directory, protect the controller's own bookkeeping with
+        # a distinct, physically charged fixed allowance before app startup.
+        all_policies[control_state] = 'state'
+        mount = mount_info(control_state)
+        _, record = registry.register(control_state, mount, 'state', read_quotas(mount['target']))
+        record['control_state'] = True
+        registry.save()
     all_policies.update(register_runtime(registry))
     migration = Migration(registry=registry)
     migration.prepare(all_policies)
