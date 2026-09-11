@@ -160,6 +160,7 @@ def run():
     seed_budget = ((clip_size * 380 + 4095) // 4096) * 4096
     with reservation('synthetic-recording-history', seed_budget, storage_class='bulk', target=media_key):
         for index in range(370):
+            seed_started = time.monotonic()
             # The regular age-retention worker keeps these recent recordings;
             # only the free-space maintainer should remove this history.
             start = now - (370 - index) * 10 - 120
@@ -174,6 +175,10 @@ def run():
                 'VALUES (?, ?, ?, ?, ?, ?, ?)',
                 (f'synthetic-seed-{index}', 'synthetic', '/media/frigate/' + str(relative),
                  start, start + 10, 10, clip_size / MIB))
+            # This fixture models recording history, not an unbounded disk-rate
+            # qualification. Two seeders together stay below the declared
+            # physical rate envelope; sparse/COW probes exercise fast divergence.
+            time.sleep(max(0, clip_size / (24 * MIB) - (time.monotonic() - seed_started)))
         assert sql('PRAGMA integrity_check')[0][0] == 'ok'
     # Set only an internal test cap. The ordinary allocator applies it, so a
     # background pass cannot silently replace the experiment's limit.
