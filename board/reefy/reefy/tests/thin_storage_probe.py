@@ -59,7 +59,9 @@ def run():
     command(['lvcreate', '--thin', '--virtualsize', '16G', '-n', 'data', VG + '/pool'])
     command(['mkfs.xfs', '-q', '/dev/' + VG + '/data'], timeout=60)
     Path(ROOT).mkdir()
-    command(['mount', '-o', 'pquota,discard', '/dev/' + VG + '/data', ROOT])
+    # Keep preparation deterministic: asynchronous discard from the earlier
+    # quota-fullness phase must not reclaim blocks during the no-discard test.
+    command(['mount', '-o', 'pquota,nodiscard', '/dev/' + VG + '/data', ROOT])
     results = {'versions': {'kernel': command(['uname', '-r']).strip(),
                            'xfs': command(['xfs_quota', '-V']).strip(),
                            'lvm': command(['lvm', 'version']).splitlines()[0]},
@@ -100,6 +102,7 @@ def run():
     assert after.used > start.used
     results['local_quota_errors_and_independent_state'] = 'passed'
     Path(ROOT + '/media/recordings').unlink()
+    flush_filesystem(ROOT)
     command(['fstrim', ROOT], timeout=60)
     # A fresh guard avoids treating the synthetic fast setup workload as a
     # qualification of the long-running production rate envelope.
@@ -116,7 +119,10 @@ def run():
     after_delete = sample()
     used_after = read_quotas(ROOT)[media['project']]['used']
     assert used_after < used_before
-    assert after_delete.used >= before_delete.used - 4 * CHUNK
+    assert after_delete.used >= before_delete.used - 4 * CHUNK, {
+        'before_delete': asdict(before_delete), 'after_delete': asdict(after_delete),
+        'mount': command(['findmnt', '--json', '--target', ROOT, '-o', 'TARGET,OPTIONS']),
+    }
     limited = guard.pass_once()
     deadline = time.monotonic() + 20
     trim_outputs = []
