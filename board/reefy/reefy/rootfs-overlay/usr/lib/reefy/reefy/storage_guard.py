@@ -33,6 +33,7 @@ class Guard:
         self.previous_time = None
         self.previous_physical = None
         self.demand = {}
+        self.burst_credit = in_flight_bytes
 
     def pass_once(self, *, pending_bytes=0):
         started = self.clock()
@@ -49,13 +50,23 @@ class Guard:
             sample = self.sample()
             elapsed = started - self.previous_time if self.previous_time is not None else None
             if elapsed and self.previous_physical is not None:
-                observed = max(0, sample.used - self.previous_physical) / elapsed
+                # The envelope is rate * elapsed + in-flight bytes. Admission
+                # wakes can sample only milliseconds apart; charging an allowed
+                # burst as a sustained rate permanently invents a huge reserve.
+                observed = max(0, sample.used - self.previous_physical
+                               - self.burst_credit) / elapsed
                 if observed > self.peak:
                     # Never retain a disproven bound or shrink it to manufacture
                     # capacity. The enlarged envelope can deny further admission.
                     self.peak = int(observed * 2) + 1
                     registry.data['peak_bytes_per_second'] = self.peak
                     registry.save()
+                # Carry one shared burst allowance across frequent admission
+                # wakes. It replenishes only with elapsed time; every new sample
+                # must not receive a fresh 64 MiB exemption.
+                growth = max(0, sample.used - self.previous_physical)
+                self.burst_credit = min(self.in_flight, max(0,
+                    self.burst_credit + self.peak * elapsed - growth))
             # A managed container replacement can remove a previously
             # inventoried native layer. Its dquot remains in reports below, so
             # retiring the path never discards physical usage or allowance.
