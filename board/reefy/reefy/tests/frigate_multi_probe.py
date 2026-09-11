@@ -115,4 +115,15 @@ def run():
 
 
 if __name__ == '__main__':
-    run()
+    try:
+        run()
+    except Exception:
+        from dataclasses import asdict
+        for name in ('hold.json', 'status.json', 'session.json'):
+            path = Path('/run/reefy/storage-pressure') / name
+            if path.exists():
+                print(name + ': ' + path.read_text(), file=sys.stderr)
+        print(json.dumps({'physical': asdict(physical_sample()),
+                          'peak_bytes_per_second': Registry().data.get('peak_bytes_per_second')}),
+              file=sys.stderr)
+        raise
