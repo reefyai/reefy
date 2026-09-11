@@ -56,6 +56,16 @@ def drain():
     finish_hold(writers=Writers(groups=(GROUP,)), mounts=[ROOT])
 
 
+def guard_loop():
+    guard = Guard(peak_bytes_per_second=INITIAL_RATE, response_seconds=RESPONSE_SECONDS,
+                  in_flight_bytes=IN_FLIGHT,
+                  registry_path=RUN_DIR + '/synthetic-thin-registry.json',
+                  sample=sample, status_path=STATUS)
+    while True:
+        guard.pass_once()
+        time.sleep(10)
+
+
 def run():
     assert not Registry().data.get('active'), 'disposable pre-activation VM required'
     assert not Path(RUN_DIR, 'hold.json').exists()
@@ -77,6 +87,12 @@ def run():
     quota = read_quotas(ROOT)[media['project']]
     assert quota['hard'] >= 128 * MIB
     set_quota(ROOT, media['project'], 128 * MIB)
+    media['max_hard'] = 128 * MIB
+    registry.save()
+    # Slow guest I/O need not reach the physical boundary within one stale
+    # heartbeat window. Run the actual guard independently at its production
+    # cadence while the observer keeps its existing one-second checks.
+    controller = subprocess.Popen([sys.executable, __file__, 'guard'])
     CGROUP.mkdir()
     writers = Writers(groups=(GROUP,))
     child = subprocess.Popen([sys.executable, __file__, 'writer'])
@@ -91,7 +107,7 @@ def run():
 
     storage_watchdog.physical_sample = observed_sample
     try:
-        while time.monotonic() - started < 19:
+        while time.monotonic() - started < 90:
             check_started = time.monotonic()
             reason = check(active=True, stale_seconds=20,
                            writers=writers, status_path=STATUS)
@@ -102,7 +118,8 @@ def run():
         if reason:
             assert reason in ('physical emergency boundary reached',
                               'protection evidence unavailable: TimeoutExpired',
-                              'protection evidence unavailable: TimeoutError'), reason
+                              'protection evidence unavailable: TimeoutError',
+                              'guard measurements are stale'), reason
             drainer = subprocess.Popen([sys.executable, __file__, 'drain'], start_new_session=True)
             hold = json.loads(Path(RUN_DIR, 'hold.json').read_text())
             while not hold.get('drained'):
@@ -141,6 +158,8 @@ def run():
                           'quota_used_bytes': quota_after, 'sample': asdict(final)}))
     finally:
         Path('/tmp/synthetic-sparse-trace.json').write_text(json.dumps({'initial': initial, 'samples': trace}))
+        controller.terminate()
+        controller.wait(timeout=15)
         if child.poll() is None:
             child.send_signal(signal.SIGKILL)
         if drainer is not None:
@@ -153,8 +172,13 @@ def run():
         command(['fstrim', ROOT], timeout=60)
         CGROUP.rmdir()
         Path(RUN_DIR, 'hold.json').unlink(missing_ok=True)
+        registry = Registry(registry.path)
+        for row in registry.data['projects'].values():
+            if row['path'] == ROOT + '/media':
+                row.pop('max_hard', None)
+        registry.save()
 
 
 if __name__ == '__main__':
-    {'writer': writer, 'drain': drain}.get(
+    {'writer': writer, 'drain': drain, 'guard': guard_loop}.get(
         sys.argv[1] if len(sys.argv) > 1 else '', run)()
