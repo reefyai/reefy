@@ -3,6 +3,9 @@
 import argparse
 from pathlib import Path
 import re
+import json
+import subprocess
+import tempfile
 import sys
 
 
@@ -86,6 +89,23 @@ def main():
             if ready:
                 recovered = True
                 if args.suite in ('all', 'core', 'core-nvme'):
+                    # Build only a synthetic legacy rootfs on this Linux runner;
+                    # no real old firmware or customer configuration is needed.
+                    from test_storage_firmware import firmware_fixture
+                    with tempfile.TemporaryDirectory() as directory:
+                        root = Path(directory) / 'root'
+                        manifest = root / 'usr/share/reefy/compatibility.json'
+                        manifest.parent.mkdir(parents=True)
+                        manifest.write_text(json.dumps({'manifest_version': 1, 'protocols': {
+                            'desired_state': {'versions': [1], 'features': {}}}}))
+                        squash = Path(directory) / 'rootfs.squashfs'
+                        subprocess.run(['mksquashfs', str(root), str(squash), '-noappend',
+                                        '-processors', '1', '-quiet'], check=True)
+                        target = Path(directory) / 'synthetic-legacy.efi'
+                        target.write_bytes(firmware_fixture(squash.read_bytes())[0])
+                        vm.scp_to(target, '/tmp/synthetic-legacy.efi')
+                    probe(Path(__file__).with_name('firmware_storage_probe.py'),
+                          'python3 /tmp/firmware_storage_probe.py', 'firmware-results.json', 120)
                     probe(Path(__file__).with_name('image_retention_probe.py'),
                           'python3 /tmp/image_retention_probe.py', 'retention-results.json', 180)
                     probe(args.service_repo / 'tests/e2e/lib/phases/backup_quota_guest.py',

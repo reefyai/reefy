@@ -228,6 +228,10 @@ def activate(*, boot=False):
     if policies is None:
         return
     validate_activation_layout(policies)
+    # A first upgrade must not migrate data while its automatic fallback still
+    # points at quota-unaware firmware. This service checks storage/control
+    # health and commits the slot; it does not depend on Docker or the network.
+    command(['systemctl', 'start', 'reefy-boot-confirm.service'], timeout=360)
     registry = Registry()
     registry.data['activation_pending'] = True
     registry.data['inventory_complete'] = False

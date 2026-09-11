@@ -241,6 +241,15 @@ older firmware, and class-aware releases require compatible firmware. Existing
 LVs are not shrunk or reformatted during quota activation. Once active, an
 accidentally omitted activation marker does not remove protection.
 
+Before first activation, the existing boot-health service confirms the running
+slot so automatic fallback cannot select the previous quota-unaware image after
+migration. Once activation is pending or complete, `reefy-efi update` and
+`reefy-efi set-next` read the target image's existing compatibility manifest
+through a temporary read-only mount and reject targets lacking quota protocol
+revision 1. The check uses the actual image, not its version string, and runs
+before changing boot entries or formatting a slot. Firmware selected outside
+Reefy's commands, such as manually through UEFI setup, is outside this guard.
+
 ### Limits of the mechanism
 
 Project-quota bytes differ from physical thin-pool usage. Snapshot COW, thin-chunk
