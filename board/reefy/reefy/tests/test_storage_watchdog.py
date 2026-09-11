@@ -77,6 +77,42 @@ class WatchdogTests(unittest.TestCase):
         reader.sample = lambda **kwargs: 'fresh'
         self.assertEqual(reader.read(timeout=0.1), 'fresh')
 
+    def test_late_cleanup_gets_one_fresh_retry_inside_the_total_budget(self):
+        from reefy.storage_watchdog import BoundedSampler, sample_with_retry
+        calls = []
+        def sample(**kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                time.sleep(.12)
+                return 'expired result'
+            return 'fresh result'
+        reader = BoundedSampler(sample)
+        with patch('reefy.storage_watchdog._observer_sampler', reader):
+            started = time.monotonic()
+            self.assertEqual(sample_with_retry(timeout=.1), 'fresh result')
+            self.assertLess(time.monotonic() - started, .3)
+            self.assertEqual(len(calls), 2)
+
+    def test_retry_wait_does_not_fan_out_or_extend_its_total_budget(self):
+        from reefy.storage_watchdog import BoundedSampler, sample_with_retry
+        release = threading.Event()
+        calls = []
+        def sample(**kwargs):
+            calls.append(kwargs)
+            release.wait(1)
+            return 'expired result'
+        reader = BoundedSampler(sample)
+        try:
+            with patch('reefy.storage_watchdog._observer_sampler', reader):
+                started = time.monotonic()
+                with self.assertRaises(TimeoutError):
+                    sample_with_retry(timeout=.02)
+                self.assertLess(time.monotonic() - started, .15)
+                self.assertEqual(len(calls), 1)
+        finally:
+            release.set()
+            self.assertTrue(reader.pending['done'].wait(1))
+
     def test_fresh_worker_result_does_not_get_reused(self):
         from reefy.storage_watchdog import BoundedSampler
         sample = Mock(side_effect=['first', 'second'])

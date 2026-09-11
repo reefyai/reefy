@@ -1,7 +1,10 @@
 [Unit]
 Description=Create Reefy snapshots with reserved physical capacity
 After=reefy-storage-guard.service reefy-storage-watchdog.service
-OnFailure=reefy-storage-hold.service
+# The worker durably holds writers before creating any snapshot. A crash after
+# that point leaves the hold for the independent watchdog/recovery protocol.
+# A generic OnFailure job could arrive after intentional cancellation/recovery
+# and incorrectly refreeze healthy apps, so no second failure trigger is used.
 
 [Service]
 Type=oneshot
