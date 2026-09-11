@@ -5,9 +5,24 @@ import shutil
 from pathlib import Path
 import subprocess
 import sys
+import time
 sys.path.insert(0, '/usr/lib/reefy')
 from reefy.storage_firmware import require_compatible_image
 from reefy.storage_quota import Registry, command
+
+
+def require_loop_cleanup(expected):
+    # Kernel autoclear can wait for a transient udev/blkid opener. Resource
+    # cleanup has its own bounded observation, separate from writer deadlines.
+    deadline = time.monotonic() + 3
+    while True:
+        actual = command(['losetup', '-a'])
+        if actual == expected:
+            return
+        if time.monotonic() >= deadline:
+            flags = {str(p): p.read_text() for p in Path('/sys/class/block').glob('loop*/loop/autoclear')}
+            raise AssertionError({'expected_loops': expected, 'actual_loops': actual, 'autoclear': flags})
+        time.sleep(0.05)
 
 
 def run():
@@ -18,7 +33,7 @@ def run():
     assert current.is_file()
     loops_before = command(['losetup', '-a'])
     require_compatible_image(current)
-    assert command(['losetup', '-a']) == loops_before
+    require_loop_cleanup(loops_before)
     before = command(['efibootmgr', '-v'])
     result = subprocess.run(['reefy-efi', 'update', '/tmp/synthetic-legacy.efi'],
                             capture_output=True, text=True, timeout=60)
@@ -49,7 +64,7 @@ def run():
     assert result.returncode != 0
     assert 'does not support the active storage quota policy' in result.stderr, result.stderr
     assert command(['efibootmgr', '-v']) == before
-    assert command(['losetup', '-a']) == loops_before
+    require_loop_cleanup(loops_before)
     assert not list(Path('/run').glob('reefy-firmware-check-*'))
     assert not Path('/run/reefy/storage-pressure/hold.json').exists()
     assert command(['systemctl', 'is-active', 'docker.service']).strip() == 'active'
