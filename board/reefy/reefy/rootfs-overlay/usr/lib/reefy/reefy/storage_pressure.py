@@ -11,7 +11,9 @@ from math import ceil, isfinite
 
 GB = 1_000_000_000
 MIB = 1024 * 1024
-QUANTUM = 1024
+# Reefy x86_64 XFS uses 4 KiB filesystem blocks. Smaller requests are
+# rounded by the kernel, so they cannot be used as verified hard limits.
+QUANTUM = 4096
 CLASSES = ('bulk', 'runtime', 'state')
 
 

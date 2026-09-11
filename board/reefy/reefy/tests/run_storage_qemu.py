@@ -13,9 +13,10 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     sys.path.insert(0, str(args.service_repo / 'tests/e2e'))
-    from lib.qemu_device import QemuDevice
+    from lib.qemu_device import QemuDevice, QemuBlockDisk
     args.output.mkdir(parents=True, exist_ok=True)
-    with QemuDevice(raw_image=args.firmware, log_path=args.output / 'qemu.log') as vm:
+    with QemuDevice(raw_image=args.firmware, log_path=args.output / 'qemu.log',
+                    extra_block_disks=(QemuBlockDisk(size='16G', serial='reefy-storage-e2e-pool'),)) as vm:
         vm.wait_for_boot(timeout_s=240)
         vm.scp_to(Path(__file__).with_name('setup_storage_probe.py'), '/tmp/setup_storage_probe.py')
         _, output, _ = vm.ssh_exec('python3 /tmp/setup_storage_probe.py', timeout_s=300)
@@ -25,6 +26,10 @@ def main():
             _, output, _ = vm.ssh_exec('python3 /tmp/kernel_storage_probe.py', timeout_s=300)
             print(output)
             (args.output / 'kernel-results.json').write_text(output)
+            vm.scp_to(Path(__file__).with_name('thin_storage_probe.py'), '/tmp/thin_storage_probe.py')
+            _, output, _ = vm.ssh_exec('python3 /tmp/thin_storage_probe.py', timeout_s=600)
+            print(output)
+            (args.output / 'thin-results.json').write_text(output)
             vm.scp_to(Path(__file__).with_name('controller_storage_probe.py'), '/tmp/controller_storage_probe.py')
             _, output, _ = vm.ssh_exec('python3 /tmp/controller_storage_probe.py', timeout_s=600)
             print(output)

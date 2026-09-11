@@ -189,7 +189,7 @@ container mount point it requests:
       "uid": 1000,
       "backup": ["borgbase"],
       "excludes": ["cache/**"],
-      "cap_pct": 20
+      "storage_class": "state"
     }
   }
 }
@@ -198,8 +198,17 @@ container mount point it requests:
 - `uid` controls ownership of the host directory.
 - `backup` selects supported backup targets. `[]` means no backup.
 - `excludes` adds app-specific shell-glob exclusions.
-- `cap_pct` gives the volume a thin LV limited to that percentage of the app
-  pool.
+- `storage_class` is `bulk` for large data whose growth can yield, or `state`
+  for databases and configuration. Omission means `state`. Classes require
+  firmware advertising `storage_pressure_quotas: 1`; they do not express a
+  fixed size or guaranteed reservation.
+- Legacy `cap_pct` retains its thin-LV virtual-size meaning. It cannot appear
+  with `storage_class`. Publish an explicitly classified replacement before
+  activating the physical-pool policy; do not infer a class from a percentage.
+
+Media and recording scratch should use separate `bulk` volumes when an app
+also has a database/config volume. Quotas apply to each app-instance volume,
+including files below its root. See [storage pressure quotas](storage-architecture.md#storage-pressure-quotas).
 
 Seed files are written only when the destination does not exist. A restored
 file therefore wins over a seed. Seed files are for first-run defaults, not

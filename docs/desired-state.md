@@ -46,6 +46,33 @@ Reefy treats the request as one coherent configuration. If it cannot safely
 represent every installed app, it leaves the device's accepted configuration
 unchanged rather than sending a partial request that could remove a workload.
 
+## Volume storage policy
+
+Firmware supporting this policy advertises
+`protocols.desired_state.features.storage_pressure_quotas: 1`. The backend sends
+`storage_pressure_policy: {"version": 1}` with effective `bulk` or `state`
+classes for declared app-instance volumes. In schema v1,
+`volume_storage_classes` is a top-level path-to-class map; in schema v2, each
+app carries its own map. Runtime storage is an internal policy group, not an
+app-spec class.
+
+The reconciler validates the marker, paths, classes, and legacy-cap conflicts
+before persisting a request. Unsupported existing filesystems are rejected
+before the cached legacy configuration is replaced. Legacy `cap_pct` keeps its
+virtual-LV meaning; a package must explicitly move to storage classes rather
+than relying on a percentage-to-class guess.
+
+A device may keep booting its cached legacy configuration until the new policy
+arrives. First activation holds writers while the coordinator establishes and
+verifies ownership and quotas. Later boots verify the cached active policy
+before Docker starts. Omitting the marker after activation does not disable
+protection; unknown policy revisions are rejected.
+
+New volumes receive ownership and a verified allowance before seeds, downloads,
+or restores write into them. Restores use the destination volume's project,
+and verification must succeed before the app is started. See
+[storage architecture](storage-architecture.md) for migration and pressure rules.
+
 ## App ports and routes
 
 Each web app receives an available device-facing port. For a normal
@@ -88,13 +115,15 @@ static IPs and deleted per-app logical volumes.
 
 The current apply order is:
 
-1. Persist `/mnt/reefy-data/state/desired-state.json`.
+1. Validate the policy and persist the selected desired-state schema. First
+   quota activation is delegated to the coordinator before normal apply resumes.
 2. Set the requested hostname, or restore the MAC-derived default.
 3. Apply Wi-Fi, using the old state to remove obsolete configuration.
 4. Provision or activate encrypted storage when requested.
 5. Apply static network addresses with old/new diff cleanup.
 6. Rewrite user SSH keys and synchronize per-app system users.
-7. Create and mount app volumes, including capped or backup-backed thin LVs.
+7. Create and mount app volumes, including capped or backup-backed thin LVs;
+   establish quota ownership before volume writes when the policy is active.
 8. Write backup configuration and restore requested archives before apps start.
 9. Apply allow-listed rendered files under `/mnt/reefy-data/apps/` or
    `/mnt/reefy-data/state/`.

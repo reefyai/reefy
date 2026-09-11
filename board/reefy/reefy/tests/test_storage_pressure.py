@@ -4,7 +4,7 @@ import unittest
 
 import _bootstrap  # noqa: F401
 from reefy.storage_pressure import (
-    GB, Consumer, PoolSample, PressureError, allocate, apply_allocation,
+    GB, QUANTUM, Consumer, PoolSample, PressureError, allocate, apply_allocation,
     boundaries, parse_thin_sample,
 )
 
@@ -48,7 +48,7 @@ class BudgetTests(unittest.TestCase):
             if plan.stage != 'bulk':
                 for c in writers:
                     if c.storage_class == 'bulk':
-                        self.assertLess(plan.limits[c.key] - c.used, 1024)
+                        self.assertLess(plan.limits[c.key] - c.used, QUANTUM)
 
     def test_large_existing_database_reduces_media_room(self):
         writers = [Consumer('media', 'bulk', 100 * GB, 200 * GB, 1000000),
@@ -62,7 +62,7 @@ class BudgetTests(unittest.TestCase):
                      PoolSample(512 * GB, 20 * GB, 100, 1000, 524288, False)]:
             plan = allocate(pool, [Consumer('new', 'bulk', 0, 0)])
             self.assertTrue(plan.quiesce)
-            self.assertEqual(plan.limits['new'], 1024)
+            self.assertEqual(plan.limits['new'], QUANTUM)
 
     def test_deleting_files_without_physical_reclamation_does_not_refund(self):
         before = allocate(sample(385 * GB), [Consumer('media', 'bulk', 300 * GB, 310 * GB)])
@@ -80,7 +80,7 @@ class BudgetTests(unittest.TestCase):
     def test_independent_hard_caps_are_respected(self):
         plan = allocate(sample(GB), [Consumer('a', 'runtime', GB, 2 * GB,
                                                max_hard=2 * GB)])
-        self.assertEqual(plan.limits['a'], 2 * GB)
+        self.assertEqual(plan.limits['a'], (2 * GB // QUANTUM) * QUANTUM)
 
     def test_unknown_limits_are_closed_before_grants(self):
         writers = [Consumer('new', 'state', 0, 0),
@@ -92,7 +92,7 @@ class BudgetTests(unittest.TestCase):
             values[key] = value
             actions.append((key, value))
         apply_allocation(writers, plan, write, values.get)
-        self.assertEqual(actions[0], ('new', 1024))
+        self.assertEqual(actions[0], ('new', QUANTUM))
         self.assertEqual(values, plan.limits)
 
     def test_failed_revoke_prevents_all_grants(self):
@@ -103,7 +103,7 @@ class BudgetTests(unittest.TestCase):
         with self.assertRaises(PressureError):
             apply_allocation(writers, plan, lambda *v: actions.append(v),
                              lambda key: 20 * GB)
-        self.assertEqual(actions, [('bulk', 1024)])
+        self.assertEqual(actions, [('bulk', QUANTUM)])
 
 
 class CounterTests(unittest.TestCase):

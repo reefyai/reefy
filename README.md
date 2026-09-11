@@ -221,6 +221,19 @@ the same desired state and backup archive.
 Read the [storage architecture](docs/storage-architecture.md) and
 [security model](docs/security-model.md).
 
+### Storage pressure quotas
+
+Class-aware firmware shares one physical storage budget across app volumes,
+Docker images, logs, and writable layers. Apps mark large, expendable volumes
+`bulk`; databases and configuration use `state`, the default. XFS project quotas
+reduce each volume's growth allowance as the pool fills, preserving headroom
+for state and recovery. Apps can respond through their existing free-space
+checks or allocation errors. Reefy migrates existing files automatically when
+the first compatible policy arrives, briefly holding writers during migration.
+
+See [quota policy and upgrade behavior](docs/storage-architecture.md#storage-pressure-quotas)
+for capacity examples, Docker retention, snapshots, and limitations.
+
 ## Security model
 
 Reefy reduces the trusted computing base instead of relying on any single
