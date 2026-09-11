@@ -159,6 +159,10 @@ def run():
                           'physical_growth_bytes': after.used - initial['sample']['used'],
                           'sample': asdict(after)}))
     except Exception:
+        print(json.dumps({'observer_call_seconds': observer_calls,
+                          'hold': json.loads(Path(RUN_DIR, 'hold.json').read_text())
+                                  if Path(RUN_DIR, 'hold.json').exists() else None}),
+              file=sys.stderr, flush=True)
         print(Path('/proc/meminfo').read_text(), file=sys.stderr)
         for p in Path('/sys/class/bdi').glob('*/*'):
             if p.name in ('max_bytes', 'strict_limit', 'read_ahead_kb'):
