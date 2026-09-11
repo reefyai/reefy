@@ -58,7 +58,7 @@ def metadata_fault(counter):
         "            and pathlib.Path(self.args[0]).name == 'dmsetup'\n"
         "            and mode_path.read_text() in ('cleanup-stall', 'cleanup-transient') and not stall_path.exists()):\n"
         "        stall_path.write_text('injected')\n"
-        "        time.sleep(.4 if mode_path.read_text() == 'cleanup-transient' else 8)\n"
+        "        time.sleep(.4 if mode_path.read_text() == 'cleanup-transient' else 20)\n"
         '    return original_wait(self, timeout=timeout)\n'
         'subprocess.Popen.wait = delayed_wait\n')
     wrapper.write_text('#!/usr/bin/python3\nimport subprocess, sys, pathlib, time\n'
@@ -118,7 +118,7 @@ def metadata_fault(counter):
         mode.write_text('normal')
         stall.unlink()
         # POSIX subprocess.run waits for child exit after timeout. Inject an
-        # eight-second wait at that exact cleanup boundary, representing a child
+        # twenty-second wait at that exact cleanup boundary, representing a child
         # that cannot exit immediately while in kernel I/O. No kernel change or
         # physical metadata exhaustion is used for this daemon fault test.
         observer_pid = command(['systemctl', 'show', '--property=MainPID', '--value',
@@ -130,16 +130,16 @@ def metadata_fault(counter):
             time.sleep(0.1)
         stall_observed = time.monotonic()
         while not Path(RUN_DIR, 'hold.json').exists():
-            # Cleanup starts after the command's 1.8-second inner timeout. The
-            # remaining total observer budget is at most 2.2 seconds; allow the
-            # polling/scheduling margin without charging the preceding tick.
-            assert time.monotonic() - stall_observed < 3, 'command cleanup blocked observer'
+            # The observer can bridge I/O stalls only until its last verified
+            # sample is ten seconds old. This is the predeclared detection
+            # window, followed by the unchanged thirty-second drain deadline.
+            assert time.monotonic() - stalled_at < 11, 'physical evidence exceeded detection budget'
             time.sleep(0.1)
         assert 'protection evidence unavailable' in json.loads(
             Path(RUN_DIR, 'hold.json').read_text())['reason']
         completed_drain()
         stopped = counter.stat().st_mtime_ns
-        until = stall_observed + 6
+        until = stall_observed + 16
         while time.monotonic() < until:
             assert counter.stat().st_mtime_ns == stopped
             time.sleep(0.1)
@@ -147,7 +147,7 @@ def metadata_fault(counter):
         assert command(['systemctl', 'show', '--property=MainPID', '--value',
                         'reefy-storage-watchdog.service']).strip() == observer_pid
         mode.write_text('normal')
-        while time.monotonic() - stalled_at < 13:
+        while time.monotonic() - stalled_at < 26:
             assert Path(RUN_DIR, 'hold.json').exists(), 'late sample cleared the latched hold'
             time.sleep(0.1)
         command(['systemctl', 'start', 'reefy-storage-recover.service'], timeout=60)

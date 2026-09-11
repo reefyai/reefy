@@ -31,6 +31,57 @@ class WatchdogTests(unittest.TestCase):
                        PoolSample(32 * GB, GB, 100, 1000, 524288, False)):
             self.assertIsNotNone(unhealthy_reason(self.status(), sample, 100, stale_seconds=20))
 
+    def test_transient_io_uses_only_observer_evidence_inside_detection_budget(self):
+        from reefy.storage_watchdog import PhysicalObserver
+        now = [100.]
+        healthy = PoolSample(32 * GB, GB, 100, 1000, 524288)
+        def sample(*, timeout):
+            if now[0] == 100:
+                now[0] += 1
+                return healthy
+            now[0] += timeout * 2
+            raise TimeoutError('synthetic busy device')
+        reader = PhysicalObserver(sample, clock=lambda: now[0])
+        self.assertEqual(reader.read(), healthy)
+        self.assertEqual(reader.sampled_at, 100)
+        now[0] = 105
+        self.assertEqual(reader.read(), healthy)
+        self.assertEqual(now[0], 109)
+        self.assertEqual(reader.sampled_at, 100, 'timeout renewed stale evidence')
+        with self.assertRaises(TimeoutError):
+            reader.read()
+        self.assertEqual(now[0], 110, 'retry extended the detection window')
+        self.assertIsNone(reader.latest)
+
+    def test_observer_does_not_defer_first_failure_bad_data_or_metadata_pressure(self):
+        from reefy.storage_watchdog import PhysicalObserver
+        failing = Mock(side_effect=TimeoutError)
+        with self.assertRaises(TimeoutError):
+            PhysicalObserver(failing).read()
+        reader = PhysicalObserver(Mock(side_effect=[
+            PoolSample(32 * GB, GB, 100, 1000, 524288), ValueError('bad counters')]))
+        reader.read()
+        with self.assertRaises(ValueError):
+            reader.read()
+        unhealthy = PoolSample(32 * GB, GB, 850, 1000, 524288)
+        reader = PhysicalObserver(Mock(return_value=unhealthy))
+        self.assertEqual(reader.read(), unhealthy)
+        self.assertEqual(unhealthy_reason(self.status(), unhealthy, 100, stale_seconds=20),
+                         'thin-pool health or metadata pressure')
+
+    def test_inactive_policy_discards_observer_history_before_reactivation(self):
+        from reefy.storage_watchdog import PhysicalObserver
+        now = [100.]
+        sampler = Mock(return_value=PoolSample(32 * GB, GB, 100, 1000, 524288))
+        reader = PhysicalObserver(sampler, clock=lambda: now[0])
+        reader.read()
+        with patch('reefy.storage_watchdog._physical_observer', reader):
+            self.assertIsNone(check(active=False, stale_seconds=20))
+        now[0] = 200
+        reader.read()
+        self.assertEqual(reader.sampled_at, 200)
+        self.assertEqual(sampler.call_count, 2)
+
     def test_transient_sampler_timeout_requires_fresh_success_before_continuing(self):
         from reefy.storage_watchdog import sample_with_retry
         healthy = PoolSample(32 * GB, GB, 100, 1000, 524288)
