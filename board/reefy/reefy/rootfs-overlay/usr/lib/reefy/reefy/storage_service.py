@@ -22,7 +22,7 @@ from reefy.storage_pressure import PressureError, QUANTUM
 from reefy.storage_quota import (
     Registry, RUN_DIR, atomic_json, command, physical_sample, state_lock,
     FileAttributes, PROJINHERIT, mount_info, require_enforcement, read_quotas, set_quota,
-    verify_tree,
+    verify_tree, assign_tree, flush_filesystem,
 )
 from reefy.storage_runtime import configure_daemon, register_runtime
 from reefy.storage_watchdog import Writers, check
@@ -180,8 +180,13 @@ def retire_missing(paths):
         registry.save()
 
 
-def verify_restore(paths):
-    """Validate destination ownership after Borg extraction and before startup."""
+def verify_restore(paths, *, repair=False):
+    """Validate destination ownership before startup, including cached restores.
+
+    File-level extraction normally inherits the destination assignment. Repair
+    imported metadata only while that destination has no running container.
+    Never retag a live source or follow a hardlink out of the destination tree.
+    """
     registry = Registry()
     if not registry.data.get('active'):
         return
@@ -191,7 +196,28 @@ def verify_restore(paths):
         if not record or not record.get('complete') or record.get('retired'):
             raise PressureError('restore destination is not registered')
         require_enforcement(mount['target'])
-        verify_tree(path, record['project'], paths)
+        excluded = set(paths) | {row['path'] for row in registry.data['projects'].values()
+                                 if not row.get('retired')}
+        try:
+            verify_tree(path, record['project'], excluded)
+        except PressureError:
+            if not repair:
+                raise
+            ids = command(['docker', 'container', 'ls', '--quiet']).split()
+            for offset in range(0, len(ids), 100):
+                containers = json.loads(command(['docker', 'inspect', *ids[offset:offset + 100]]))
+                for container in containers:
+                    for bind in container.get('Mounts', []):
+                        source = bind.get('Source', '').rstrip('/')
+                        if source and (source == path or source.startswith(path + '/')
+                                       or path.startswith(source + '/')):
+                            raise PressureError('restore destination is still in use')
+            # XFS charges transferred blocks to the destination as each inode
+            # is assigned. An insufficient destination quota fails the restore;
+            # no temporary unlimited quota or source limit change is needed.
+            assign_tree(path, record['project'], excluded)
+            flush_filesystem(path)
+            verify_tree(path, record['project'], excluded)
         quota = read_quotas(mount['target']).get(record['project'], {})
         if not quota.get('hard') or quota.get('soft'):
             raise PressureError('restore destination lacks a verified quota')
