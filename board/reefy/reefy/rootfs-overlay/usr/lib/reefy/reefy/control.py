@@ -452,12 +452,9 @@ class ControlPlane:
         # failing. None when this device has no thin pool (legacy
         # storage); backend treats absence as "not applicable".
         try:
-            r = subprocess.run(
-                ['lvs', '--noheadings', '--nosuffix', '-o', 'data_percent',
-                 f'{self.STORAGE_VG}/{self.STORAGE_POOL}'],
-                capture_output=True, text=True, timeout=5)
-            if r.returncode == 0 and r.stdout.strip():
-                hw['pool_pct'] = int(float(r.stdout.strip()))
+            from reefy.storage_quota import physical_sample
+            sample = physical_sample(timeout=2)
+            hw['pool_pct'] = sample.used * 100 // sample.capacity
         except Exception:
             pass
         return hw

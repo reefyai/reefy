@@ -17,11 +17,9 @@ RequiresMountsFor=/mnt/reefy-data
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/bin/reefy-mount-volumes
-# Bound the barrier: a wedged volume mount must not hang the device
-# forever. With the docker drop-in using Wants= (not Requires=), a
-# timeout here degrades to "docker starts anyway" and the reconciler's
-# runtime reconcile re-mounts stragglers, rather than blocking boot.
-TimeoutStartSec=120
+# Allow first-mount project accounting to scan existing large trees.
+# The storage guard adds a separate fail-closed barrier once quotas activate.
+TimeoutStartSec=1800
 
 [Install]
 WantedBy=multi-user.target

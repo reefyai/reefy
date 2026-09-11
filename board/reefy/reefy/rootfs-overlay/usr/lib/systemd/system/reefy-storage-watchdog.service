@@ -1,0 +1,23 @@
+[Unit]
+Description=Reefy independent storage watchdog
+After=reefy-storage.service reefy-app-volumes.service
+Requires=reefy-storage.service
+OnFailure=reefy-storage-hold.service
+
+[Service]
+Type=notify
+NotifyAccess=main
+WatchdogSec=8
+TimeoutStartSec=8
+Environment=PYTHONPATH=/usr/lib/reefy
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m reefy.storage_service watchdog
+Restart=always
+RestartSec=1
+TimeoutStopSec=5
+CPUWeight=1000
+OOMScoreAdjust=-900
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

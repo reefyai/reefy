@@ -1,0 +1,8 @@
+[Unit]
+Description=Hold Reefy writers after storage watchdog failure
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/usr/lib/reefy
+ExecStart=/usr/bin/python3 -m reefy.storage_service hold
+TimeoutStartSec=8

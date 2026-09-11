@@ -55,9 +55,13 @@ class Storage:
         # _ensure_volume_lv / _prepare_app_dirs. Callers (data-plane
         # apply, boot_mount) set this before invoking volume ops.
         self._volume_caps = volume_caps if volume_caps is not None else {}
+        self._storage_classes = None
 
     def set_volume_caps(self, caps):
         self._volume_caps = caps or {}
+
+    def set_storage_classes(self, classes):
+        self._storage_classes = classes
 
     def _write_fresh_keyfile(self, key_part, _log=None):
         """Write 44 high-entropy bytes (base64 of urandom(32)) to
@@ -794,7 +798,7 @@ class Storage:
         subprocess.run(['umount', '/mnt/reefy-data'], capture_output=True, timeout=5)
         r = subprocess.run(
             ['mount', '-o', self._fs_mount_opts(lv_path), lv_path,
-             '/mnt/reefy-data'], capture_output=True, text=True, timeout=10)
+             '/mnt/reefy-data'], capture_output=True, text=True, timeout=900)
         if r.returncode != 0:
             if _log:
                 _log(f'reefy_default mount failed: {r.stderr}')
@@ -870,7 +874,7 @@ class Storage:
         existing per-app LVs are ext4."""
         fstype = self._fs_type(dev)
         if fstype == 'xfs':
-            return 'noatime,discard'
+            return 'noatime,discard,pquota'
         return self.REEFY_DATA_MOUNT_OPTS
 
     def _repair_owned_xfs_volume(self, path, lv_name, lv_path):
@@ -1516,12 +1520,12 @@ class Storage:
 
             try:
                 os.makedirs(path, mode=0o755, exist_ok=True)
-                # Mount can stall on thin-pool metadata ops when the pool is
-                # under load. 60s gives the kernel enough headroom.
+                # First project accounting scans existing inodes. Allow large
+                # trees to finish instead of killing a healthy first mount.
                 mount_opts = self._fs_mount_opts(lv_path)
                 r = subprocess.run(
                     ['mount', '-o', mount_opts, lv_path, path],
-                    capture_output=True, text=True, timeout=60)
+                    capture_output=True, text=True, timeout=900)
             except (subprocess.SubprocessError, OSError) as e:
                 if created_here:
                     mounted = self._resolve_new_volume_mount_failure(
@@ -1543,7 +1547,7 @@ class Storage:
                     try:
                         r = subprocess.run(
                             ['mount', '-o', mount_opts, lv_path, path],
-                            capture_output=True, text=True, timeout=60)
+                            capture_output=True, text=True, timeout=900)
                     except (subprocess.SubprocessError, OSError) as e:
                         raise ExistingVolumeUnavailableError(
                             'Owned app volume could not be mounted after '
@@ -2141,6 +2145,9 @@ class Storage:
                 log('mqtt', f'Created app dir: {path} (uid={uid})')
 
             # Write seed files (only if they don't already exist)
+            if self._storage_classes is not None:
+                from reefy.storage_service import ensure_volume
+                ensure_volume(path, self._storage_classes[path])
             seed_files = vol.get('seed_files', {})
             for filename, content_b64 in seed_files.items():
                 file_path = os.path.join(path, filename)

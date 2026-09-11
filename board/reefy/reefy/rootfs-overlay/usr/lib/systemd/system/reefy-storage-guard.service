@@ -1,0 +1,19 @@
+[Unit]
+Description=Reefy physical storage guard
+After=reefy-storage.service reefy-app-volumes.service
+Requires=reefy-storage.service
+
+[Service]
+Type=simple
+Environment=PYTHONPATH=/usr/lib/reefy
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m reefy.storage_service guard
+Restart=always
+RestartSec=1
+TimeoutStopSec=5
+CPUWeight=1000
+OOMScoreAdjust=-800
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

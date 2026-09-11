@@ -116,10 +116,10 @@ def set_quota(mountpoint, project, hard):
              f'limit -p bsoft=0 bhard={hard // 1024}k {project}', mountpoint])
 
 
-def physical_sample(pool='reefy-reefy_pool-tpool'):
+def physical_sample(pool='reefy-reefy_pool-tpool', *, timeout=10):
     return parse_thin_sample(
-        command(['dmsetup', 'status', '--noflush', pool]),
-        command(['dmsetup', 'table', pool]))
+        command(['dmsetup', 'status', '--noflush', pool], timeout=timeout),
+        command(['dmsetup', 'table', pool], timeout=timeout))
 
 
 class FileAttributes:

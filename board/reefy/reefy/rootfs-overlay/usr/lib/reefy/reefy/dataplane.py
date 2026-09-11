@@ -647,12 +647,14 @@ class DataPlane:
         app_volumes = []
         files = list(host.get('files') or [])
         volume_caps = {}
+        volume_storage_classes = {}
         backup_instances = []
         for app in state.get('apps') or []:
             app_volumes.extend(json.loads(json.dumps(
                 app.get('volumes') or [])))
             files.extend(json.loads(json.dumps(app.get('files') or [])))
             volume_caps.update(app.get('volume_caps') or {})
+            volume_storage_classes.update(app.get('volume_storage_classes') or {})
             if app.get('backup'):
                 backup_instances.append(json.loads(json.dumps(
                     app['backup'])))
@@ -662,6 +664,9 @@ class DataPlane:
             host['files'] = files
         if volume_caps:
             host['volume_caps'] = volume_caps
+        if 'storage_pressure_policy' in state:
+            host['storage_pressure_policy'] = state['storage_pressure_policy']
+            host['volume_storage_classes'] = volume_storage_classes
         backup_policy = json.loads(json.dumps(
             state.get('backup_policy') or {}))
         if backup_instances:
@@ -908,6 +913,12 @@ class DataPlane:
             return False
 
         incoming_v2 = self._is_v2_state(state)
+        from reefy.storage_service import read_policy, requires_activation, request_activation
+        try:
+            read_policy(state)
+        except (ValueError, RuntimeError, OSError) as error:
+            log('mqtt', f'Invalid storage policy: {error}')
+            return False
         if incoming_v2 and not self._valid_v2_lifecycle(state):
             return False
         if not incoming_v2 and os.path.exists(self.DESIRED_STATE_V2_PATH):
@@ -946,6 +957,11 @@ class DataPlane:
         # delayed retry scheduled for the previous artifact requirements.
         self._reset_artifact_retry()
 
+        if requires_activation(state):
+            log('mqtt', 'Activating storage quotas; holding app writers during migration')
+            request_activation()
+            return False
+
         # Data plane applies directly; the control process publishes the
         # applying/ready stages around its Varlink call.
         return self._apply_desired_state(old_state=old_state)
@@ -968,6 +984,8 @@ class DataPlane:
             log('mqtt', f'ERROR: Failed to read desired state: {e}')
             return False
 
+        from reefy.storage_service import read_policy
+        self._storage.set_storage_classes(read_policy(state))
         v2_state = state if self._is_v2_state(state) else None
         runtime_state = (
             self._flatten_v2_state(state) if v2_state is not None else state)
@@ -1133,6 +1151,9 @@ class DataPlane:
         # Always inspect self-identifying managed LVs. Their LVM tags survive
         # reboot, so a prior busy unmount/lvremove gets another reclaim
         # attempt even when old_state is unavailable or unchanged.
+        if self._storage._storage_classes is not None:
+            from reefy.storage_service import retire_missing
+            retire_missing(set(self._storage._storage_classes))
         self._storage._reclaim_deleted_instance_lvs(
             old_state or {}, state, backup_paths)
 
@@ -3879,6 +3900,8 @@ Environment=MQTT_PORT={self.port}
                     failed.add(iuuid)
                     continue
                 log('mqtt', f'borg extract completed for {iuuid}')
+                from reefy.storage_service import verify_restore
+                verify_restore(paths)
 
             except Exception as e:
                 log('mqtt', f'Restore error: {e}')
@@ -4118,6 +4141,10 @@ Environment=MQTT_PORT={self.port}
         volumes (only for broken-layer recovery, never routine no-space).
         Returns True if prune actually reclaimed space - retrying a
         no_space pull is pointless when prune freed nothing."""
+        if self._storage._storage_classes is not None:
+            log('mqtt', 'Automatic Docker prune disabled by age-only image retention; '
+                'operation deferred until capacity or explicit recovery is available')
+            return False
         cmd = ['docker', 'system', 'prune', '-a', '-f']
         if volumes:
             cmd.append('--volumes')

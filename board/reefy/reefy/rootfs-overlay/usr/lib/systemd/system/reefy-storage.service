@@ -7,6 +7,8 @@ Before=docker.service
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/boot-reefy-storage.sh
+# First XFS project accounting can scan a large pre-existing filesystem.
+TimeoutStartSec=1800
 RemainAfterExit=true
 
 [Install]
