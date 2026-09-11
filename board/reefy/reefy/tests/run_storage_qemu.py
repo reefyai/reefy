@@ -29,6 +29,11 @@ def main():
             _, output, _ = vm.ssh_exec('python3 /tmp/controller_storage_probe.py', timeout_s=600)
             print(output)
             (args.output / 'controller-results.json').write_text(output)
+            vm.scp_to(args.service_repo / 'tests/e2e/lib/phases/backup_quota_guest.py',
+                      '/tmp/backup_quota_guest.py')
+            _, output, _ = vm.ssh_exec('REEFY_E2E_QUOTA_GUEST=1 python3 /tmp/backup_quota_guest.py', timeout_s=600)
+            print(output)
+            (args.output / 'backup-results.log').write_text(output)
         finally:
             _, kernel, _ = vm.ssh_exec('dmesg', timeout_s=10)
             kernel = re.sub(r'password=\S+', 'password=[redacted]', kernel)
