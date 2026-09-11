@@ -30,6 +30,10 @@ def writer():
     error_number = None
     try:
         with FILE.open('wb', buffering=0) as stream:
+            # Pre-size without allocation so writes land inside sparse holes.
+            # EOF writes let XFS speculative preallocation charge intervening
+            # blocks to the quota and do not reproduce amplification.
+            stream.truncate(16 * 1024**3)
             for offset in range(0, 16 * 1024**3, CHUNK):
                 stream.seek(offset)
                 stream.write(b's' * 4096)
@@ -93,7 +97,7 @@ def run():
         quota_after = read_quotas(ROOT)[media['project']]['used']
         assert final.healthy
         assert final.capacity - final.used >= initial['allocation']['boundaries']['emergency'], asdict(final)
-        assert final.used > initial['sample']['used'] + 128 * MIB
+        assert final.used > initial['sample']['used'] + 128 * MIB, (asdict(final), quota_after)
         assert quota_after <= 128 * MIB
         print(json.dumps({'sparse_allocation_amplification_contained': 'passed',
                           'outcome': reason or 'application allocation error',
