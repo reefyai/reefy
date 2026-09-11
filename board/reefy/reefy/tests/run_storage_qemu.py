@@ -14,7 +14,7 @@ def main():
     parser.add_argument('--service-repo', type=Path, required=True)
     parser.add_argument('--firmware', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--suite', choices=('all', 'core', 'core-nvme', 'thin', 'frigate', 'frigate-multi', 'migration', 'soak'), default='all')
+    parser.add_argument('--suite', choices=('all', 'core', 'core-nvme', 'thin', 'frigate', 'frigate-multi', 'migration', 'soak', 'cow'), default='all')
     args = parser.parse_args()
     sys.path.insert(0, str(args.service_repo / 'tests/e2e'))
     from lib.qemu_device import QemuDevice, QemuBlockDisk
@@ -65,14 +65,15 @@ def main():
             if args.suite in ('all', 'core', 'core-nvme', 'thin'):
                 probe(Path(__file__).with_name('kernel_storage_probe.py'),
                       'python3 /tmp/kernel_storage_probe.py', 'kernel-results.json', 300)
-            if args.suite in ('all', 'thin'):
+            if args.suite in ('all', 'thin', 'cow'):
                 thin_ready = probe(Path(__file__).with_name('thin_storage_probe.py'),
                                    'python3 /tmp/thin_storage_probe.py', 'thin-results.json', 600)
                 if thin_ready:
-                    probe(Path(__file__).with_name('pressure_storage_probe.py'),
-                          'python3 /tmp/pressure_storage_probe.py', 'pressure-results.json', 660)
-                    _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-pressure-trace.json', timeout_s=20, check=False)
-                    (args.output / 'pressure-trace.json').write_text(trace)
+                    if args.suite != 'cow':
+                        probe(Path(__file__).with_name('pressure_storage_probe.py'),
+                              'python3 /tmp/pressure_storage_probe.py', 'pressure-results.json', 660)
+                        _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-pressure-trace.json', timeout_s=20, check=False)
+                        (args.output / 'pressure-trace.json').write_text(trace)
                     cow_ready = probe(Path(__file__).with_name('cow_storage_probe.py'),
                                       'python3 /tmp/cow_storage_probe.py', 'cow-results.json', 180)
                     _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-cow-trace.json', timeout_s=20, check=False)
@@ -83,7 +84,7 @@ def main():
                         _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-sparse-trace.json', timeout_s=20, check=False)
                         (args.output / 'amplification-trace.json').write_text(trace)
             ready = False
-            if args.suite != 'thin':
+            if args.suite not in ('thin', 'cow'):
                 ready = probe(Path(__file__).with_name('controller_storage_probe.py'),
                               'python3 /tmp/controller_storage_probe.py', 'controller-results.json', 600)
             if ready:

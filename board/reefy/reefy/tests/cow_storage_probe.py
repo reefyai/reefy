@@ -106,6 +106,25 @@ def run():
                           'freeze_seconds': time.monotonic() - started,
                           'physical_growth_bytes': after.used - initial['sample']['used'],
                           'sample': asdict(after)}))
+    except Exception:
+        # Preserve blocked kernel-task evidence before test cleanup thaws the
+        # writer. A repeated dmsetup timeout is not a successful containment.
+        for process in Path('/proc').iterdir():
+            if not process.name.isdigit():
+                continue
+            try:
+                status = (process / 'status').read_text()
+                state = next(line for line in status.splitlines() if line.startswith('State:'))
+                name = next(line for line in status.splitlines() if line.startswith('Name:'))
+                if any(value in state for value in ('D (', 'T (')) or process.name == str(child.pid):
+                    print(json.dumps({'pid': process.name, 'name': name, 'state': state,
+                          'wchan': (process / 'wchan').read_text(),
+                          'stack': (process / 'stack').read_text(),
+                          'cgroup': (process / 'cgroup').read_text()}), file=sys.stderr)
+            except (OSError, StopIteration):
+                pass
+        Path('/proc/sysrq-trigger').write_text('w')
+        raise
     finally:
         Path('/tmp/synthetic-cow-trace.json').write_text(json.dumps({'initial': initial, 'samples': trace}))
         # Test-only cleanup, after preserving containment evidence. Never use
