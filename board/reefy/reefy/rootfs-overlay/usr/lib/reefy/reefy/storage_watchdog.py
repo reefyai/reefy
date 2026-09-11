@@ -72,6 +72,9 @@ def unhealthy_reason(status, sample, now, *, stale_seconds):
         sampled = status['sampled_monotonic']
         completed = status['completed_monotonic']
         ceiling = status['allocation']['boundaries']['state']
+        stop_at = status.get('physical_stop_bytes', ceiling)
+        if type(stop_at) is not int or not 0 <= stop_at <= ceiling:
+            return 'invalid physical containment threshold'
         if not 0 <= sampled <= completed <= now:
             return 'invalid guard heartbeat'
         if now - sampled > stale_seconds:
@@ -79,7 +82,7 @@ def unhealthy_reason(status, sample, now, *, stale_seconds):
         if (not sample.healthy
                 or sample.metadata_used * 100 >= sample.metadata_capacity * 85):
             return 'thin-pool health or metadata pressure'
-        if sample.used >= ceiling or status['allocation']['quiesce']:
+        if sample.used >= stop_at or status['allocation']['quiesce']:
             return 'physical emergency boundary reached'
     except (KeyError, TypeError, ValueError):
         return 'missing guard evidence'

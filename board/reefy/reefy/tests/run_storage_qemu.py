@@ -55,6 +55,10 @@ def main():
                           'python3 /tmp/pressure_storage_probe.py', 'pressure-results.json', 660)
                     _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-pressure-trace.json', timeout_s=20, check=False)
                     (args.output / 'pressure-trace.json').write_text(trace)
+                    probe(Path(__file__).with_name('cow_storage_probe.py'),
+                          'python3 /tmp/cow_storage_probe.py', 'cow-results.json', 180)
+                    _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-cow-trace.json', timeout_s=20, check=False)
+                    (args.output / 'cow-trace.json').write_text(trace)
             ready = False
             if args.suite != 'thin':
                 ready = probe(Path(__file__).with_name('controller_storage_probe.py'),
