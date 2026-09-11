@@ -175,6 +175,12 @@ class Guard:
             self.previous = {c.key: c.used for c in consumers}
             self.previous_time, self.previous_physical = started, sample.used
             result = {'sampled_monotonic': started, 'completed_monotonic': finished,
+                      # The one-second observer must begin containment at the
+                      # same response margin as the allocator, not wait until
+                      # that margin has already been consumed by snapshot COW.
+                      'physical_stop_bytes': max(0, allocation.boundaries.state
+                          - max(sample.chunk_bytes, int(self.peak * self.response))
+                          - pending_bytes - len(consumers) * sample.chunk_bytes),
                       'generation': registry.data.get('generation', 0),
                       'admitted_leases': admitted,
                       'elapsed_seconds': finished - started, 'sample': asdict(sample),

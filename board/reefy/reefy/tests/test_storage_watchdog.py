@@ -39,6 +39,16 @@ class WatchdogTests(unittest.TestCase):
             save.assert_called_once()
             writers.freeze.assert_called_once()
 
+    def test_cow_containment_starts_before_consuming_the_response_margin(self):
+        status = dict(self.status(), physical_stop_bytes=24 * GB)
+        self.assertIsNone(unhealthy_reason(status, PoolSample(32 * GB, 23 * GB, 100, 1000, 524288),
+                                          100, stale_seconds=20))
+        self.assertIsNotNone(unhealthy_reason(status, PoolSample(32 * GB, 24 * GB, 100, 1000, 524288),
+                                             100, stale_seconds=20))
+        status['physical_stop_bytes'] = 29 * GB
+        self.assertIn('invalid', unhealthy_reason(status, PoolSample(32 * GB, GB, 100, 1000, 524288),
+                                                 100, stale_seconds=20))
+
     def test_cgroup_freezer_preserves_control_and_checks_completion(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
