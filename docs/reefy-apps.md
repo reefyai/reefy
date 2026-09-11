@@ -208,7 +208,7 @@ container mount point it requests:
 
 Media and recording scratch should use separate `bulk` volumes when an app
 also has a database/config volume. Quotas apply to each app-instance volume,
-including files below its root. See [storage pressure quotas](storage-architecture.md#storage-pressure-quotas).
+including files below its root. See [storage pressure quotas](https://reefy.ai/docs/internals/storage-architecture#storage-pressure-quotas).
 
 Seed files are written only when the destination does not exist. A restored
 file therefore wins over a seed. Seed files are for first-run defaults, not

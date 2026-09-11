@@ -99,6 +99,8 @@ Reefy does not mount a new LV over a non-empty legacy directory. It preserves
 the existing files and leaves that volume on the default LV rather than
 hiding data.
 
+<a id="storage-pressure-quotas"></a>
+
 ## Storage pressure quotas
 
 Class-aware firmware retains thin provisioning and XFS. Each app-instance volume
