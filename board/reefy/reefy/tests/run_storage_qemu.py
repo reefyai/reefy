@@ -106,6 +106,8 @@ def main():
                         vm.scp_to(target, '/tmp/synthetic-legacy.efi')
                     probe(Path(__file__).with_name('firmware_storage_probe.py'),
                           'python3 /tmp/firmware_storage_probe.py', 'firmware-results.json', 120)
+                    probe(Path(__file__).with_name('runtime_storage_probe.py'),
+                          'python3 /tmp/runtime_storage_probe.py', 'runtime-results.json', 240)
                     probe(Path(__file__).with_name('image_retention_probe.py'),
                           'python3 /tmp/image_retention_probe.py', 'retention-results.json', 180)
                     probe(args.service_repo / 'tests/e2e/lib/phases/backup_quota_guest.py',
