@@ -113,7 +113,7 @@ def set_quota(mountpoint, project, hard):
             or not isinstance(hard, int) or hard <= 0 or hard % 1024):
         raise ValueError('invalid nonzero XFS project limit')
     command(['xfs_quota', '-x', '-c',
-             f'limit -p bsoft=0 bhard={hard}b {project}', mountpoint])
+             f'limit -p bsoft=0 bhard={hard // 1024}k {project}', mountpoint])
 
 
 def physical_sample(pool='reefy-reefy_pool-tpool'):
@@ -264,20 +264,33 @@ class Registry:
     def save(self):
         atomic_json(self.path, self.data)
 
-    def register(self, path, mount, storage_class, occupied=()):
+    def register(self, path, mount, storage_class, occupied=(), preferred_project=None):
         path = os.path.abspath(path)
         identity = mount['uuid'] + ':' + path
         records = self.data['projects']
         if identity not in records:
             taken = set(occupied) | {v['project'] for v in records.values()}
-            # Docker overlay2 owns its range starting at 2**20. Never allocate
-            # from it, and still inspect existing XFS IDs for older assignments.
-            project = next((i for i in range(1024, 2**20) if i not in taken), None)
+            # Reefy configures Docker's driver-home project at or above 2**20.
+            # Docker does not have a fixed built-in range: establishing that
+            # base while it is stopped is a required activation step.
+            project = preferred_project
+            if project is not None:
+                if type(project) is not int or not 0 < project < 2**32:
+                    raise PressureError('invalid requested project identity')
+                if any(v['filesystem'] == mount['uuid'] and v['project'] == project
+                       for v in records.values()):
+                    raise PressureError('project identity belongs to another volume')
+                if project in occupied and FileAttributes().read(path)[3] != project:
+                    raise PressureError('occupied project does not belong to this root')
+            else:
+                project = next((i for i in range(1024, 2**20) if i not in taken), None)
             if project is None:
                 raise PressureError('project ID range exhausted')
             records[identity] = {'path': path, 'filesystem': mount['uuid'],
                                  'project': project, 'complete': False}
         record = records[identity]
+        if preferred_project is not None and record['project'] != preferred_project:
+            raise PressureError('project identity changed during migration')
         record.update(storage_class=storage_class, mount=mount['target'],
                       device=mount['maj:min'], retired=False)
         self.save()

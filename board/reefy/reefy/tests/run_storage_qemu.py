@@ -2,7 +2,7 @@
 """Run kernel probes using the existing service-repository QEMU harness."""
 import argparse
 from pathlib import Path
-import shlex
+import re
 import sys
 
 
@@ -18,11 +18,14 @@ def main():
     with QemuDevice(raw_image=args.firmware, log_path=args.output / 'qemu.log') as vm:
         vm.wait_for_boot(timeout_s=240)
         vm.scp_to(Path(__file__).with_name('kernel_storage_probe.py'), '/tmp/kernel_storage_probe.py')
-        _, output, _ = vm.ssh_exec('python3 /tmp/kernel_storage_probe.py', timeout_s=300)
-        print(output)
-        (args.output / 'kernel-results.json').write_text(output)
-        _, kernel, _ = vm.ssh_exec('dmesg', timeout_s=10)
-        (args.output / 'dmesg.log').write_text(kernel)
+        try:
+            _, output, _ = vm.ssh_exec('python3 /tmp/kernel_storage_probe.py', timeout_s=300)
+            print(output)
+            (args.output / 'kernel-results.json').write_text(output)
+        finally:
+            _, kernel, _ = vm.ssh_exec('dmesg', timeout_s=10)
+            kernel = re.sub(r'password=\S+', 'password=[redacted]', kernel)
+            (args.output / 'dmesg.log').write_text(kernel)
         assert 'Filesystem has been shut down' not in kernel
         assert 'out_of_data_space' not in kernel
 
