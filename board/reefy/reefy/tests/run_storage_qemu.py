@@ -21,28 +21,37 @@ def main():
         vm.scp_to(Path(__file__).with_name('setup_storage_probe.py'), '/tmp/setup_storage_probe.py')
         _, output, _ = vm.ssh_exec('python3 /tmp/setup_storage_probe.py', timeout_s=300)
         print(output)
-        vm.scp_to(Path(__file__).with_name('kernel_storage_probe.py'), '/tmp/kernel_storage_probe.py')
+        failures = []
+
+        def probe(source, command, result, timeout):
+            vm.scp_to(source, '/tmp/' + source.name)
+            try:
+                _, output, _ = vm.ssh_exec(command, timeout_s=timeout)
+                print(output)
+                (args.output / result).write_text(output)
+                return True
+            except Exception as error:
+                print(f'{source.name} FAILED: {error}', flush=True)
+                failures.append(source.name)
+                return False
+
         try:
-            _, output, _ = vm.ssh_exec('python3 /tmp/kernel_storage_probe.py', timeout_s=300)
-            print(output)
-            (args.output / 'kernel-results.json').write_text(output)
-            vm.scp_to(Path(__file__).with_name('thin_storage_probe.py'), '/tmp/thin_storage_probe.py')
-            _, output, _ = vm.ssh_exec('python3 /tmp/thin_storage_probe.py', timeout_s=600)
-            print(output)
-            (args.output / 'thin-results.json').write_text(output)
-            vm.scp_to(Path(__file__).with_name('controller_storage_probe.py'), '/tmp/controller_storage_probe.py')
-            _, output, _ = vm.ssh_exec('python3 /tmp/controller_storage_probe.py', timeout_s=600)
-            print(output)
-            (args.output / 'controller-results.json').write_text(output)
-            vm.scp_to(args.service_repo / 'tests/e2e/lib/phases/backup_quota_guest.py',
-                      '/tmp/backup_quota_guest.py')
-            _, output, _ = vm.ssh_exec('REEFY_E2E_QUOTA_GUEST=1 python3 /tmp/backup_quota_guest.py', timeout_s=600)
-            print(output)
-            (args.output / 'backup-results.log').write_text(output)
+            probe(Path(__file__).with_name('kernel_storage_probe.py'),
+                  'python3 /tmp/kernel_storage_probe.py', 'kernel-results.json', 300)
+            probe(Path(__file__).with_name('thin_storage_probe.py'),
+                  'python3 /tmp/thin_storage_probe.py', 'thin-results.json', 600)
+            ready = probe(Path(__file__).with_name('controller_storage_probe.py'),
+                          'python3 /tmp/controller_storage_probe.py', 'controller-results.json', 600)
+            if ready:
+                probe(args.service_repo / 'tests/e2e/lib/phases/backup_quota_guest.py',
+                      'REEFY_E2E_QUOTA_GUEST=1 python3 /tmp/backup_quota_guest.py', 'backup-results.log', 600)
+                probe(Path(__file__).with_name('frigate_storage_probe.py'),
+                      'python3 /tmp/frigate_storage_probe.py', 'frigate-results.json', 1500)
         finally:
             _, kernel, _ = vm.ssh_exec('dmesg', timeout_s=10)
             kernel = re.sub(r'password=\S+', 'password=[redacted]', kernel)
             (args.output / 'dmesg.log').write_text(kernel)
+        assert not failures, failures
         assert 'Filesystem has been shut down' not in kernel
         assert 'out_of_data_space' not in kernel
 

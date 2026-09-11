@@ -154,6 +154,9 @@ def run():
     results['docker_native_projects_and_governed_bind_mounts'] = 'passed'
 
     additional = '/mnt/reefy-data/apps/synthetic-new/state'
+    policy['app_volumes'].append({'path': additional})
+    policy['volume_storage_classes'][additional] = 'state'
+    atomic_json(shared.desired_state_path(), policy)
     Path(additional).mkdir(parents=True)
     ensure_volume(additional, 'state')
     record = next(r for r in Registry().data['projects'].values() if r['path'] == additional)
