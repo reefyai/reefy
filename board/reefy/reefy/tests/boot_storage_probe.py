@@ -45,6 +45,11 @@ def prepare():
     policy = json.loads(Path(policy_path).read_text())
     policy['app_volumes'].append({'path': ROOT})
     policy['volume_storage_classes'][ROOT] = 'bulk'
+    fresh = '/mnt/reefy-data/apps/synthetic-offline-new/config'
+    policy['app_volumes'].append({'path': fresh})
+    policy['volume_storage_classes'][fresh] = 'state'
+    policy.setdefault('backup', {}).setdefault('instances', []).append({'paths': [fresh]})
+    assert storage._volume_lv_name(fresh) not in storage._lv_metadata_names()
     atomic_json(policy_path, policy)
     assert not any(row['path'] == ROOT for row in Registry().data['projects'].values())
     evidence = {'create_seconds': time.monotonic() - started, 'metadata': metadata,
@@ -61,6 +66,11 @@ def verify():
     assert not registry.data.get('activation_pending')
     assert not Path('/run/reefy/storage-pressure/hold.json').exists()
     row = next(row for row in registry.data['projects'].values() if row['path'] == ROOT)
+    fresh = '/mnt/reefy-data/apps/synthetic-offline-new/config'
+    assert Storage()._dedicated_volume_mount_status(fresh) is True
+    new_record = next(row for row in registry.data['projects'].values() if row['path'] == fresh)
+    assert new_record['complete']
+    verify_tree(fresh, new_record['project'])
     require_enforcement(ROOT)
     assert row['complete'] and row['inodes'] >= 1001000
     assert verify_tree(ROOT, row['project']) == row['inodes']

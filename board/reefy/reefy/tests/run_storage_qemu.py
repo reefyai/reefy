@@ -43,6 +43,8 @@ def main():
             ready = probe(Path(__file__).with_name('controller_storage_probe.py'),
                           'python3 /tmp/controller_storage_probe.py', 'controller-results.json', 600)
             if ready:
+                probe(Path(__file__).with_name('image_retention_probe.py'),
+                      'python3 /tmp/image_retention_probe.py', 'retention-results.json', 180)
                 probe(args.service_repo / 'tests/e2e/lib/phases/backup_quota_guest.py',
                       'REEFY_E2E_QUOTA_GUEST=1 python3 /tmp/backup_quota_guest.py', 'backup-results.log', 600)
                 probe(Path(__file__).with_name('frigate_storage_probe.py'),

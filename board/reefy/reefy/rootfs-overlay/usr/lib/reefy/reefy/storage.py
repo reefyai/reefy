@@ -56,6 +56,7 @@ class Storage:
         # apply, boot_mount) set this before invoking volume ops.
         self._volume_caps = volume_caps if volume_caps is not None else {}
         self._storage_classes = None
+        self._volume_admission = None
 
     def set_volume_caps(self, caps):
         self._volume_caps = caps or {}
@@ -1474,7 +1475,7 @@ class Storage:
                 # class-aware admission and quotas govern that separately.
                 lv_ref = f'{self.STORAGE_VG}/{lv_name}'
                 try:
-                    with reservation('volume-create', 16 * 1024**2,
+                    with (self._volume_admission or reservation)('volume-create', 16 * 1024**2,
                                      storage_class=storage_class):
                         r = subprocess.run(
                             ['lvcreate', '--thin', '--virtualsize',
@@ -1505,7 +1506,7 @@ class Storage:
                 # 12-char label limit; the dm path identifies it anyway.)
                 # Existing ext4 LVs are untouched - we only mkfs on create.
                 try:
-                    with format_admission(lv_path, storage_class):
+                    with format_admission(lv_path, storage_class, admission=self._volume_admission):
                         r = subprocess.run(
                             ['mkfs.xfs', '-q', lv_path],
                             capture_output=True, text=True, timeout=60)
@@ -1583,7 +1584,17 @@ class Storage:
                     'volume; preserving it without automatic reclaim')
             return cap_enforced
 
-    def boot_mount(self):
+    def boot_mount(self, *, quiesced_admission=False):
+        from reefy.storage_admission import quiesced_reservation
+        previous = self._volume_admission
+        if quiesced_admission:
+            self._volume_admission = quiesced_reservation
+        try:
+            return self._boot_mount_inner()
+        finally:
+            self._volume_admission = previous
+
+    def _boot_mount_inner(self):
         """Mount all per-app volumes from persisted desired-state, before
         docker starts. Run by reefy-app-volumes.service (oneshot,
         Before=docker.service) so containers never bind-mount an empty
@@ -2176,10 +2187,8 @@ class Storage:
                 os.makedirs(os.path.dirname(file_path), exist_ok=True)
                 try:
                     log('mqtt', f'Downloading app file -> {file_path}')
-                    subprocess.run(
-                        ['curl', '-fSL', '-o', file_path, f['url']],
-                        capture_output=True, timeout=600, check=True
-                    )
+                    from reefy.storage_download import download
+                    download(path, file_path, f['url'])
                     log('mqtt', f'Downloaded: {file_path}')
                 except subprocess.CalledProcessError as e:
                     log('mqtt',
@@ -2211,7 +2220,8 @@ def main_boot_mount():
     per-app volumes from persisted desired-state, then exit, so docker
     (ordered after it) starts with volumes already in place."""
     try:
-        Storage().boot_mount()
+        from reefy.storage_service import read_policy
+        Storage().boot_mount(quiesced_admission=read_policy() is not None)
     except Exception as e:
         log('mqtt', f'[boot-mount] fatal: {e}')
     sys.exit(0)

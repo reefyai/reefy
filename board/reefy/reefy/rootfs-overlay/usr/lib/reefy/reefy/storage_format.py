@@ -29,13 +29,13 @@ def format_budget(layout, chunk_bytes):
 
 
 @contextmanager
-def format_admission(device, storage_class):
-    if not Registry().data.get('active'):
+def format_admission(device, storage_class, *, admission=None):
+    if admission is None and not Registry().data.get('active'):
         yield
         return
     layout = command(['mkfs.xfs', '-N', device], timeout=30)
     budget = format_budget(layout, physical_sample().chunk_bytes)
-    with reservation('volume-format', budget, storage_class=storage_class):
+    with (admission or reservation)('volume-format', budget, storage_class=storage_class):
         yield
 
 

@@ -1070,8 +1070,8 @@ class SensitiveDownloadLoggingTests(unittest.TestCase):
                         storage.os, 'stat',
                         return_value=types.SimpleNamespace(
                             st_uid=1000, st_gid=1000)), \
-                    mock.patch.object(
-                        storage.subprocess, 'run', side_effect=failure), \
+                    mock.patch(
+                        'reefy.storage_download.download', side_effect=failure), \
                     mock.patch.object(
                         storage, 'log',
                         side_effect=lambda source, message: messages.append(message)), \
