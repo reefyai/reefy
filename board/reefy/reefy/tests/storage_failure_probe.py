@@ -48,6 +48,18 @@ def metadata_fault(counter):
     stall = folder / 'stall-observed'
     stall_calls = folder / 'stall-calls'
     mode.write_text('timeout-once')
+    hook = folder / 'sitecustomize.py'
+    hook.write_text('import pathlib, subprocess, time\n'
+        'original_wait = subprocess.Popen.wait\n'
+        'mode_path = pathlib.Path(' + repr(str(mode)) + ')\n'
+        'stall_path = pathlib.Path(' + repr(str(stall)) + ')\n'
+        'def delayed_wait(self, timeout=None):\n'
+        "    if (timeout is None and isinstance(self.args, list)\n"
+        "            and pathlib.Path(self.args[0]).name == 'dmsetup'\n"
+        "            and mode_path.read_text() == 'cleanup-stall' and not stall_path.exists()):\n"
+        "        stall_path.write_text('injected'); time.sleep(8)\n"
+        '    return original_wait(self, timeout=timeout)\n'
+        'subprocess.Popen.wait = delayed_wait\n')
     wrapper.write_text('#!/usr/bin/python3\nimport subprocess, sys, pathlib, time\n'
         'mode = pathlib.Path(' + repr(str(mode)) + ').read_text()\n'
         'marker = pathlib.Path(' + repr(str(marker)) + ')\n'
@@ -55,10 +67,7 @@ def metadata_fault(counter):
         'stall_calls = pathlib.Path(' + repr(str(stall_calls)) + ')\n'
         "if sys.argv[1] == 'status' and mode == 'cleanup-stall':\n"
         "    with stall_calls.open('a') as out: out.write('call\\n')\n"
-        "    if not stall.exists():\n"
-        "        stall.write_text('injected')\n"
-        "        subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(8)'])\n"
-        "        time.sleep(12)\n"
+        "    time.sleep(12)\n"
         "if sys.argv[1] == 'status' and mode == 'timeout-once' and not marker.exists():\n"
         "    marker.write_text('injected'); time.sleep(3)\n"
         'result = subprocess.run(' + repr([binary]) + ' + sys.argv[1:], capture_output=True, text=True)\n'
@@ -73,7 +82,9 @@ def metadata_fault(counter):
     wrapper.chmod(0o700)
     dropin = Path('/run/systemd/system/reefy-storage-watchdog.service.d/synthetic-metadata.conf')
     dropin.parent.mkdir(parents=True, exist_ok=True)
-    dropin.write_text('[Service]\nEnvironment="PATH=' + str(folder) + ':' + os.environ['PATH'] + '"\n')
+    dropin.write_text('[Service]\nEnvironment="PATH=' + str(folder) + ':' + os.environ['PATH'] + '"\n'
+                      'Environment="PYTHONPATH=' + str(folder) + ':/usr/lib/reefy"\n'
+                      'Environment=PYTHONDONTWRITEBYTECODE=1\n')
     started = time.monotonic()
     try:
         command(['systemctl', 'daemon-reload'])
@@ -87,9 +98,10 @@ def metadata_fault(counter):
             assert not Path(RUN_DIR, 'hold.json').exists(), 'one sampler timeout latched protection'
             time.sleep(0.1)
         assert counter.stat().st_mtime_ns > before
-        # A grandchild holds command pipes open after the timed-out parent is
-        # killed. This recreates delayed subprocess cleanup without changing
-        # the actual kernel or exhausting the physical metadata LV.
+        # POSIX subprocess.run waits for child exit after timeout. Inject an
+        # eight-second wait at that exact cleanup boundary, representing a child
+        # that cannot exit immediately while in kernel I/O. No kernel change or
+        # physical metadata exhaustion is used for this daemon fault test.
         observer_pid = command(['systemctl', 'show', '--property=MainPID', '--value',
                                 'reefy-storage-watchdog.service']).strip()
         mode.write_text('cleanup-stall')
@@ -113,7 +125,7 @@ def metadata_fault(counter):
         assert command(['systemctl', 'show', '--property=MainPID', '--value',
                         'reefy-storage-watchdog.service']).strip() == observer_pid
         mode.write_text('normal')
-        while time.monotonic() - stalled_at < 11:
+        while time.monotonic() - stalled_at < 13:
             assert Path(RUN_DIR, 'hold.json').exists(), 'late sample cleared the latched hold'
             time.sleep(0.1)
         command(['systemctl', 'start', 'reefy-storage-recover.service'], timeout=60)
@@ -147,6 +159,7 @@ def metadata_fault(counter):
         marker.unlink(missing_ok=True)
         stall.unlink(missing_ok=True)
         stall_calls.unlink(missing_ok=True)
+        hook.unlink()
         folder.rmdir()
     command(['systemctl', 'start', 'reefy-storage-recover.service'], timeout=60)
     deadline = time.monotonic() + 10
