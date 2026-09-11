@@ -141,8 +141,13 @@ def run():
     quota = read_quotas('/mnt/reefy-data')[project]
     assert 0 < quota['hard'] <= 2 * 1024**3
     # Compare the actual container statfs view with the governed bind mount.
-    output = command(['docker', 'exec', 'storage-probe', 'df', '-Pk', '/media', '/config'])
-    assert '/media' in output and '/config' in output, output
+    # BusyBox df associates same-device bind mounts with the first mount name.
+    # stat -f performs statfs on the requested path, as Frigate disk_usage does.
+    for host, guest in ((media, '/media'), (config, '/config')):
+        output = command(['docker', 'exec', 'storage-probe', 'stat', '-f', '-c', '%S %a', guest])
+        block, available = map(int, output.split())
+        actual = os.statvfs(host)
+        assert block * available == actual.f_frsize * actual.f_bavail, output
     command(['docker', 'exec', 'storage-probe', 'sh', '-c',
              'echo committed > /config/probe; echo segment > /media/probe'])
     assert Path(config, 'probe').read_text().strip() == 'committed'
