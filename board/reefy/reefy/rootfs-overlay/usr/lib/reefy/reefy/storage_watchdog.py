@@ -147,21 +147,41 @@ class BoundedSampler:
             raise pending['error']
         return pending['result']
 
+    def discard_pending(self, *, timeout):
+        """Wait within the retry budget for the old worker, then discard it.
+
+        A late result never establishes safety. Waiting for termination is only
+        permission to issue a fresh sample without overlapping subprocesses.
+        """
+        pending = self.pending
+        if pending is not None:
+            if not pending['done'].wait(max(0, timeout)):
+                raise TimeoutError('physical sample worker still prevents a fresh retry')
+            self.pending = None
+
 
 _observer_sampler = BoundedSampler()
 
 
-def sample_with_retry():
+def sample_with_retry(*, timeout=2):
     # Each status+table pair and process cleanup share a two-second observer
     # budget. One retry handles transient device-mapper/CPU latency. A worker
     # still blocked after its deadline prevents parallel replacement commands.
     # The freeze request is nonblocking. Sampling stays below systemd's
     # eight-second watchdog while queued I/O drains independently.
     # Only a fresh successful sample authorizes continued writes.
+    deadline = time.monotonic() + 2 * timeout
     try:
-        return _observer_sampler.read(timeout=2)
+        return _observer_sampler.read(timeout=timeout)
     except (subprocess.TimeoutExpired, TimeoutError):
-        return _observer_sampler.read(timeout=2)
+        # The outer deadline can expire shortly before child reaping finishes.
+        # An immediate second read would just revisit that expired worker,
+        # consuming the retry without ever making a fresh measurement.
+        _observer_sampler.discard_pending(timeout=deadline - time.monotonic())
+        remaining = min(timeout, deadline - time.monotonic())
+        if remaining <= 0:
+            raise TimeoutError('physical sample retry budget expired')
+        return _observer_sampler.read(timeout=remaining)
 
 
 def check(*, active, stale_seconds, sample=None, writers=None,

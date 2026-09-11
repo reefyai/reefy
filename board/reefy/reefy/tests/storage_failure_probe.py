@@ -56,8 +56,9 @@ def metadata_fault(counter):
         'def delayed_wait(self, timeout=None):\n'
         "    if (timeout is None and isinstance(self.args, list)\n"
         "            and pathlib.Path(self.args[0]).name == 'dmsetup'\n"
-        "            and mode_path.read_text() == 'cleanup-stall' and not stall_path.exists()):\n"
-        "        stall_path.write_text('injected'); time.sleep(8)\n"
+        "            and mode_path.read_text() in ('cleanup-stall', 'cleanup-transient') and not stall_path.exists()):\n"
+        "        stall_path.write_text('injected')\n"
+        "        time.sleep(.4 if mode_path.read_text() == 'cleanup-transient' else 8)\n"
         '    return original_wait(self, timeout=timeout)\n'
         'subprocess.Popen.wait = delayed_wait\n')
     wrapper.write_text('#!/usr/bin/python3\nimport subprocess, sys, pathlib, time\n'
@@ -67,6 +68,8 @@ def metadata_fault(counter):
         'stall_calls = pathlib.Path(' + repr(str(stall_calls)) + ')\n'
         "if sys.argv[1] == 'status' and mode == 'cleanup-stall':\n"
         "    with stall_calls.open('a') as out: out.write('call\\n')\n"
+        "    time.sleep(12)\n"
+        "if sys.argv[1] == 'status' and mode == 'cleanup-transient' and not stall.exists():\n"
         "    time.sleep(12)\n"
         "if sys.argv[1] == 'status' and mode == 'timeout-once' and not marker.exists():\n"
         "    marker.write_text('injected'); time.sleep(3)\n"
@@ -98,6 +101,22 @@ def metadata_fault(counter):
             assert not Path(RUN_DIR, 'hold.json').exists(), 'one sampler timeout latched protection'
             time.sleep(0.1)
         assert counter.stat().st_mtime_ns > before
+        # Child reaping may finish just after the outer two-second deadline.
+        # Discard that expired result and require a new real sample, within the
+        # same total four-second retry budget, before allowing writes to continue.
+        mode.write_text('cleanup-transient')
+        before = counter.stat().st_mtime_ns
+        started = time.monotonic()
+        while not stall.exists():
+            assert time.monotonic() - started < 5
+            time.sleep(.1)
+        until = time.monotonic() + 5
+        while time.monotonic() < until:
+            assert not Path(RUN_DIR, 'hold.json').exists(), 'late cleanup consumed the fresh retry'
+            time.sleep(.1)
+        assert counter.stat().st_mtime_ns > before
+        mode.write_text('normal')
+        stall.unlink()
         # POSIX subprocess.run waits for child exit after timeout. Inject an
         # eight-second wait at that exact cleanup boundary, representing a child
         # that cannot exit immediately while in kernel I/O. No kernel change or
@@ -111,7 +130,10 @@ def metadata_fault(counter):
             time.sleep(0.1)
         stall_observed = time.monotonic()
         while not Path(RUN_DIR, 'hold.json').exists():
-            assert time.monotonic() - stalled_at < 5, 'command cleanup blocked observer'
+            # Cleanup starts after the command's 1.8-second inner timeout. The
+            # remaining total observer budget is at most 2.2 seconds; allow the
+            # polling/scheduling margin without charging the preceding tick.
+            assert time.monotonic() - stall_observed < 3, 'command cleanup blocked observer'
             time.sleep(0.1)
         assert 'protection evidence unavailable' in json.loads(
             Path(RUN_DIR, 'hold.json').read_text())['reason']
@@ -167,6 +189,7 @@ def metadata_fault(counter):
         assert time.monotonic() < deadline
         time.sleep(0.1)
     return {'one_sampler_timeout_recovered_with_fresh_measurement': True,
+            'late_cleanup_retried_with_fresh_measurement_inside_original_budget': True,
             'stuck_command_cleanup_bounded_without_worker_fanout': True,
             'metadata_counter_fault_contained_and_recovered': True,
             'systemd_worker': drain_result}
