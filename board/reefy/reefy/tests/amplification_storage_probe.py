@@ -87,7 +87,9 @@ def run():
             assert child.poll() == 0 and RESULT.exists(), 'writer escaped bounded observation'
             assert json.loads(RESULT.read_text())['errno'] in (errno.ENOSPC, errno.EDQUOT)
         time.sleep(1)
-        final = sample()
+        # Writer is already contained; allow queued I/O to settle for this
+        # final evidence sample. The watchdog deadline above stays unchanged.
+        final = sample(timeout=10)
         quota_after = read_quotas(ROOT)[media['project']]['used']
         assert final.healthy
         assert final.capacity - final.used >= initial['allocation']['boundaries']['emergency'], asdict(final)

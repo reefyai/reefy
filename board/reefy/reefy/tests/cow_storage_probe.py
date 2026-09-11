@@ -95,7 +95,9 @@ def run():
         # The predeclared emergency reserve must still exist after queued I/O
         # settles; quota usage stays flat while physical COW grows separately.
         time.sleep(1)
-        after = sample()
+        # Writer is already contained; allow queued I/O to settle for this
+        # final evidence sample. The watchdog deadline above stays unchanged.
+        after = sample(timeout=10)
         assert after.healthy
         assert after.capacity - after.used >= initial['allocation']['boundaries']['emergency'], asdict(after)
         assert abs(read_quotas(ROOT)[media['project']]['used'] - quota_before) <= 4 * MIB

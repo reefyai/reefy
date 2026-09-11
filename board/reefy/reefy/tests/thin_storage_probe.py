@@ -29,8 +29,8 @@ CHUNK = 512 * 1024
 MIB = 1024**2
 
 
-def sample():
-    return physical_sample(POOL, timeout=2)
+def sample(timeout=2):
+    return physical_sample(POOL, timeout=timeout)
 
 
 def records(registry):
