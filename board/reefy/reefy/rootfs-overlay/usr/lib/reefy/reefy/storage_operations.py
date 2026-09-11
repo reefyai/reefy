@@ -51,5 +51,7 @@ def compose_operation(compose, project_name, args):
             yield
         finally:
             # ExitStack releases leases while the operation remains serialized.
-            stack.close()
-            _local.inside = False
+            try:
+                stack.close()
+            finally:
+                _local.inside = False
