@@ -20,10 +20,17 @@ DB_SCRIPT = """import pathlib, sqlite3, time
 db = sqlite3.connect('/data/state.db')
 db.execute('PRAGMA journal_mode=WAL')
 db.execute('CREATE TABLE commits (sequence INTEGER PRIMARY KEY, payload BLOB)')
+checkpoint_count = 0
 while True:
     db.execute('INSERT INTO commits(payload) VALUES (?)', (b's' * 32768,))
     db.commit()
-    pathlib.Path('/data/commits').write_text(str(db.execute('SELECT max(sequence) FROM commits').fetchone()[0]))
+    sequence = db.execute('SELECT max(sequence) FROM commits').fetchone()[0]
+    if sequence % 100 == 0:
+        checkpoint = db.execute('PRAGMA wal_checkpoint(PASSIVE)').fetchone()
+        assert checkpoint[0] == 0 and checkpoint[2] >= 0, checkpoint
+        checkpoint_count += 1
+        pathlib.Path('/data/checkpoints').write_text(str(checkpoint_count))
+    pathlib.Path('/data/commits').write_text(str(sequence))
     time.sleep(0.1)
 """
 
@@ -85,10 +92,11 @@ def run():
             assert 'recordings_continue_and_database_integrity' in log, log[-20000:]
             print(log)
         assert previous_commits > 500
+        assert int((ROOT / 'checkpoints').read_text()) >= 5
         result = command(['docker', 'exec', NAME, 'python3', '-c',
             "import sqlite3; c=sqlite3.connect('/data/state.db', timeout=30); "
             "assert c.execute('PRAGMA integrity_check').fetchone()[0]=='ok'; "
-            "assert c.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone()[0]==0; print('ok')"])
+            "assert c.execute('PRAGMA wal_checkpoint(PASSIVE)').fetchone()[0]==0; print('ok')"])
         assert result.strip() == 'ok'
         assignments = {row['project'] for row in Registry().data['projects'].values()
                        if row['path'] in (str(ROOT), '/mnt/reefy-data/apps/synthetic-frigate-low/media',
