@@ -14,6 +14,27 @@ def sample(used, capacity=512 * GB):
 
 
 class BudgetTests(unittest.TestCase):
+    def test_control_state_runway_is_preserved_and_charged_to_every_band(self):
+        control = Consumer('control', 'state', MIB, 256 * MIB,
+                           max_hard=256 * MIB, minimum_hard=256 * MIB)
+        app = Consumer('app', 'state', GB, 2 * GB, demand=MIB)
+        for used in (GB, 20 * GB, 27 * GB, 28 * GB):
+            result = allocate(sample(used, 32 * GB), [control, app])
+            self.assertEqual(result.limits['control'], 256 * MIB)
+            if not result.quiesce:
+                outstanding = sum(max(0, result.limits[c.key] - c.used) for c in (control, app))
+                self.assertLessEqual(used + outstanding, getattr(result.boundaries, result.stage))
+        result = allocate(sample(28 * GB - 128 * MIB, 32 * GB), [control, app])
+        self.assertTrue(result.quiesce)
+        self.assertEqual(result.limits['control'], 256 * MIB)
+
+    def test_control_state_minimum_requires_a_consistent_aligned_cap(self):
+        for value in (-4096, 1, True):
+            with self.assertRaises(ValueError):
+                Consumer('control', 'state', 0, 4096, minimum_hard=value)
+        with self.assertRaises(ValueError):
+            Consumer('control', 'state', 0, 4096, max_hard=4096, minimum_hard=8192)
+
     def test_reviewed_disk_sizes(self):
         for size, bulk, runtime, state in [
                 (32, 21.6, 24.8, 28), (128, 96, 108.8, 121.6),

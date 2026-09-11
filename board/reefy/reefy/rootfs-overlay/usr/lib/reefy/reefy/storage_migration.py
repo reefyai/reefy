@@ -118,7 +118,9 @@ class Migration:
                  and record.get('root_inode') == info.st_ino
                  and stat.S_ISDIR(info.st_mode) and found == project
                  and flags & PROJINHERIT and quota and quota['hard'] > 0
-                 and quota['soft'] == 0)
+                 and quota['soft'] == 0
+                 and (not record.get('control_state')
+                      or 0 < record.get('minimum_hard', 0) <= quota['hard']))
         if ready and not force_verify:
             self.checkpoint('verified-root', path=root)
             return
@@ -135,7 +137,17 @@ class Migration:
             tree_bytes += item.st_blocks * 512
             if number % 25000 == 0:
                 self.checkpoint('inventory', path=root, inodes=number)
-        temporary_limit = max(QUANTUM, tree_bytes + (quota or {}).get('used', 0) + 64 * 1024**2)
+        if record.get('control_state') and not record.get('minimum_hard'):
+            # Old devices may keep control state on the thin default filesystem.
+            # Preserve a fixed small allowance so atomic registry replacement
+            # still works when runtime/apps hit their quota. Charge the unused
+            # part to the physical ledger on every pass; never lend it twice.
+            minimum = max(256 * 1024**2, tree_bytes + 64 * 1024**2)
+            minimum = ((minimum + QUANTUM - 1) // QUANTUM) * QUANTUM
+            record.update(minimum_hard=minimum, max_hard=minimum)
+            self.registry.save()
+        temporary_limit = max(QUANTUM, tree_bytes + (quota or {}).get('used', 0) + 64 * 1024**2,
+                              record.get('minimum_hard', 0))
         temporary_limit = ((temporary_limit + QUANTUM - 1) // QUANTUM) * QUANTUM
         set_quota(mount, project, temporary_limit)
         if read_quotas(mount).get(project, {}).get('hard') != temporary_limit:
@@ -151,7 +163,7 @@ class Migration:
         quota = read_quotas(mount).get(project)
         if quota is None:
             raise PressureError('tagged project missing from quota accounting')
-        hard = max(QUANTUM, quota['used'])
+        hard = max(QUANTUM, quota['used'], record.get('minimum_hard', 0))
         set_quota(mount, project, hard)
         final = read_quotas(mount).get(project, {})
         if final.get('hard') != hard or final.get('soft') != 0:
