@@ -3,6 +3,7 @@
 from dataclasses import asdict
 import errno
 import json
+import mmap
 import os
 from pathlib import Path
 import signal
@@ -12,7 +13,7 @@ import time
 
 sys.path.insert(0, '/usr/lib/reefy')
 from reefy.storage_guard import Guard
-from reefy.storage_quota import Registry, RUN_DIR, command, read_quotas, set_quota
+from reefy.storage_quota import Registry, RUN_DIR, command, flush_filesystem, read_quotas, set_quota
 from reefy.storage_service import INITIAL_RATE, RESPONSE_SECONDS, IN_FLIGHT
 from reefy import storage_watchdog
 from reefy.storage_watchdog import Writers, check
@@ -29,23 +30,25 @@ def writer():
     (CGROUP / 'cgroup.procs').write_text(str(os.getpid()))
     written = 0
     error_number = None
+    descriptor = None
     try:
-        with FILE.open('wb', buffering=0) as stream:
-            # Pre-size without allocation so writes land inside sparse holes.
-            # EOF writes let XFS speculative preallocation charge intervening
-            # blocks to the quota and do not reproduce amplification.
-            stream.truncate(16 * 1024**3)
+        descriptor = os.open(FILE, os.O_CREAT | os.O_TRUNC | os.O_WRONLY | os.O_DIRECT, 0o600)
+        os.ftruncate(descriptor, 16 * 1024**3)
+        # Direct I/O prevents delayed-allocation extent sizing from filling
+        # the intervening holes. mmap supplies page-aligned memory for O_DIRECT.
+        with mmap.mmap(-1, 4096) as block:
+            block[:] = b's' * 4096
             for offset in range(0, 16 * 1024**3, CHUNK):
-                stream.seek(offset)
-                stream.write(b's' * 4096)
+                assert os.pwrite(descriptor, block, offset) == 4096
                 written += 4096
-                # At most 64 partially dirty thin chunks per flush, matching
-                # the declared 64 MiB in-flight bound without a rate sleep.
                 if written % (64 * 4096) == 0:
-                    os.fsync(stream.fileno())
-            os.fsync(stream.fileno())
+                    os.fsync(descriptor)
+            os.fsync(descriptor)
     except OSError as error:
         error_number = error.errno
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
     RESULT.write_text(json.dumps({'written': written, 'errno': error_number}))
 
 
@@ -56,6 +59,9 @@ def run():
                                   '-o', 'TARGET,SOURCE']))['filesystems'][0]
     assert mounted['target'] == ROOT
     assert os.path.realpath(mounted['source']) == os.path.realpath('/dev/' + VG + '/data')
+    Path(ROOT, 'media', 'cow').unlink(missing_ok=True)
+    flush_filesystem(ROOT)
+    command(['fstrim', ROOT], timeout=60)
     registry = Registry('/run/reefy/storage-pressure/synthetic-thin-registry.json')
     media = next(row for row in registry.data['projects'].values() if row['path'] == ROOT + '/media')
     guard = Guard(peak_bytes_per_second=INITIAL_RATE, response_seconds=RESPONSE_SECONDS,
