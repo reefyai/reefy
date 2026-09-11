@@ -71,6 +71,7 @@ def run():
         with reservation('synthetic-frigate-export-check', 64 * MIB):
             result = command(['docker', 'run', '--rm', '--name', 'synthetic-frigate-exports',
                 '--entrypoint', 'python3', '-e', 'PYTHONDONTWRITEBYTECODE=1',
+                '-e', 'PYTHONPATH=/opt/frigate',
                 '-v', str(ROOT / 'config') + ':/config', '-v', str(media) + ':/media/frigate',
                 '-v', str(script) + ':/check.py:ro', IMAGE, '/check.py'], timeout=60)
         assert export.stat().st_size == before

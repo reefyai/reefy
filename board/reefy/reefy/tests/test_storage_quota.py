@@ -85,10 +85,6 @@ class ToolParsingTests(unittest.TestCase):
                 require_enforcement('/test')
 
 
-if __name__ == '__main__':
-    unittest.main()
-
-
 class PhysicalSampleDeadlineTests(unittest.TestCase):
     def test_status_and_table_share_one_deadline(self):
         with patch('reefy.storage_quota.time.monotonic', side_effect=[10, 11.5]), \
@@ -101,3 +97,7 @@ class PhysicalSampleDeadlineTests(unittest.TestCase):
             with self.assertRaises(TimeoutError):
                 physical_sample('synthetic-pool', timeout=2)
             self.assertEqual(command.call_count, 1)
+
+
+if __name__ == '__main__':
+    unittest.main()
