@@ -1,0 +1,13 @@
+[Unit]
+Description=Drain queued Reefy filesystem work while storage writers are held
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/usr/lib/reefy
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m reefy.storage_service drain
+TimeoutStartSec=35
+TimeoutStopSec=5
+CPUWeight=1000
+OOMScoreAdjust=-900
+MemoryMax=128M

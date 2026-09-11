@@ -16,9 +16,9 @@ def sample(used, capacity=512 * GB):
 class BudgetTests(unittest.TestCase):
     def test_production_response_budget_charges_detection_freeze_and_drain(self):
         from reefy.storage_service import INITIAL_RATE, RESPONSE_SECONDS, IN_FLIGHT
-        from reefy.storage_watchdog import DETECTION_SECONDS, FREEZE_SECONDS, DRAIN_SECONDS
+        from reefy.storage_watchdog import DETECTION_SECONDS, QUIESCE_SECONDS
         self.assertEqual(RESPONSE_SECONDS,
-                         DETECTION_SECONDS + FREEZE_SECONDS + DRAIN_SECONDS)
+                         DETECTION_SECONDS + QUIESCE_SECONDS)
         self.assertEqual(RESPONSE_SECONDS, 40)
         result = allocate(sample(4 * 1024**3, 12 * 1024**3),
                           [Consumer('media', 'bulk', 4 * 1024**3, 5 * 1024**3)],

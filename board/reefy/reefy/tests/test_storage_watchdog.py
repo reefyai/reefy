@@ -8,7 +8,8 @@ from unittest.mock import Mock, patch
 
 import _bootstrap  # noqa: F401
 from reefy.storage_pressure import GB, PoolSample, PressureError
-from reefy.storage_watchdog import Writers, check, unhealthy_reason, hold_writers
+from reefy.storage_watchdog import (Writers, check, unhealthy_reason, hold_writers,
+                                    finish_hold, start_hold_worker)
 
 
 class WatchdogTests(unittest.TestCase):
@@ -122,6 +123,79 @@ class WatchdogTests(unittest.TestCase):
                     patch('reefy.storage_watchdog.time.monotonic', side_effect=lambda: clock[0]):
                 self.assertEqual(hold_writers(writers=writer), 'other coordinator')
             self.assertFalse(json.loads(Path(directory, 'hold.json').read_text()).get('deadline_exceeded'))
+
+    def test_freezer_and_filesystem_drain_share_one_deadline(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                patch('reefy.storage_watchdog.RUN_DIR', directory):
+            path = Path(directory, 'hold.json')
+            path.write_text(json.dumps({'reason': 'synthetic', 'monotonic': 100}))
+            clock = [100]
+            writer = Mock()
+
+            def freeze(**kwargs):
+                self.assertEqual(kwargs['timeout'], 30)
+                clock[0] = 112
+
+            def flush(args, **kwargs):
+                self.assertEqual(kwargs['timeout'], 18)
+                clock[0] = 129
+
+            writer.freeze.side_effect = freeze
+            with patch('reefy.storage_watchdog.time.monotonic', side_effect=lambda: clock[0]), \
+                    patch('reefy.storage_watchdog.command', side_effect=flush):
+                finish_hold(writers=writer, mounts=['/synthetic'])
+            hold = json.loads(path.read_text())
+            self.assertTrue(hold['drained'])
+            self.assertEqual(hold['frozen_monotonic'], 112)
+            self.assertEqual(hold['drained_monotonic'], 129)
+            self.assertFalse(hold.get('deadline_exceeded'))
+            writer.thaw.assert_not_called()
+
+    def test_frozen_process_with_undrained_io_is_still_subject_to_deadline(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                patch('reefy.storage_watchdog.RUN_DIR', directory):
+            writer = Mock()
+            writer.frozen.return_value = True
+            hold_writers('pressure', writers=writer, now=100)
+            self.assertIn('exceeded', hold_writers(writers=writer, now=131))
+            self.assertFalse(json.loads(Path(directory, 'hold.json').read_text()).get('drained'))
+
+    def test_only_one_worker_is_queued_and_recovery_blocks_late_starts(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                patch('reefy.storage_watchdog.RUN_DIR', directory), \
+                patch('reefy.storage_watchdog.command') as command:
+            path = Path(directory, 'hold.json')
+            path.write_text(json.dumps({'reason': 'synthetic', 'monotonic': 100}))
+            start_hold_worker()
+            start_hold_worker()
+            command.assert_called_once()
+            self.assertIn('--no-block', command.call_args.args[0])
+            path.write_text(json.dumps({'reason': 'synthetic', 'monotonic': 101,
+                                        'recovering': True}))
+            start_hold_worker()
+            command.assert_called_once()
+            path.unlink()
+            writer = Mock()
+            finish_hold(writers=writer, mounts=['/synthetic'])
+            writer.freeze.assert_not_called()
+
+    def test_late_drain_is_recorded_as_failure_and_never_releases_writers(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                patch('reefy.storage_watchdog.RUN_DIR', directory):
+            path = Path(directory, 'hold.json')
+            path.write_text(json.dumps({'reason': 'synthetic', 'monotonic': 100}))
+            clock = [100]
+            writer = Mock()
+
+            def slow_flush(*args, **kwargs):
+                clock[0] = 131
+
+            with patch('reefy.storage_watchdog.time.monotonic', side_effect=lambda: clock[0]), \
+                    patch('reefy.storage_watchdog.command', side_effect=slow_flush):
+                with self.assertRaises(PressureError):
+                    finish_hold(writers=writer, mounts=['/synthetic'])
+            self.assertTrue(json.loads(path.read_text())['deadline_exceeded'])
+            writer.thaw.assert_not_called()
 
     def test_cow_containment_starts_before_consuming_the_response_margin(self):
         status = dict(self.status(), physical_stop_bytes=24 * GB)

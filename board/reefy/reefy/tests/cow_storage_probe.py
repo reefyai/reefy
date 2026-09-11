@@ -18,7 +18,7 @@ from reefy.storage_guard import Guard
 from reefy.storage_quota import Registry, RUN_DIR, command, flush_filesystem, read_quotas, set_quota
 from reefy.storage_service import INITIAL_RATE, RESPONSE_SECONDS, IN_FLIGHT
 from reefy import storage_watchdog
-from reefy.storage_watchdog import Writers, check, FREEZE_SECONDS, DRAIN_SECONDS
+from reefy.storage_watchdog import Writers, check, QUIESCE_SECONDS, finish_hold
 from thin_storage_probe import ROOT, VG, MIB, CHUNK, SERIAL, sample, write_file
 
 GROUP = 'synthetic-storage-cow'
@@ -35,6 +35,10 @@ def writer():
                 stream.seek(offset)
                 stream.write(b'c' * 4096)
             os.fsync(stream.fileno())
+
+
+def drain():
+    finish_hold(writers=Writers(groups=(GROUP,)), mounts=[ROOT])
 
 
 def run():
@@ -81,6 +85,7 @@ def run():
     CGROUP.mkdir()
     writers = Writers(groups=(GROUP,))
     child = subprocess.Popen([sys.executable, __file__, 'writer'])
+    drainer = None
     trace = []
     observer_calls = []
     started = time.monotonic()
@@ -111,9 +116,11 @@ def run():
         assert reason in ('physical emergency boundary reached',
                           'protection evidence unavailable: TimeoutExpired',
                           'protection evidence unavailable: TimeoutError'), (reason, initial, trace)
+        drainer = subprocess.Popen([sys.executable, __file__, 'drain'], start_new_session=True)
         hold = json.loads(Path(RUN_DIR, 'hold.json').read_text())
-        while not hold.get('frozen'):
-            assert time.monotonic() - hold['monotonic'] <= FREEZE_SECONDS
+        while not hold.get('drained'):
+            assert not hold.get('drain_error'), hold
+            assert time.monotonic() - hold['monotonic'] <= QUIESCE_SECONDS
             time.sleep(1)
             tick = time.monotonic()
             check(active=True, stale_seconds=20, writers=writers, status_path=STATUS)
@@ -124,16 +131,14 @@ def run():
         assert 'frozen 1' in (CGROUP / 'cgroup.events').read_text()
         confirmed = time.monotonic()
         if crossed is not None:
-            assert time.monotonic() - crossed <= FREEZE_SECONDS + 5, 'freezer exceeded its declared response bound'
+            assert time.monotonic() - crossed <= QUIESCE_SECONDS + 5, 'freezer exceeded its declared response bound'
         else:
             assert reason.startswith('protection evidence unavailable:'), reason
         # The predeclared emergency reserve must still exist after queued I/O
         # settles; quota usage stays flat while physical COW grows separately.
-        drain_started = time.monotonic()
-        command([sys.executable, '-c',
-                 'import sys; from reefy.storage_quota import flush_filesystem; '
-                 'flush_filesystem(sys.argv[1])', ROOT], timeout=DRAIN_SECONDS)
-        drain_seconds = time.monotonic() - drain_started
+        assert drainer.wait(timeout=2) == 0
+        confirmed = hold['frozen_monotonic']
+        drain_seconds = hold['drained_monotonic'] - confirmed
         # Writer is already contained; allow queued I/O to settle for this
         # final evidence sample. The watchdog deadline above stays unchanged.
         after = sample(timeout=10)
@@ -202,6 +207,10 @@ def run():
         # Test-only cleanup, after preserving containment evidence. Never use
         # this manual freezer release as the production recovery path.
         child.send_signal(signal.SIGKILL)
+        if drainer is not None:
+            if drainer.poll() is None:
+                os.killpg(drainer.pid, signal.SIGKILL)
+            drainer.wait(timeout=5)
         writers.thaw()
         child.wait(timeout=10)
         command(['lvremove', '-f', VG + '/pressure_hold'])
@@ -212,4 +221,5 @@ def run():
 
 
 if __name__ == '__main__':
-    (writer if sys.argv[1:] == ['writer'] else run)()
+    {'writer': writer, 'drain': drain}.get(
+        sys.argv[1] if len(sys.argv) > 1 else '', run)()

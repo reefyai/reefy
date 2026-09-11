@@ -18,7 +18,7 @@ def run():
     assert not Registry().data.get('active'), 'disposable pre-activation VM required'
     registry = Registry('/run/reefy/storage-pressure/synthetic-thin-registry.json')
     root_record = next(r for r in registry.data['projects'].values() if r['path'] == ROOT)
-    set_quota(ROOT, root_record['project'], 11 * 1024**3)
+    set_quota(ROOT, root_record['project'], sample().capacity)
     tree = Path(ROOT, 'migration-cow')
     filler = Path(ROOT, 'migration-fill')
     tree.mkdir()

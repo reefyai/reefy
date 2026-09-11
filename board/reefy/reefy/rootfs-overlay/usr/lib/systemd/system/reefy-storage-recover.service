@@ -7,4 +7,4 @@ Type=oneshot
 Environment=PYTHONPATH=/usr/lib/reefy
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 -m reefy.storage_service recover
-TimeoutStartSec=60
+TimeoutStartSec=90

@@ -281,8 +281,10 @@ as timely. Recovery requires confirmed freezing and a bounded filesystem flush
 before a fresh allocation pass and writer release.
 
 The initial physical budget is 128 MiB/s over 40 seconds: ten seconds for
-observer failure detection and scheduling, 25 seconds for freeze confirmation,
-and five seconds for remaining filesystem work, plus 64 MiB in-flight allowance.
+observer failure detection and scheduling, plus one shared 30-second deadline
+for freeze confirmation and filesystem drain, with 64 MiB in-flight allowance.
+A separate systemd worker performs that drain while the observer keeps running.
+A frozen process alone does not establish that kernel writeback has finished.
 This raises the initial emergency reserve to approximately 5.44 GB where the
 base reserve is smaller; it also increases the separately charged response
 margin. A small or occupied pool that cannot fit this envelope refuses growth.
