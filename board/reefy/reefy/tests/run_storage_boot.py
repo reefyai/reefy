@@ -72,5 +72,33 @@ def run_boot_migration(vm, output):
     vm.scp_to(source, '/tmp/boot_storage_probe.py')
     _, verified, _ = vm.ssh_exec('python3 /tmp/boot_storage_probe.py verify', timeout_s=600)
     results['verification'] = json.loads(verified.splitlines()[-1])
+    # A normal subsequent boot verifies completed roots without walking the
+    # million-inode tree again. Observe completion barriers throughout startup.
+    previous = snapshot(vm)['boot']
+    vm.qmp_execute('system_reset')
+    started = time.monotonic()
+    while time.monotonic() - started < 180:
+        try:
+            state = snapshot(vm)
+        except Exception:
+            time.sleep(1)
+            continue
+        if state['boot'] == previous:
+            time.sleep(0.25)
+            continue
+        record = state['record']
+        if record:
+            assert record['complete'], 'completed tree re-entered migration on the next boot'
+            assert record['project'] == project
+        marker = state['migration']
+        if marker.get('path') == '/mnt/reefy-data/apps/synthetic-scale/media':
+            assert marker.get('phase') == 'verified-root', marker
+        if state['ready'] and not state['held'] and not state['pending'] and state['docker'] > 1:
+            results['subsequent_boot'] = {'seconds': time.monotonic() - started,
+                                          'completed_tree_not_retagged': True, 'state': state}
+            break
+        time.sleep(0.25)
+    else:
+        raise AssertionError('subsequent boot did not become ready')
     (output / 'boot-results.json').write_text(json.dumps(results, sort_keys=True, indent=2))
     print(verified)
