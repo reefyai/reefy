@@ -79,3 +79,37 @@ class CapacityIntegrationTests(unittest.TestCase):
                     expanded = guard.pass_once()
                 self.assertGreater(expanded['allocation']['granted'], initial['allocation']['granted'])
                 self.assertTrue(all(row['hard'] > 0 and row['hard'] % QUANTUM == 0 for row in quotas.values()))
+
+
+class RateEnvelopeTests(unittest.TestCase):
+    def test_short_burst_uses_inflight_envelope_but_sustained_excess_increases_bound(self):
+        mib = 1024**2
+        with tempfile.TemporaryDirectory() as directory:
+            registry = Registry(str(Path(directory) / 'registry.json'))
+            registry.data.update(active=True, inventory_complete=True, projects={})
+            registry.save()
+            now = 0
+            used = GB
+            with patch('reefy.storage_guard.state_lock', return_value=nullcontext()):
+                guard = Guard(peak_bytes_per_second=128 * mib, response_seconds=30,
+                              in_flight_bytes=64 * mib, registry_path=registry.path,
+                              status_path=str(Path(directory) / 'status.json'),
+                              clock=lambda: now,
+                              sample=lambda: PoolSample(128 * GB, used, 100, 1000, 524288))
+                guard.pass_once()
+                # An admission wake observes a 32 MiB burst after just 50 ms.
+                # It fits the declared envelope; 640 MiB/s is not sustained.
+                now += 0.05
+                used += 32 * mib
+                guard.pass_once()
+                self.assertEqual(guard.peak, 128 * mib)
+                # Repeated bursts do not receive a fresh in-flight exemption.
+                now += 0.05
+                used += 32 * mib
+                guard.pass_once()
+                self.assertEqual(guard.peak, 128 * mib)
+                now += 0.05
+                used += 32 * mib
+                guard.pass_once()
+                self.assertGreater(guard.peak, 128 * mib)
+                self.assertEqual(Registry(registry.path).data['peak_bytes_per_second'], guard.peak)
