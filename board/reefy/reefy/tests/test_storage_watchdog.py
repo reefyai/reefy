@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 import subprocess
 from pathlib import Path
 import tempfile
@@ -100,6 +101,27 @@ class WatchdogTests(unittest.TestCase):
             writer.frozen.return_value = True
             self.assertIn('exceeded', hold_writers(writers=writer, now=100))
             writer.request_freeze.assert_called_once()
+
+    def test_concurrent_guard_hold_does_not_look_like_a_future_timestamp(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                patch('reefy.storage_watchdog.RUN_DIR', directory):
+            clock = [100]
+
+            @contextmanager
+            def another_guard_wins_lock():
+                # Another coordinator latches a hold after this observer began
+                # its call, but before it can enter the serialized section.
+                Path(directory, 'hold.json').write_text(json.dumps({
+                    'reason': 'other coordinator', 'monotonic': 101}))
+                clock[0] = 102
+                yield
+
+            writer = Mock()
+            writer.frozen.return_value = False
+            with patch('reefy.storage_watchdog.hold_lock', another_guard_wins_lock), \
+                    patch('reefy.storage_watchdog.time.monotonic', side_effect=lambda: clock[0]):
+                self.assertEqual(hold_writers(writers=writer), 'other coordinator')
+            self.assertFalse(json.loads(Path(directory, 'hold.json').read_text()).get('deadline_exceeded'))
 
     def test_cow_containment_starts_before_consuming_the_response_margin(self):
         status = dict(self.status(), physical_stop_bytes=24 * GB)
