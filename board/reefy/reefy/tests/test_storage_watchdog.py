@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -25,6 +26,23 @@ class WatchdogTests(unittest.TestCase):
                        PoolSample(32 * GB, GB, 850, 1000, 524288),
                        PoolSample(32 * GB, GB, 100, 1000, 524288, False)):
             self.assertIsNotNone(unhealthy_reason(self.status(), sample, 100, stale_seconds=20))
+
+    def test_transient_sampler_timeout_requires_fresh_success_before_continuing(self):
+        from reefy.storage_watchdog import sample_with_retry
+        healthy = PoolSample(32 * GB, GB, 100, 1000, 524288)
+        with patch('reefy.storage_watchdog.physical_sample',
+                   side_effect=[subprocess.TimeoutExpired('dmsetup', 2), healthy]) as sample:
+            self.assertEqual(sample_with_retry(), healthy)
+            self.assertEqual(sample.call_count, 2)
+            self.assertTrue(all(call.kwargs == {'timeout': 2} for call in sample.call_args_list))
+        with patch('reefy.storage_watchdog.physical_sample', side_effect=TimeoutError) as sample:
+            with self.assertRaises(TimeoutError):
+                sample_with_retry()
+            self.assertEqual(sample.call_count, 2)
+        with patch('reefy.storage_watchdog.physical_sample', side_effect=ValueError) as sample:
+            with self.assertRaises(ValueError):
+                sample_with_retry()
+            self.assertEqual(sample.call_count, 1)
 
     def test_failed_sampler_freezes_writers_without_docker_api(self):
         with tempfile.TemporaryDirectory() as directory:

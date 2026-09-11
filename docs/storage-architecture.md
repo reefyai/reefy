@@ -258,7 +258,12 @@ physical blocks without increasing an app's quota usage. Deleted bytes are not
 credited until the pool reports real reclamation. Quotas are operational pressure
 controls, not exact instantaneous physical ceilings or an uninterrupted-backup
 guarantee. An independent watchdog holds unsafe writers when measurements are
-stale or physical/metadata pressure cannot be contained. Hardware qualification
+stale or physical/metadata pressure cannot be contained. Each complete physical
+sample has a two-second deadline; the independent watchdog retries one transient
+timeout, then requires fresh healthy counters or freezes writers. The four-second
+sampling budget plus three-second freezer deadline fits inside systemd's
+eight-second watchdog. A failed sample never reuses stale counters as new evidence.
+Hardware qualification
 must establish an adequate response reserve before rollout.
 
 The policy protects against accidental unbounded growth. It is not a security
