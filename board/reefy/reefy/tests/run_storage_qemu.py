@@ -44,8 +44,10 @@ def main():
                 _, evidence, _ = vm.ssh_exec(
                     'journalctl -b -u reefy-storage-guard -u reefy-storage-watchdog '
                     '-u reefy-storage-hold --no-pager -n 100; '
-                    'cat /run/reefy/storage-pressure/hold.json; '
-                    'cat /sys/fs/cgroup/system.slice/docker.service/cgroup.events',
+                    'sudo cat /run/reefy/storage-pressure/hold.json; '
+                    'sudo cat /run/reefy/storage-pressure/status.json; '
+                    'sudo cat /run/reefy/storage-pressure/session.json; '
+                    'sudo cat /sys/fs/cgroup/system.slice/docker.service/cgroup.events',
                     timeout_s=20, check=False)
                 (args.output / (source.stem + '-protection.log')).write_text(evidence)
                 return False
