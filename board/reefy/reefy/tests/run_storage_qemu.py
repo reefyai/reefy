@@ -36,6 +36,10 @@ def main():
                 print(f'{source.name} FAILED: {error}', flush=True)
                 (args.output / (result + '.error.log')).write_text(str(error))
                 failures.append(source.name)
+                if isinstance(error, TimeoutError):
+                    # Closing SSH cannot prove the timed-out writer exited.
+                    # Tear down this disposable VM before another mutation.
+                    raise
                 # Independent of Docker, which may be frozen or unresponsive.
                 _, evidence, _ = vm.ssh_exec(
                     'journalctl -b -u reefy-storage-guard -u reefy-storage-watchdog '
