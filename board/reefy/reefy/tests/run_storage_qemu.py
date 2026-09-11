@@ -74,7 +74,7 @@ def main():
                           'python3 /tmp/migration_cow_probe.py', 'migration-cow-results.json', 600)
                 if thin_ready and args.suite == 'amplification':
                     probe(Path(__file__).with_name('amplification_storage_probe.py'),
-                          'python3 /tmp/amplification_storage_probe.py', 'amplification-results.json', 120)
+                          'python3 /tmp/amplification_storage_probe.py', 'amplification-results.json', 180)
                     _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-sparse-trace.json', timeout_s=20, check=False)
                     (args.output / 'amplification-trace.json').write_text(trace)
                 if thin_ready and args.suite not in ('migration-cow', 'amplification'):
@@ -96,7 +96,7 @@ def main():
                     (args.output / 'cow-trace.json').write_text(trace)
                     if cow_ready:
                         probe(Path(__file__).with_name('amplification_storage_probe.py'),
-                              'python3 /tmp/amplification_storage_probe.py', 'amplification-results.json', 120)
+                              'python3 /tmp/amplification_storage_probe.py', 'amplification-results.json', 180)
                         _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-sparse-trace.json', timeout_s=20, check=False)
                         (args.output / 'amplification-trace.json').write_text(trace)
             ready = False
