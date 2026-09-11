@@ -232,8 +232,11 @@ ID equality across different filesystems does not imply shared quota ownership.
 Imported mismatches can be repaired only while the destination is unused;
 existing destination quotas remain enforced throughout. A completed-restore
 marker does not bypass the ownership check. Boot recovery releases operation
-reservations from proven previous boots, while reservations with uncertain or
-same-boot ownership remain conservative.
+reservations from proven previous boots. Backup snapshots are persistent
+resources: failed or unverified removal retains their reservations even after
+the owner exits or the device reboots. Activation removes owned orphan snapshots
+while writers are stopped and verifies their absence before reclaiming those
+reservations. Other uncertain or same-boot reservations remain conservative.
 
 Legacy `cap_pct` continues to limit an LV's virtual size. It is not reinterpreted
 as a physical threshold. The catalog retains the last classless manifest for
