@@ -117,9 +117,13 @@ def set_quota(mountpoint, project, hard):
 
 
 def physical_sample(pool='reefy-reefy_pool-tpool', *, timeout=10):
-    return parse_thin_sample(
-        command(['dmsetup', 'status', '--noflush', pool], timeout=timeout),
-        command(['dmsetup', 'table', pool], timeout=timeout))
+    deadline = time.monotonic() + timeout
+    status = command(['dmsetup', 'status', '--noflush', pool], timeout=timeout)
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError('physical storage sample deadline exceeded')
+    table = command(['dmsetup', 'table', pool], timeout=remaining)
+    return parse_thin_sample(status, table)
 
 
 class FileAttributes:

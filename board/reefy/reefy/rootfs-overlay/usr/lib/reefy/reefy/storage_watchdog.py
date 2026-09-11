@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import subprocess
 import time
 
 from reefy.storage_pressure import PressureError
@@ -89,12 +90,25 @@ def unhealthy_reason(status, sample, now, *, stale_seconds):
     return None
 
 
+
+def sample_with_retry():
+    # Each complete status+table pair shares a two-second deadline. One retry
+    # handles transient device-mapper/CPU latency during image extraction.
+    # Worst case: four seconds sampling plus three seconds to freeze, below
+    # systemd's eight-second watchdog and the physical 30-second envelope.
+    # Only a fresh successful sample authorizes continued writes.
+    try:
+        return physical_sample(timeout=2)
+    except (subprocess.TimeoutExpired, TimeoutError):
+        return physical_sample(timeout=2)
+
+
 def check(*, active, stale_seconds, sample=None, writers=None,
           status_path=RUN_DIR + '/status.json', now=None):
     if not active:
         return None
     writers = writers or Writers()
-    sample = sample or (lambda: physical_sample(timeout=1))
+    sample = sample or sample_with_retry
     try:
         with open(status_path) as source:
             status = json.load(source)
@@ -104,6 +118,7 @@ def check(*, active, stale_seconds, sample=None, writers=None,
     except Exception as error:
         reason = f'protection evidence unavailable: {type(error).__name__}'
     if reason:
+        now = time.monotonic() if now is None else now
         # Publish the hold before freezing so service start gates reject new
         # writers even when an existing process cannot freeze promptly.
         atomic_json(RUN_DIR + '/hold.json', {'reason': reason, 'monotonic': now})

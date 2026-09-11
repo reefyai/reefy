@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import _bootstrap  # noqa: F401
 from reefy.storage_quota import (
-    Registry, check_hardlinks, owned_tree, read_quotas, require_enforcement, set_quota,
+    Registry, check_hardlinks, owned_tree, read_quotas, require_enforcement, set_quota, physical_sample,
 )
 from reefy.storage_pressure import PressureError
 
@@ -87,3 +87,17 @@ class ToolParsingTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class PhysicalSampleDeadlineTests(unittest.TestCase):
+    def test_status_and_table_share_one_deadline(self):
+        with patch('reefy.storage_quota.time.monotonic', side_effect=[10, 11.5]), \
+                patch('reefy.storage_quota.command', side_effect=['status', 'table']) as command, \
+                patch('reefy.storage_quota.parse_thin_sample', return_value='sample'):
+            self.assertEqual(physical_sample('synthetic-pool', timeout=2), 'sample')
+            self.assertEqual([call.kwargs['timeout'] for call in command.call_args_list], [2, 0.5])
+        with patch('reefy.storage_quota.time.monotonic', side_effect=[10, 12.1]), \
+                patch('reefy.storage_quota.command', return_value='status') as command:
+            with self.assertRaises(TimeoutError):
+                physical_sample('synthetic-pool', timeout=2)
+            self.assertEqual(command.call_count, 1)

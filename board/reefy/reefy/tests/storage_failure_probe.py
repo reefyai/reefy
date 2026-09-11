@@ -26,10 +26,17 @@ def metadata_fault(counter):
     folder = Path('/run/synthetic-metadata-fault')
     folder.mkdir()
     wrapper = folder / 'dmsetup'
-    wrapper.write_text('#!/usr/bin/python3\nimport subprocess, sys\n'
+    mode = folder / 'mode'
+    marker = folder / 'timeout-observed'
+    mode.write_text('timeout-once')
+    wrapper.write_text('#!/usr/bin/python3\nimport subprocess, sys, pathlib, time\n'
+        'mode = pathlib.Path(' + repr(str(mode)) + ').read_text()\n'
+        'marker = pathlib.Path(' + repr(str(marker)) + ')\n'
+        "if sys.argv[1] == 'status' and mode == 'timeout-once' and not marker.exists():\n"
+        "    marker.write_text('injected'); time.sleep(3)\n"
         'result = subprocess.run(' + repr([binary]) + ' + sys.argv[1:], capture_output=True, text=True)\n'
         'output = result.stdout\n'
-        "if result.returncode == 0 and sys.argv[1] == 'status':\n"
+        "if result.returncode == 0 and sys.argv[1] == 'status' and mode == 'metadata':\n"
         '    fields = output.split()\n'
         "    index = fields.index('thin-pool') + 2\n"
         "    capacity = int(fields[index].split('/')[1])\n"
@@ -44,6 +51,17 @@ def metadata_fault(counter):
     try:
         command(['systemctl', 'daemon-reload'])
         command(['systemctl', 'restart', 'reefy-storage-watchdog.service'], timeout=20)
+        while not marker.exists():
+            assert time.monotonic() - started < 10
+            time.sleep(0.1)
+        before = counter.stat().st_mtime_ns
+        until = time.monotonic() + 6
+        while time.monotonic() < until:
+            assert not Path(RUN_DIR, 'hold.json').exists(), 'one sampler timeout latched protection'
+            time.sleep(0.1)
+        assert counter.stat().st_mtime_ns > before
+        mode.write_text('metadata')
+        started = time.monotonic()
         while not Path(RUN_DIR, 'hold.json').exists():
             assert time.monotonic() - started < 8, 'metadata fault did not hold writers'
             time.sleep(0.1)
@@ -63,13 +81,16 @@ def metadata_fault(counter):
         command(['systemctl', 'daemon-reload'])
         command(['systemctl', 'restart', 'reefy-storage-watchdog.service'], timeout=20)
         wrapper.unlink()
+        mode.unlink()
+        marker.unlink(missing_ok=True)
         folder.rmdir()
     command(['systemctl', 'start', 'reefy-storage-recover.service'], timeout=60)
     deadline = time.monotonic() + 10
     while counter.stat().st_mtime_ns == frozen:
         assert time.monotonic() < deadline
         time.sleep(0.1)
-    return {'metadata_counter_fault_contained_and_recovered': True}
+    return {'one_sampler_timeout_recovered_with_fresh_measurement': True,
+            'metadata_counter_fault_contained_and_recovered': True}
 
 
 def run():
