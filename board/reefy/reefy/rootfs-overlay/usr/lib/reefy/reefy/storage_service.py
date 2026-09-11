@@ -103,7 +103,7 @@ def ensure_volume(path, storage_class):
             set_quota(mount['target'], record['project'], 1024)
             if read_quotas(mount['target']).get(record['project'], {}).get('hard') != 1024:
                 raise PressureError('new volume quota could not be verified')
-            record.update(complete=True, root_inode=os.lstat(path).st_ino)
+            record.update(complete=True, ownership_version=2, root_inode=os.lstat(path).st_ino)
         else:
             flags, _, _, project, _ = attributes.read(path)
             if (not record.get('complete') or project != record['project']

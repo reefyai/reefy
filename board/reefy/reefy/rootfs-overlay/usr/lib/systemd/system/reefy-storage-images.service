@@ -1,0 +1,17 @@
+[Unit]
+Description=Reefy age-based Docker image maintenance
+After=docker.service
+PartOf=docker.service
+
+[Service]
+Environment=PYTHONPATH=/usr/lib/reefy
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m reefy.storage_images
+Restart=always
+RestartSec=10
+CPUWeight=10
+IOWeight=10
+MemoryMax=192M
+
+[Install]
+WantedBy=multi-user.target

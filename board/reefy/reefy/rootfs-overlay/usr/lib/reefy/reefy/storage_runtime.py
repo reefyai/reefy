@@ -47,6 +47,14 @@ def register_runtime(registry, *, docker_root='/mnt/reefy-data/docker', attribut
         raise PressureError('Docker feature-probe project unexpectedly owns blocks')
     registry.register(str(overlay), mount, 'runtime', quotas, preferred_project=base)
     policies = {str(overlay): 'runtime'}
+    # Docker may reuse its own high IDs after removed layers disappear across
+    # a daemon restart. Reefy app IDs remain permanent. Retire native mappings
+    # only after both the old directory and all charged blocks are gone.
+    for identity, record in list(registry.data['projects'].items()):
+        if (record.get('native_docker') and not os.path.lexists(record['path'])
+                and not quotas.get(record['project'], {}).get('used', 0)):
+            del registry.data['projects'][identity]
+    registry.save()
     taken = set(quotas) | {v['project'] for v in registry.data['projects'].values()}
     taken.update((base, base + 1))
     containers = docker / 'containers'
@@ -79,7 +87,7 @@ def register_runtime(registry, *, docker_root='/mnt/reefy-data/docker', attribut
         _, record = registry.register(root, mount, 'runtime', quotas,
                                       preferred_project=project)
         record['native_docker'] = True
-        record['max_hard'] = max(LAYER_SIZE, quotas.get(project, {}).get('used', 0))
+        record['max_hard'] = LAYER_SIZE
         registry.save()
         policies[root] = 'runtime'
     return policies

@@ -98,6 +98,21 @@ def run():
             worker.prepare({str(old): 'bulk'})
             assert [item['phase'] for item in progress] == ['verified-root']
             results['migration_content_collision_and_restart'] = 'passed'
+            covered = mount / 'covered'
+            covered.mkdir()
+            (covered / 'hidden-before-mount').write_bytes(b'preserved hidden blocks')
+            command(['mount', '--bind', str(config), str(covered)])
+            try:
+                worker.prepare({str(mount): 'runtime', str(media): 'bulk',
+                                str(config): 'state', str(old): 'bulk'})
+                roots = {row['path']: row for row in registry.data['projects'].values()}
+                assert read_quotas(str(mount)).get(0, {}).get('used', 0) == 0
+                verify_tree(str(config), roots[str(config)]['project'])
+            finally:
+                command(['umount', str(covered)])
+            assert (covered / 'hidden-before-mount').read_bytes() == b'preserved hidden blocks'
+            assert attrs.read(str(covered / 'hidden-before-mount'))[3] == roots[str(mount)]['project']
+            results['hidden_mountpoint_blocks_are_governed'] = 'passed'
             flush_filesystem(str(mount))
         finally:
             command(['umount', str(mount)], timeout=60)

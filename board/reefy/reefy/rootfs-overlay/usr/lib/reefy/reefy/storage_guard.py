@@ -3,10 +3,11 @@
 Lifecycle operations publish a complete inventory while writers are held.
 This module does no recursive filesystem work and never deletes app data.
 """
-from dataclasses import asdict, replace
+from dataclasses import asdict
+import os
 import time
 
-from reefy.storage_pressure import Consumer, PressureError, QUANTUM, allocate, apply_allocation
+from reefy.storage_pressure import Consumer, PressureError, QUANTUM, allocate, apply_allocation, admit_reservations
 from reefy.storage_quota import (
     Registry, RUN_DIR, atomic_json, physical_sample, read_quotas,
     require_enforcement, set_quota, state_lock, mount_info,
@@ -54,6 +55,17 @@ class Guard:
                     self.peak = int(observed * 2) + 1
                     registry.data['peak_bytes_per_second'] = self.peak
                     registry.save()
+            # A managed container replacement can remove a previously
+            # inventoried native layer. Its dquot remains in reports below, so
+            # retiring the path never discards physical usage or allowance.
+            changed = False
+            for record in records.values():
+                if (record.get('native_docker') and not record.get('retired')
+                        and not os.path.lexists(record['path'])):
+                    record['retired'] = True
+                    changed = True
+            if changed:
+                registry.save()
             reports = {}
             for record in records.values():
                 if record.get('retired'):
@@ -118,32 +130,8 @@ class Guard:
                 peak_bytes_per_second=self.peak, response_seconds=self.response,
                 in_flight_bytes=self.in_flight)
 
-            admitted = []
-            extra = {}
-            # Pending reservations already reduce the shared allocator budget.
-            # Grant reserved bytes only to their named consumer, and only below
-            # the requested class boundary. Non-targeted leases cover native
-            # Docker creation or snapshot COW outside logical quota growth.
-            if not allocation.quiesce:
-                total = sample.used + pending_bytes + self.peak * self.response
-                for identity, lease in leases.items():
-                    ceiling = getattr(allocation.boundaries, lease['storage_class'])
-                    if total >= ceiling:
-                        continue
-                    target = lease.get('target')
-                    if target:
-                        record = by_key.get(target)
-                        if not record or record.get('retired'):
-                            raise PressureError('admission destination disappeared')
-                        if record['storage_class'] != lease['storage_class']:
-                            raise PressureError('admission class does not match destination')
-                        extra[target] = extra.get(target, 0) + lease['bytes']
-                    admitted.append(identity)
-                limits = dict(allocation.limits)
-                for target, amount in extra.items():
-                    limits[target] += amount
-                allocation = replace(allocation, limits=limits,
-                                     granted=allocation.granted + sum(extra.values()))
+            allocation, admitted = admit_reservations(
+                allocation, sample, consumers, leases, margin=self.peak * self.response)
 
             def deadline():
                 if self.clock() - started > 20:

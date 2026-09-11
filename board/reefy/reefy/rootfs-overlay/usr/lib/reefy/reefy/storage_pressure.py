@@ -5,7 +5,7 @@ blocks. The runtime must revoke and verify old allowances before granting new
 ones and monitor COW/metadata allocation independently of project usage.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import ceil, isfinite
 
 
@@ -210,3 +210,36 @@ def parse_thin_sample(status, table):
                           chunk, healthy)
     except (ValueError, IndexError) as error:
         raise PressureError('unreadable thin-pool counters') from error
+
+
+def admit_reservations(allocation, sample, consumers, leases, *, margin):
+    """Attach already-budgeted targeted allowances after class admission.
+
+    allocate() must first subtract the sum of ALL lease bytes as pending_bytes.
+    Untargeted leases retain that reservation without increasing any quota.
+    """
+    if allocation.quiesce:
+        return allocation, []
+    consumers = {consumer.key: consumer for consumer in consumers}
+    total = sample.used + sum(lease['bytes'] for lease in leases.values()) + margin
+    admitted, extra = [], {}
+    for identity, lease in leases.items():
+        ceiling = getattr(allocation.boundaries, lease['storage_class'])
+        if total >= ceiling:
+            continue
+        target = lease.get('target')
+        if target:
+            consumer = consumers.get(target)
+            if consumer is None or consumer.storage_class != lease['storage_class']:
+                raise PressureError('admission destination or storage class changed')
+            amount = extra.get(target, 0) + lease['bytes']
+            if (consumer.max_hard is not None
+                    and allocation.limits[target] + amount > consumer.max_hard):
+                continue
+            extra[target] = amount
+        admitted.append(identity)
+    limits = dict(allocation.limits)
+    for target, amount in extra.items():
+        limits[target] += amount
+    return replace(allocation, limits=limits,
+                   granted=allocation.granted + sum(extra.values())), admitted

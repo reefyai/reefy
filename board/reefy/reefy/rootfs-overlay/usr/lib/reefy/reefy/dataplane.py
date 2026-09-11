@@ -939,6 +939,10 @@ class DataPlane:
         except (OSError, json.JSONDecodeError):
             pass
 
+        if read_policy(state) is not None:
+            from reefy.storage_images import remember_desired
+            remember_desired(state, old_state)
+
         # Save to persistent storage
         try:
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
@@ -2578,6 +2582,16 @@ class DataPlane:
 
     def _run_compose_command_streaming(
             self, compose_path, project_name, args, timeout):
+        from reefy.storage_operations import compose_operation
+        try:
+            with compose_operation(compose_path, project_name, args):
+                return self._run_compose_command_streaming_inner(
+                    compose_path, project_name, args, timeout)
+        except (RuntimeError, OSError) as error:
+            return False, f'storage admission failed: {error}'
+
+    def _run_compose_command_streaming_inner(
+            self, compose_path, project_name, args, timeout):
         """Run a long Compose command with bounded, redacted diagnostics."""
         command = [
             'docker', 'compose', '-f', compose_path, '-p', project_name,
@@ -2786,6 +2800,16 @@ class DataPlane:
 
     @staticmethod
     def _run_compose_command(compose_path, project_name, args, timeout):
+        from reefy.storage_operations import compose_operation
+        try:
+            with compose_operation(compose_path, project_name, args):
+                return DataPlane._run_compose_command_inner(
+                    compose_path, project_name, args, timeout)
+        except (RuntimeError, OSError) as error:
+            return False, f'storage admission failed: {error}'
+
+    @staticmethod
+    def _run_compose_command_inner(compose_path, project_name, args, timeout):
         try:
             result = subprocess.run(
                 ['docker', 'compose', '-f', compose_path, '-p', project_name,
@@ -3826,82 +3850,84 @@ Environment=MQTT_PORT={self.port}
 
             log('mqtt', f'Restoring archive {archive_name} via borg extract')
             try:
-                list_proc = subprocess.run(
-                    ['borg', 'list', '--short',
-                     f'{repo_path}::{archive_name}'],
-                    env=env, capture_output=True, text=True, timeout=120
-                )
-                if list_proc.returncode != 0:
-                    err_msg = (list_proc.stderr or "").strip()[:500]
-                    log('mqtt',
-                        f'borg list failed (rc={list_proc.returncode}): '
-                        f'{err_msg}')
-                    self._publish_restore_status(
-                        iuuid, 'error', archive_name,
-                        error=f'borg list rc={list_proc.returncode}: {err_msg}')
-                    failed.add(iuuid)
-                    continue
-                first_path = next(
-                    (l.strip() for l in list_proc.stdout.splitlines()
-                     if l.strip()), '')
-                strip_n = 0
-                parts = first_path.split('/')
-                if len(parts) >= 5 and parts[0] == 'mnt' and \
-                        parts[1] in ('reefy-data', 'sbnb-data') and \
-                        parts[2] == 'apps':
-                    strip_n = 4
-
-                cmd = ['borg', '--log-json', 'extract', '--progress']
-                if strip_n:
-                    cmd += ['--strip-components', str(strip_n)]
-                cmd.append(f'{repo_path}::{archive_name}')
-                EXTRACT_TIMEOUT = 6 * 3600  # 6h cap for huge archives
-                extract_proc = subprocess.Popen(
-                    cmd, env=env, cwd=new_inst_dir,
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE
-                )
-
-                # Stream borg's --log-json stderr through to our log.
-                # Pass everything except in-flight progress_percent
-                # frames, which can fire many times per second on big
-                # archives - throttle those to one every PROGRESS_EVERY_S.
-                # log_message lines (warnings, errors) and the final
-                # `finished: true` always pass through.
-                PROGRESS_EVERY_S = 5.0
-                last_progress_t = 0.0
-                deadline = time.time() + EXTRACT_TIMEOUT
-                for raw in iter(extract_proc.stderr.readline, b''):
-                    if time.time() > deadline:
-                        extract_proc.kill()
-                        break
-                    line = raw.decode('utf-8', errors='replace').rstrip()
-                    if not line:
+                from reefy.storage_admission import reservation
+                with reservation('restore', 64 * 1024**2, storage_class='state'):
+                    list_proc = subprocess.run(
+                        ['borg', 'list', '--short',
+                         f'{repo_path}::{archive_name}'],
+                        env=env, capture_output=True, text=True, timeout=120
+                    )
+                    if list_proc.returncode != 0:
+                        err_msg = (list_proc.stderr or "").strip()[:500]
+                        log('mqtt',
+                            f'borg list failed (rc={list_proc.returncode}): '
+                            f'{err_msg}')
+                        self._publish_restore_status(
+                            iuuid, 'error', archive_name,
+                            error=f'borg list rc={list_proc.returncode}: {err_msg}')
+                        failed.add(iuuid)
                         continue
-                    try:
-                        obj = json.loads(line)
-                    except ValueError:
-                        log('mqtt', f'borg: {line}')
-                        continue
-                    if obj.get('type') == 'progress_percent' \
-                            and not obj.get('finished'):
-                        now = time.time()
-                        if now - last_progress_t < PROGRESS_EVERY_S:
+                    first_path = next(
+                        (l.strip() for l in list_proc.stdout.splitlines()
+                         if l.strip()), '')
+                    strip_n = 0
+                    parts = first_path.split('/')
+                    if len(parts) >= 5 and parts[0] == 'mnt' and \
+                            parts[1] in ('reefy-data', 'sbnb-data') and \
+                            parts[2] == 'apps':
+                        strip_n = 4
+
+                    cmd = ['borg', '--log-json', 'extract', '--progress']
+                    if strip_n:
+                        cmd += ['--strip-components', str(strip_n)]
+                    cmd.append(f'{repo_path}::{archive_name}')
+                    EXTRACT_TIMEOUT = 6 * 3600  # 6h cap for huge archives
+                    extract_proc = subprocess.Popen(
+                        cmd, env=env, cwd=new_inst_dir,
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                    )
+
+                    # Stream borg's --log-json stderr through to our log.
+                    # Pass everything except in-flight progress_percent
+                    # frames, which can fire many times per second on big
+                    # archives - throttle those to one every PROGRESS_EVERY_S.
+                    # log_message lines (warnings, errors) and the final
+                    # `finished: true` always pass through.
+                    PROGRESS_EVERY_S = 5.0
+                    last_progress_t = 0.0
+                    deadline = time.time() + EXTRACT_TIMEOUT
+                    for raw in iter(extract_proc.stderr.readline, b''):
+                        if time.time() > deadline:
+                            extract_proc.kill()
+                            break
+                        line = raw.decode('utf-8', errors='replace').rstrip()
+                        if not line:
                             continue
-                        last_progress_t = now
-                    log('mqtt', f'borg: {line}')
+                        try:
+                            obj = json.loads(line)
+                        except ValueError:
+                            log('mqtt', f'borg: {line}')
+                            continue
+                        if obj.get('type') == 'progress_percent' \
+                                and not obj.get('finished'):
+                            now = time.time()
+                            if now - last_progress_t < PROGRESS_EVERY_S:
+                                continue
+                            last_progress_t = now
+                        log('mqtt', f'borg: {line}')
 
-                extract_proc.wait()
-                if extract_proc.returncode != 0:
-                    log('mqtt',
-                        f'borg extract failed (rc={extract_proc.returncode})')
-                    self._publish_restore_status(
-                        iuuid, 'error', archive_name,
-                        error=f'borg extract rc={extract_proc.returncode}')
-                    failed.add(iuuid)
-                    continue
-                log('mqtt', f'borg extract completed for {iuuid}')
-                from reefy.storage_service import verify_restore
-                verify_restore(paths)
+                    extract_proc.wait()
+                    if extract_proc.returncode != 0:
+                        log('mqtt',
+                            f'borg extract failed (rc={extract_proc.returncode})')
+                        self._publish_restore_status(
+                            iuuid, 'error', archive_name,
+                            error=f'borg extract rc={extract_proc.returncode}')
+                        failed.add(iuuid)
+                        continue
+                    log('mqtt', f'borg extract completed for {iuuid}')
+                    from reefy.storage_service import verify_restore
+                    verify_restore(paths)
 
             except Exception as e:
                 log('mqtt', f'Restore error: {e}')
@@ -3930,6 +3956,15 @@ Environment=MQTT_PORT={self.port}
             return self._apply_compose_locked(compose)
 
     def _apply_compose_locked(self, compose):
+        from reefy.storage_operations import compose_operation
+        try:
+            with compose_operation(compose, 'state', ['up', '--pull', 'missing']):
+                return self._apply_compose_locked_inner(compose)
+        except (RuntimeError, OSError) as error:
+            log('mqtt', f'Storage admission failed: {error}')
+            return False
+
+    def _apply_compose_locked_inner(self, compose):
         """Write compose JSON and run docker compose up, streaming output to logs.
         Caller must hold _compose_mutation_lock. Returns True on success,
         False on failure."""
