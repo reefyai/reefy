@@ -17,6 +17,9 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     with QemuDevice(raw_image=args.firmware, log_path=args.output / 'qemu.log') as vm:
         vm.wait_for_boot(timeout_s=240)
+        vm.scp_to(Path(__file__).with_name('setup_storage_probe.py'), '/tmp/setup_storage_probe.py')
+        _, output, _ = vm.ssh_exec('python3 /tmp/setup_storage_probe.py', timeout_s=300)
+        print(output)
         vm.scp_to(Path(__file__).with_name('kernel_storage_probe.py'), '/tmp/kernel_storage_probe.py')
         try:
             _, output, _ = vm.ssh_exec('python3 /tmp/kernel_storage_probe.py', timeout_s=300)
