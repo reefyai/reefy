@@ -12,7 +12,24 @@ sys.path.insert(0, '/usr/lib/reefy')
 from reefy.storage_admission import reservation
 from reefy.storage_quota import RUN_DIR, command, physical_sample
 from reefy.storage_runtime import LAYER_INITIAL_SIZE
+from reefy.storage_watchdog import QUIESCE_SECONDS
 
+
+
+def completed_drain():
+    """Require the actual systemd drain worker, not just a frozen process."""
+    path = Path(RUN_DIR, 'hold.json')
+    while True:
+        hold = json.loads(path.read_text())
+        assert not hold.get('deadline_exceeded'), hold
+        assert not hold.get('drain_error'), hold
+        if hold.get('drained'):
+            assert hold['drained_monotonic'] - hold['monotonic'] <= QUIESCE_SECONDS
+            assert hold['worker_requested'] and hold['frozen'], hold
+            return {'freeze_seconds': hold['frozen_monotonic'] - hold['monotonic'],
+                    'drain_seconds': hold['drained_monotonic'] - hold['frozen_monotonic']}
+        assert time.monotonic() - hold['monotonic'] <= QUIESCE_SECONDS, hold
+        time.sleep(0.1)
 
 
 def metadata_fault(counter):
@@ -74,6 +91,7 @@ def metadata_fault(counter):
         frozen = counter.stat().st_mtime_ns
         time.sleep(0.5)
         assert counter.stat().st_mtime_ns == frozen
+        drain_result = completed_drain()
         actual = physical_sample()
         assert actual.healthy and actual.metadata_used * 100 < actual.metadata_capacity * 85
     finally:
@@ -90,7 +108,8 @@ def metadata_fault(counter):
         assert time.monotonic() < deadline
         time.sleep(0.1)
     return {'one_sampler_timeout_recovered_with_fresh_measurement': True,
-            'metadata_counter_fault_contained_and_recovered': True}
+            'metadata_counter_fault_contained_and_recovered': True,
+            'systemd_worker': drain_result}
 
 
 def run():
@@ -129,7 +148,8 @@ def run():
                 path = Path('/sys/fs/cgroup/system.slice') / group / 'cgroup.freeze'
                 if path.exists():
                     assert path.read_text().strip() == '0', 'control or recovery access was frozen'
-            results[unit] = {'freeze_seconds': time.monotonic() - paused, 'writer_stopped': True}
+            results[unit] = {'freeze_seconds': time.monotonic() - paused,
+                             'writer_stopped': True, 'systemd_worker': completed_drain()}
             if unit.endswith('watchdog.service'):
                 # OnFailure proves containment. Start a healthy replacement
                 # before asking the production recovery coordinator to thaw.
