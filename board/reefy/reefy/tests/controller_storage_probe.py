@@ -102,6 +102,52 @@ def cache_migration(image, policy):
     command(['docker', 'rm', '--force', current])
 
 
+
+def interrupted_download(policy):
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import threading
+    from reefy.storage import Storage
+    destination = '/mnt/reefy-data/apps/synthetic-download/models'
+    policy['app_volumes'].append({'path': destination})
+    policy['volume_storage_classes'][destination] = 'bulk'
+    atomic_json(shared.desired_state_path(), policy)
+    payload = b'synthetic-model-content' * (1024 * 256)
+
+    class Server(BaseHTTPRequestHandler):
+        attempts = 0
+
+        def log_message(self, *args):
+            pass
+
+        def do_HEAD(self):
+            self.send_response(200)
+            self.send_header('Content-Length', str(len(payload)))
+            self.end_headers()
+
+        def do_GET(self):
+            type(self).attempts += 1
+            self.do_HEAD()
+            self.wfile.write(payload[:1024] if self.attempts == 1 else payload)
+            self.close_connection = True
+
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Server)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    storage = Storage()
+    storage.set_storage_classes({destination: 'bulk'})
+    volume = {'path': destination, 'files': [{'name': 'model.bin',
+              'url': f'http://127.0.0.1:{server.server_port}/model.bin'}]}
+    try:
+        storage._prepare_app_dirs([volume])
+        assert not Path(destination, 'model.bin').exists(), 'partial download became a completed seed'
+        assert not list(Path(destination).glob('.reefy-download-*'))
+        storage._prepare_app_dirs([volume])
+        assert Path(destination, 'model.bin').read_bytes() == payload
+        assert Path(destination, 'model.bin').stat().st_mode & 0o777 == 0o644
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def run():
     results = {}
     # Fetch while still legacy. Network failure is a setup failure, never a pass.
@@ -169,6 +215,8 @@ def run():
     results['managed_and_default_log_rotation'] = 'passed'
     cache_migration(image, policy)
     results['pending_cache_survives_new_bind_mount'] = 'passed'
+    interrupted_download(policy)
+    results['interrupted_download_retries_without_corrupt_seed'] = 'passed'
     print(json.dumps(results, sort_keys=True))
 
 

@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 import _bootstrap  # noqa: F401
-from reefy.storage_admission import reservation
+from reefy.storage_admission import reservation, quiesced_reservation
 from reefy.storage_pressure import (GB, Consumer, PoolSample, PressureError,
                                     allocate, admit_reservations)
 from reefy.storage_quota import Registry
@@ -57,6 +57,29 @@ class AdmissionTests(unittest.TestCase):
                 with self.assertRaises(ValueError), reservation('copy', 4096):
                     raise ValueError('operation failed')
                 self.assertEqual(Registry(path).data['leases'], {})
+
+
+
+
+
+class BootAdmissionTests(unittest.TestCase):
+    def test_boot_can_budget_with_guard_unavailable_but_writers_stopped(self):
+        sample = PoolSample(32 * GB, GB, 100, 1000, 524288)
+        with patch('reefy.storage_admission.command', return_value='0'), \
+                patch('reefy.storage_quota.physical_sample', return_value=sample), \
+                patch('reefy.storage_admission.wait_generation') as wait:
+            with quiesced_reservation('volume-format', 128 * 1024**2):
+                pass
+            wait.assert_not_called()
+
+    def test_boot_refuses_active_writers_or_insufficient_physical_headroom(self):
+        with patch('reefy.storage_admission.command', return_value='55'):
+            with self.assertRaises(PressureError), quiesced_reservation('format', 4096):
+                self.fail('boot bypassed an active writer')
+        with patch('reefy.storage_admission.command', return_value='0'), \
+                patch('reefy.storage_quota.physical_sample', return_value=PoolSample(32 * GB, 28 * GB, 100, 1000, 524288)):
+            with self.assertRaises(PressureError), quiesced_reservation('format', 4096):
+                self.fail('boot initialization ignored real capacity')
 
 
 if __name__ == '__main__':

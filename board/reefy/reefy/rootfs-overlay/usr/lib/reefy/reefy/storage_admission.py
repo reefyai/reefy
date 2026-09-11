@@ -90,3 +90,33 @@ def reservation(kind, budget, *, storage_class='runtime', target=None):
                 registry.data.get('leases', {}).pop(identity, None)
                 registry.data['generation'] = registry.data.get('generation', 0) + 1
                 registry.save()
+
+
+@contextmanager
+def quiesced_reservation(kind, budget, *, storage_class='state'):
+    """Bound boot initialization before the normal guard can start.
+
+    Docker ExecStartPre has no daemon MainPID yet. The app-volume boot unit
+    precedes Docker and the reconciler, so waiting for guard admission there
+    would deadlock its own startup dependencies. Only this verified quiescent
+    path uses a physical budget directly; live operations use durable leases.
+    """
+    from reefy.storage_pressure import boundaries
+    from reefy.storage_quota import physical_sample
+    if type(budget) is not int or budget <= 0 or budget % QUANTUM:
+        raise ValueError('invalid quiesced allocation budget')
+    if storage_class not in ('bulk', 'runtime', 'state'):
+        raise ValueError('unknown admission class')
+    for unit in ('docker.service', 'reefy-reconciler.service', 'reefy-backup.service'):
+        pid = int(command(['systemctl', 'show', '--property=MainPID', '--value', unit]).strip() or '0')
+        if pid:
+            raise PressureError('offline storage admission requires stopped app writers')
+    sample = physical_sample()
+    ceiling = getattr(boundaries(sample.capacity), storage_class)
+    if (not sample.healthy or sample.metadata_used * 100 >= sample.metadata_capacity * 80
+            or sample.used + budget + 64 * 1024**2 >= ceiling):
+        raise PressureError('insufficient physical headroom for boot initialization')
+    yield
+    after = physical_sample()
+    if not after.healthy or after.used >= ceiling:
+        raise PressureError('boot initialization exhausted its class headroom')

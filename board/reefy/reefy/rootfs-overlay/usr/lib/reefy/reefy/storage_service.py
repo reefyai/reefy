@@ -216,7 +216,7 @@ def activate(*, boot=False):
             if loaded != 'not-found':
                 command(['systemctl', 'stop', unit], timeout=120)
     storage = Storage()
-    storage.boot_mount()
+    storage.boot_mount(quiesced_admission=True)
     metadata = storage._lv_metadata_names()
     if metadata is None:
         raise PressureError('cannot verify owned app volume mounts')
