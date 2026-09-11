@@ -14,7 +14,7 @@ def main():
     parser.add_argument('--service-repo', type=Path, required=True)
     parser.add_argument('--firmware', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--suite', choices=('all', 'core', 'core-nvme', 'core-legacy-state', 'thin', 'frigate', 'frigate-multi', 'migration', 'soak', 'cow', 'cow-writeback', 'cow-memory', 'cow-nowbt', 'migration-cow'), default='all')
+    parser.add_argument('--suite', choices=('all', 'core', 'core-nvme', 'core-legacy-state', 'thin', 'frigate', 'frigate-multi', 'migration', 'soak', 'cow', 'cow-writeback', 'cow-memory', 'cow-nowbt', 'migration-cow', 'amplification'), default='all')
     args = parser.parse_args()
     sys.path.insert(0, str(args.service_repo / 'tests/e2e'))
     from lib.qemu_device import QemuDevice, QemuBlockDisk
@@ -66,13 +66,18 @@ def main():
             if args.suite in ('all', 'core', 'core-nvme', 'core-legacy-state', 'thin'):
                 probe(Path(__file__).with_name('kernel_storage_probe.py'),
                       'python3 /tmp/kernel_storage_probe.py', 'kernel-results.json', 300)
-            if args.suite in ('all', 'thin', 'cow', 'cow-writeback', 'cow-memory', 'cow-nowbt', 'migration-cow'):
+            if args.suite in ('all', 'thin', 'cow', 'cow-writeback', 'cow-memory', 'cow-nowbt', 'migration-cow', 'amplification'):
                 thin_ready = probe(Path(__file__).with_name('thin_storage_probe.py'),
                                    'python3 /tmp/thin_storage_probe.py', 'thin-results.json', 600)
                 if thin_ready and args.suite == 'migration-cow':
                     probe(Path(__file__).with_name('migration_cow_probe.py'),
                           'python3 /tmp/migration_cow_probe.py', 'migration-cow-results.json', 600)
-                if thin_ready and args.suite != 'migration-cow':
+                if thin_ready and args.suite == 'amplification':
+                    probe(Path(__file__).with_name('amplification_storage_probe.py'),
+                          'python3 /tmp/amplification_storage_probe.py', 'amplification-results.json', 120)
+                    _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-sparse-trace.json', timeout_s=20, check=False)
+                    (args.output / 'amplification-trace.json').write_text(trace)
+                if thin_ready and args.suite not in ('migration-cow', 'amplification'):
                     if args.suite not in ('cow', 'cow-writeback', 'cow-memory', 'cow-nowbt'):
                         probe(Path(__file__).with_name('pressure_storage_probe.py'),
                               'python3 /tmp/pressure_storage_probe.py', 'pressure-results.json', 660)
@@ -90,7 +95,7 @@ def main():
                         _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-sparse-trace.json', timeout_s=20, check=False)
                         (args.output / 'amplification-trace.json').write_text(trace)
             ready = False
-            if args.suite not in ('thin', 'cow', 'cow-writeback', 'cow-memory', 'cow-nowbt', 'migration-cow'):
+            if args.suite not in ('thin', 'cow', 'cow-writeback', 'cow-memory', 'cow-nowbt', 'migration-cow', 'amplification'):
                 ready = probe(Path(__file__).with_name('controller_storage_probe.py'),
                               'python3 /tmp/controller_storage_probe.py' +
                               (' --legacy-state' if args.suite == 'core-legacy-state' else ''),
