@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import runpy
+import stat
 
 from reefy.shared import STORAGE_VG, STORAGE_POOL
 from reefy.storage_pressure import PressureError, QUANTUM
@@ -51,10 +52,15 @@ def source_inventory(paths):
         record = records[0]
         device = f'/dev/{STORAGE_VG}/reefy_backup_' + hashlib.sha1(path.encode()).hexdigest()[:12]
         mount = mount_info(path)
+        info = os.stat(device)
+        device_id = f'{os.major(info.st_rdev)}:{os.minor(info.st_rdev)}'
+        # Device nodes can be independent aliases rather than symlinks. Match
+        # the kernel identity, as snapshot teardown does, not pathname spelling.
         if (mount['target'] != path or record['mount'] != path
                 or mount['uuid'] != record['filesystem']
                 or mount['maj:min'] != record['device']
-                or os.path.realpath(mount['source']) != os.path.realpath(device)):
+                or not stat.S_ISBLK(info.st_mode) or mount['maj:min'] != device_id
+                or '[' in mount.get('source', '')):
             raise PressureError('snapshot source is not its verified dedicated LV')
         sources.append({'path': path, 'device': device,
                         'bytes': mapped_bytes(device),

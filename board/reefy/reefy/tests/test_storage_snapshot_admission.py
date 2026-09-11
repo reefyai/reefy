@@ -1,6 +1,7 @@
 from contextlib import nullcontext
 import json
 import os
+import stat
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -70,6 +71,27 @@ class ReservationGuardTests(unittest.TestCase):
 
 
 class SourceCounterTests(unittest.TestCase):
+    def test_source_inventory_matches_kernel_device_despite_distinct_alias_nodes(self):
+        path = '/synthetic/config'
+        row = {'path': path, 'mount': path, 'filesystem': 'synthetic-xfs',
+               'device': '253:8', 'complete': True, 'storage_class': 'state'}
+        mount = {'target': path, 'source': '/dev/dm-8', 'uuid': 'synthetic-xfs',
+                 'maj:min': '253:8'}
+        with patch.object(snapshot, 'Registry', return_value=SimpleNamespace(data={'projects': {'p': row}})), \
+                patch.object(snapshot, 'mount_info', return_value=mount), \
+                patch.object(snapshot.os, 'stat', return_value=SimpleNamespace(
+                    st_rdev=os.makedev(253, 8), st_mode=stat.S_IFBLK)), \
+                patch.object(snapshot, 'mapped_bytes', return_value=1024**2):
+            self.assertEqual(snapshot.source_inventory([path])[0]['bytes'], 1024**2)
+            for field, wrong in (('maj:min', '253:9'), ('source', '/dev/dm-8[/subdir]'),
+                                 ('uuid', 'wrong-filesystem'), ('target', '/another')):
+                with self.subTest(field=field):
+                    original = mount[field]
+                    mount[field] = wrong
+                    with self.assertRaises(PressureError):
+                        snapshot.source_inventory([path])
+                    mount[field] = original
+
     def test_sector_count_is_exact_despite_huge_virtual_size(self):
         with patch.object(snapshot, 'command', side_effect=[
                 '0 200000000000 thin 253:2 7', '0 200000000000 thin 2048 199999999999']), \
