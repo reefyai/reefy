@@ -112,3 +112,27 @@ def configure_daemon(active, *, source='/etc/docker/daemon.json',
     else:
         config.pop('storage-opts', None)
     atomic_json(destination, config)
+
+
+def active_native_projects(registry, *, attributes=None, overlay='/mnt/reefy-data/docker/overlay2'):
+    """Read only overlay2's immediate roots, never container directory trees.
+
+    An empty dquot survives removal of its Docker layer. It must not receive
+    fresh runway forever merely because its numeric ID is in Docker's range.
+    """
+    settings = registry.data.get('docker') or {}
+    if not settings:
+        return set()
+    attributes = attributes or FileAttributes()
+    projects = set()
+    with os.scandir(overlay) as entries:
+        for entry in entries:
+            if not entry.is_dir(follow_symlinks=False):
+                continue
+            try:
+                project = attributes.read(entry.path)[3]
+            except FileNotFoundError:
+                continue  # Docker removed it after scandir.
+            if project >= settings['base_project'] + 2:
+                projects.add(project)
+    return projects

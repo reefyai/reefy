@@ -38,6 +38,15 @@ class OwnershipTests(unittest.TestCase):
             self.assertIn(directory + '/owned/link', paths)
             self.assertNotIn(directory + '/other', paths)
 
+    def test_same_device_mount_is_excluded_from_captured_mount_inventory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            nested = directory + '/nested'
+            os.mkdir(nested)
+            with open(nested + '/foreign', 'w') as stream:
+                stream.write('separate mounted domain')
+            with patch('reefy.storage_quota.mount_targets', return_value={nested}):
+                self.assertEqual([path for path, _ in owned_tree(directory)], [directory])
+
     def test_hardlink_outside_volume_fails_without_mutating_files(self):
         with tempfile.TemporaryDirectory() as directory:
             os.mkdir(directory + '/owned')
