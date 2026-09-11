@@ -87,8 +87,11 @@ def main():
                     recovered = probe(Path(__file__).with_name('storage_failure_probe.py'),
                                       'python3 /tmp/storage_failure_probe.py', 'failure-results.json', 180)
                 if args.suite in ('all', 'frigate'):
-                    probe(Path(__file__).with_name('frigate_storage_probe.py'),
+                    frigate_ready = probe(Path(__file__).with_name('frigate_storage_probe.py'),
                           'python3 /tmp/frigate_storage_probe.py', 'frigate-results.json', 1500)
+                    if frigate_ready:
+                        probe(Path(__file__).with_name('sqlite_full_probe.py'),
+                              'python3 /tmp/sqlite_full_probe.py', 'sqlite-results.json', 180)
                 if args.suite in ('all', 'frigate-multi'):
                     vm.scp_to(Path(__file__).with_name('frigate_storage_probe.py'), '/tmp/frigate_storage_probe.py')
                     probe(Path(__file__).with_name('frigate_multi_probe.py'),
