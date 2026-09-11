@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Actual systemd/Docker integration on a disposable firmware QEMU device."""
+import glob
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,7 @@ import time
 
 sys.path.insert(0, '/usr/lib/reefy')
 from reefy import shared
+from reefy.dataplane import DataPlane
 from reefy.storage_admission import reservation
 from reefy.storage_quota import (Registry, RUN_DIR, FileAttributes, atomic_json,
                                  command, physical_sample, read_quotas, verify_tree)
@@ -31,6 +33,73 @@ def wait_ready(timeout=120):
             pass
         time.sleep(1)
     raise AssertionError('storage controller did not become ready')
+
+
+def log_rotation(image):
+    for managed in (False, True):
+        name = 'synthetic-managed-logger' if managed else 'synthetic-default-logger'
+        writer = ('echo synthetic-start; dd if=/dev/zero bs=8192 count=11000 2>/dev/null '
+                  '| tr "\\000" x; echo; echo synthetic-end; sleep 3600')
+        if managed:
+            compose = {'services': {'logger': {'image': image, 'command': ['sh', '-c', writer],
+                'logging': {'driver': 'json-file', 'options': {'max-size': '20m', 'max-file': '3'}}}}}
+            path = '/tmp/synthetic-logger.json'
+            atomic_json(path, compose)
+            ok, output = DataPlane._run_compose_command(path, name, ['up', '-d', '--pull', 'never'], 120)
+            assert ok, output
+            name = command(['docker', 'ps', '-q', '--filter',
+                            'label=com.docker.compose.project=' + name]).strip()
+        else:
+            with reservation('probe-log-create', 2 * LAYER_INITIAL_SIZE):
+                command(['docker', 'run', '-d', '--name', name, image, 'sh', '-c', writer])
+        try:
+            deadline = time.monotonic() + 120
+            while 'synthetic-end' not in command(['docker', 'logs', '--tail', '1', name], timeout=15):
+                assert time.monotonic() < deadline, 'log writer did not finish'
+                time.sleep(1)
+            row = json.loads(command(['docker', 'inspect', name]))[0]
+            assert row['HostConfig']['LogConfig']['Config'] == {'max-size': '20m', 'max-file': '3'}
+            logs = glob.glob(row['LogPath'] + '*')
+            assert len(logs) == 3, logs
+            assert all(os.stat(path).st_size <= 20 * 1024**2 + 32768 for path in logs)
+            assert not any(b'synthetic-start' in Path(path).read_bytes() for path in logs)
+            assert row['State']['Running']
+        finally:
+            command(['docker', 'rm', '--force', name])
+
+
+def cache_migration(image, policy):
+    name, path = 'synthetic-cache', '/tmp/synthetic-cache-compose.json'
+    compose = {'services': {'recorder': {'image': image, 'restart': 'always',
+        'command': ['sh', '-c', 'mkdir -p /tmp/cache; test -f /tmp/cache/pending || echo preserved > /tmp/cache/pending; exec sleep 3600']}}}
+    atomic_json(path, compose)
+    ok, output = DataPlane._run_compose_command(path, name, ['up', '-d', '--pull', 'never'], 120)
+    assert ok, output
+    old = command(['docker', 'ps', '-q', '--filter', 'label=com.docker.compose.project=' + name]).strip()
+    deadline = time.monotonic() + 20
+    while True:
+        try:
+            assert command(['docker', 'exec', old, 'cat', '/tmp/cache/pending']).strip() == 'preserved'
+            break
+        except Exception:
+            assert time.monotonic() < deadline
+            time.sleep(0.2)
+    destination = '/mnt/reefy-data/apps/synthetic-cache/cache'
+    policy['app_volumes'].append({'path': destination})
+    policy['volume_storage_classes'][destination] = 'bulk'
+    atomic_json(shared.desired_state_path(), policy)
+    Path(destination).mkdir(parents=True)
+    ensure_volume(destination, 'bulk')
+    compose['services']['recorder']['volumes'] = [destination + ':/tmp/cache']
+    atomic_json(path, compose)
+    ok, output = DataPlane._run_compose_command(path, name, ['up', '-d', '--pull', 'never'], 120)
+    assert ok, output
+    current = command(['docker', 'ps', '-q', '--filter', 'label=com.docker.compose.project=' + name]).strip()
+    assert current != old
+    assert Path(destination, 'pending').read_text().strip() == 'preserved'
+    row = json.loads(command(['docker', 'inspect', current]))[0]
+    assert row['State']['Running'] and row['HostConfig']['RestartPolicy']['Name'] == 'always'
+    command(['docker', 'rm', '--force', current])
 
 
 def run():
@@ -88,6 +157,10 @@ def run():
     verify_tree(additional, record['project'])
     results['dynamic_volume_registered_before_first_write'] = 'passed'
     command(['docker', 'rm', '--force', 'storage-probe'])
+    log_rotation(image)
+    results['managed_and_default_log_rotation'] = 'passed'
+    cache_migration(image, policy)
+    results['pending_cache_survives_new_bind_mount'] = 'passed'
     print(json.dumps(results, sort_keys=True))
 
 
