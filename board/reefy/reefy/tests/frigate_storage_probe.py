@@ -17,7 +17,7 @@ from reefy import shared
 from reefy.dataplane import DataPlane
 from reefy.storage_admission import reservation, wait_generation
 from reefy.storage_quota import (Registry, atomic_json, command, read_quotas,
-                                 state_lock, verify_tree)
+                                 physical_sample, state_lock, verify_tree)
 from reefy.storage_service import ensure_volume
 
 IMAGE = 'ghcr.io/blakeblackshear/frigate:0.17.0'
@@ -224,6 +224,19 @@ if __name__ == '__main__':
     try:
         run()
     except Exception:
+        from dataclasses import asdict
+        # Preserve the actual failing filesystem, quota and pool evidence before
+        # any recovery or reboot can hide the cause of an image unpack failure.
+        for path in ('/mnt/reefy-data', '/mnt/reefy-data/docker/overlay2', '/tmp'):
+            status = os.statvfs(path)
+            print(json.dumps({'path': path, 'available_bytes': status.f_bavail * status.f_frsize,
+                              'total_bytes': status.f_blocks * status.f_frsize,
+                              'available_inodes': status.f_favail}), file=sys.stderr)
+        print(json.dumps({'pool': asdict(physical_sample()),
+                          'quotas': read_quotas('/mnt/reefy-data')}), file=sys.stderr)
+        status_path = Path('/run/reefy/storage-pressure/status.json')
+        if status_path.exists():
+            print(status_path.read_text(), file=sys.stderr)
         cid = container()
         if cid:
             print(command(['docker', 'logs', '--tail', '200', cid]), file=sys.stderr)
