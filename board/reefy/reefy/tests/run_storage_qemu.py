@@ -33,16 +33,28 @@ def main():
                 return True
             except Exception as error:
                 print(f'{source.name} FAILED: {error}', flush=True)
+                (args.output / (result + '.error.log')).write_text(str(error))
                 failures.append(source.name)
                 return False
+            finally:
+                _, kernel_log, _ = vm.ssh_exec('dmesg', timeout_s=10)
+                kernel_log = re.sub(r'password=\S+', 'password=[redacted]', kernel_log)
+                (args.output / (source.stem + '-dmesg.log')).write_text(kernel_log)
+                if any(value in kernel_log for value in ('Filesystem has been shut down', 'out_of_data_space')):
+                    failures.append(source.name + ': kernel storage failure')
 
         try:
             if args.suite in ('all', 'core', 'thin'):
                 probe(Path(__file__).with_name('kernel_storage_probe.py'),
                       'python3 /tmp/kernel_storage_probe.py', 'kernel-results.json', 300)
             if args.suite in ('all', 'thin'):
-                probe(Path(__file__).with_name('thin_storage_probe.py'),
-                      'python3 /tmp/thin_storage_probe.py', 'thin-results.json', 600)
+                thin_ready = probe(Path(__file__).with_name('thin_storage_probe.py'),
+                                   'python3 /tmp/thin_storage_probe.py', 'thin-results.json', 600)
+                if thin_ready:
+                    probe(Path(__file__).with_name('pressure_storage_probe.py'),
+                          'python3 /tmp/pressure_storage_probe.py', 'pressure-results.json', 660)
+                    _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-pressure-trace.json', timeout_s=20, check=False)
+                    (args.output / 'pressure-trace.json').write_text(trace)
             ready = False
             if args.suite != 'thin':
                 ready = probe(Path(__file__).with_name('controller_storage_probe.py'),
