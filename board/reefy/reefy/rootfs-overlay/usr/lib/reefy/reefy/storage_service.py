@@ -18,7 +18,7 @@ from reefy.storage_admission import wait_generation
 from reefy.storage_guard import Guard
 from reefy.storage_migration import Migration
 from reefy.storage_policy import storage_policy
-from reefy.storage_pressure import PressureError
+from reefy.storage_pressure import PressureError, QUANTUM
 from reefy.storage_quota import (
     Registry, RUN_DIR, atomic_json, command, physical_sample, state_lock,
     FileAttributes, PROJINHERIT, mount_info, require_enforcement, read_quotas, set_quota,
@@ -63,6 +63,26 @@ def new_guard():
                  in_flight_bytes=IN_FLIGHT)
 
 
+def validate_activation_layout(policies):
+    """Reject unsupported existing filesystems before changing cached policy.
+
+    A class-aware firmware image does not convert legacy ext4/f2fs data. Those
+    devices retain their identified legacy configuration until a separate,
+    data-preserving filesystem migration is performed.
+    """
+    mount_info('/mnt/reefy-data')
+    storage = Storage()
+    metadata = storage._lv_metadata_names()
+    if metadata is None or storage.STORAGE_POOL not in metadata:
+        raise PressureError('storage quotas require an available thin pool')
+    for path in policies:
+        lv = storage._volume_lv_name(path)
+        if lv in metadata and storage._fs_type(f'/dev/{storage.STORAGE_VG}/{lv}') != 'xfs':
+            raise PressureError('existing app filesystem requires a separate XFS migration')
+        if os.path.exists(path):
+            mount_info(path)
+
+
 def requires_activation(state):
     policies = read_policy(state)
     if policies is None:
@@ -100,8 +120,8 @@ def ensure_volume(path, storage_class):
             quotas = read_quotas(mount['target'])
             _, record = registry.register(path, mount, storage_class, quotas)
             attributes.assign(path, record['project'], True)
-            set_quota(mount['target'], record['project'], 1024)
-            if read_quotas(mount['target']).get(record['project'], {}).get('hard') != 1024:
+            set_quota(mount['target'], record['project'], QUANTUM)
+            if read_quotas(mount['target']).get(record['project'], {}).get('hard') != QUANTUM:
                 raise PressureError('new volume quota could not be verified')
             record.update(complete=True, ownership_version=2, root_inode=os.lstat(path).st_ino)
         else:
@@ -151,7 +171,7 @@ def retire_missing(paths):
             quota = read_quotas(record['mount']).get(record['project'])
             if quota is None:
                 raise PressureError('removed volume quota is unavailable')
-            hard = max(1024, quota['used'])
+            hard = max(QUANTUM, quota['used'])
             set_quota(record['mount'], record['project'], hard)
             if read_quotas(record['mount']).get(record['project'], {}).get('hard') != hard:
                 raise PressureError('removed volume allowance could not be revoked')
@@ -181,6 +201,7 @@ def activate(*, boot=False):
     policies = read_policy()
     if policies is None:
         return
+    validate_activation_layout(policies)
     registry = Registry()
     registry.data['activation_pending'] = True
     registry.data['inventory_complete'] = False
@@ -273,6 +294,24 @@ def run_watchdog():
         time.sleep(max(0.05, 1 - (time.monotonic() - started)))
 
 
+def recover():
+    """Resume held writers only after a fresh guard and verified quota pass."""
+    registry = Registry()
+    if not registry.data.get('active') or registry.data.get('activation_pending'):
+        raise PressureError('incomplete activation requires migration recovery')
+    if not os.path.exists(RUN_DIR + '/hold.json'):
+        return
+    # A stopped or wedged guard cannot prove its own recovery. systemd tears
+    # down the old process (and releases its flock) before starting a fresh one.
+    command(['systemctl', 'restart', 'reefy-storage-guard.service'], timeout=20)
+    command(['systemctl', 'is-active', '--quiet', 'reefy-storage-watchdog.service'])
+    result = new_guard().pass_once()
+    if result['allocation']['quiesce']:
+        raise PressureError('physical pressure still prevents writer recovery')
+    Writers().thaw()
+    Path(RUN_DIR + '/hold.json').unlink(missing_ok=True)
+
+
 def force_hold():
     if os.path.exists(RUN_DIR + '/session.json'):
         # OnFailure must not retry the external sampler that may have wedged.
@@ -283,7 +322,7 @@ def force_hold():
 def main():
     actions = {'guard': run_guard, 'watchdog': run_watchdog,
                'activate': activate, 'boot': boot_gate,
-               'hold': force_hold}
+               'hold': force_hold, 'recover': recover}
     if len(sys.argv) != 2 or sys.argv[1] not in actions:
         raise SystemExit('expected internal storage role')
     actions[sys.argv[1]]()

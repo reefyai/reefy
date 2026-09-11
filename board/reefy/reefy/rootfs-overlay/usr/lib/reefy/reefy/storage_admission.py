@@ -12,7 +12,7 @@ import signal
 import time
 import uuid
 
-from reefy.storage_pressure import PressureError
+from reefy.storage_pressure import PressureError, QUANTUM
 from reefy.storage_quota import Registry, RUN_DIR, command, state_lock
 
 
@@ -51,8 +51,8 @@ def reservation(kind, budget, *, storage_class='runtime', target=None):
     target is a registry identity, not an arbitrary filesystem path. No lock
     survives the yield. Normal quotas continue to bound the operation's writes.
     """
-    if type(budget) is not int or budget <= 0 or budget % 1024:
-        raise ValueError('reservation requires a positive KiB-aligned budget')
+    if type(budget) is not int or budget <= 0 or budget % QUANTUM:
+        raise ValueError('reservation requires a positive 4-KiB-aligned budget')
     if storage_class not in ('bulk', 'runtime', 'state'):
         raise ValueError('unknown admission class')
     if not Registry().data.get('active', False):

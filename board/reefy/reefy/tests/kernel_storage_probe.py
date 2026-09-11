@@ -11,7 +11,7 @@ import tempfile
 
 sys.path.insert(0, '/usr/lib/reefy')
 from reefy.storage_migration import Migration
-from reefy.storage_pressure import GB, PoolSample
+from reefy.storage_pressure import GB, QUANTUM, PoolSample
 from reefy.storage_quota import (
     FileAttributes, Registry, assign_tree, command, flush_filesystem,
     mount_info, owned_tree, read_quotas, require_enforcement, set_quota, verify_tree,
@@ -48,6 +48,15 @@ def run():
             finally:
                 command(['umount', str(nested)])
             results['symlinks_fifos_bind_boundaries'] = 'passed'
+            empty = mount / 'empty'
+            empty.mkdir()
+            assign_tree(str(empty), 1026, attributes=attrs)
+            command(['xfs_quota', '-x', '-c', 'limit -p bsoft=0 bhard=1k 1026', str(mount)])
+            results['one_kib_requested_hard_readback'] = read_quotas(str(mount))[1026]['hard']
+            set_quota(str(mount), 1026, QUANTUM)
+            assert read_quotas(str(mount))[1026]['hard'] == QUANTUM
+            assert shutil.disk_usage(empty).free <= QUANTUM
+            results['empty_project_minimum_limit'] = 'passed'
             assign_tree(str(config), 1025, attributes=attrs)
             set_quota(str(mount), 1024, 8 * 1024**2)
             set_quota(str(mount), 1025, 16 * 1024**2)
@@ -70,7 +79,7 @@ def run():
             (config / 'independent').write_bytes(b'committed state')
             quota = read_quotas(str(mount))[1024]
             assert quota['used'] > 0
-            set_quota(str(mount), 1024, 1024)
+            set_quota(str(mount), 1024, 4096)
             assert shutil.disk_usage(recordings).free == 0
             assert read_quotas(str(mount))[1024]['used'] >= quota['used']
             (recordings / 'fill').unlink()

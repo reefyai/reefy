@@ -18,7 +18,7 @@ from reefy.storage_runtime import LAYER_SIZE
 class Guard:
     def __init__(self, *, peak_bytes_per_second, response_seconds,
                  in_flight_bytes, registry_path=None, clock=time.monotonic,
-                 sample=physical_sample):
+                 sample=physical_sample, status_path=RUN_DIR + '/status.json'):
         # An observed average is not a cold-start safety bound. The integration
         # must supply a validated physical rate/response envelope explicitly.
         if peak_bytes_per_second <= 0 or response_seconds <= 0 or in_flight_bytes < 0:
@@ -28,6 +28,7 @@ class Guard:
         self.in_flight = in_flight_bytes
         self.registry_path = registry_path
         self.clock, self.sample = clock, sample
+        self.status_path = status_path
         self.previous = {}
         self.previous_time = None
         self.previous_physical = None
@@ -169,5 +170,5 @@ class Guard:
                       'admitted_leases': admitted,
                       'elapsed_seconds': finished - started, 'sample': asdict(sample),
                       'allocation': asdict(allocation)}
-            atomic_json(RUN_DIR + '/status.json', result)
+            atomic_json(self.status_path, result)
             return result

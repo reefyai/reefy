@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 import time
 
-from reefy.storage_pressure import PressureError, parse_thin_sample
+from reefy.storage_pressure import PressureError, QUANTUM, parse_thin_sample
 
 
 PROJINHERIT = 0x200
@@ -110,7 +110,7 @@ def read_quotas(mountpoint):
 
 def set_quota(mountpoint, project, hard):
     if (not isinstance(project, int) or not 0 < project < 2**32
-            or not isinstance(hard, int) or hard <= 0 or hard % 1024):
+            or not isinstance(hard, int) or hard <= 0 or hard % QUANTUM):
         raise ValueError('invalid nonzero XFS project limit')
     command(['xfs_quota', '-x', '-c',
              f'limit -p bsoft=0 bhard={hard // 1024}k {project}', mountpoint])

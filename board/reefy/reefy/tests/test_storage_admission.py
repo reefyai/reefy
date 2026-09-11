@@ -46,15 +46,15 @@ class AdmissionTests(unittest.TestCase):
             with patch('reefy.storage_admission.Registry', lambda: Registry(path)), \
                     patch('reefy.storage_admission.state_lock', return_value=nullcontext()), \
                     patch('reefy.storage_admission.wait_generation') as wait:
-                with reservation('copy', 1024):
+                with reservation('copy', 4096):
                     self.assertEqual(len(Registry(path).data['leases']), 1)
                 self.assertEqual(Registry(path).data['leases'], {})
                 wait.side_effect = PressureError('not enough space')
-                with self.assertRaises(PressureError), reservation('copy', 1024):
+                with self.assertRaises(PressureError), reservation('copy', 4096):
                     self.fail('operation ran before admission')
                 self.assertEqual(Registry(path).data['leases'], {})
                 wait.side_effect = None
-                with self.assertRaises(ValueError), reservation('copy', 1024):
+                with self.assertRaises(ValueError), reservation('copy', 4096):
                     raise ValueError('operation failed')
                 self.assertEqual(Registry(path).data['leases'], {})
 

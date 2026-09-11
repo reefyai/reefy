@@ -912,9 +912,13 @@ class DataPlane:
             return False
 
         incoming_v2 = self._is_v2_state(state)
-        from reefy.storage_service import read_policy, requires_activation, request_activation
+        from reefy.storage_service import (
+            read_policy, requires_activation, request_activation, validate_activation_layout,
+        )
         try:
-            read_policy(state)
+            policies = read_policy(state)
+            if policies is not None and requires_activation(state):
+                validate_activation_layout(policies)
         except (ValueError, RuntimeError, OSError) as error:
             log('mqtt', f'Invalid storage policy: {error}')
             return False
