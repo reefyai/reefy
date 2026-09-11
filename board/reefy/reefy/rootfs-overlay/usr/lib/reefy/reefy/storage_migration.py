@@ -11,7 +11,7 @@ from reefy.storage_pressure import PressureError, QUANTUM, boundaries
 from reefy.storage_quota import (
     FileAttributes, PROJINHERIT, Registry, assign_tree, atomic_json,
     flush_filesystem, mount_info, physical_sample, read_quotas,
-    require_enforcement, set_quota, verify_tree, RUN_DIR,
+    require_enforcement, set_quota, verify_tree, owned_tree, RUN_DIR,
 )
 
 
@@ -78,8 +78,14 @@ class Migration:
         record['complete'] = False
         self.registry.save()
         self.checkpoint('tagging', path=root)
-        fs = os.statvfs(root)
-        temporary_limit = max(QUANTUM, fs.f_blocks * fs.f_frsize)
+        # statvfs(root) may already be clamped by its old quota. Count allocated
+        # blocks while writers are held, including foreign IDs awaiting retag.
+        tree_bytes = 0
+        for number, (_, item) in enumerate(owned_tree(root, roots), 1):
+            tree_bytes += item.st_blocks * 512
+            if number % 25000 == 0:
+                self.checkpoint('inventory', path=root, inodes=number)
+        temporary_limit = max(QUANTUM, tree_bytes + (quota or {}).get('used', 0) + 64 * 1024**2)
         temporary_limit = ((temporary_limit + QUANTUM - 1) // QUANTUM) * QUANTUM
         set_quota(mount, project, temporary_limit)
         if read_quotas(mount).get(project, {}).get('hard') != temporary_limit:

@@ -13,15 +13,23 @@ def storage_policy(state, *, active=False, previous=None):
     revisions and malformed explicit values never overwrite the valid policy.
     """
     marker = state.get('storage_pressure_policy')
-    if marker is not None and (not isinstance(marker, dict)
+    if 'storage_pressure_policy' in state and (not isinstance(marker, dict)
                                or set(marker) != {'version'}
                                or type(marker['version']) is not int
                                or marker['version'] != 1):
         raise ValueError('unsupported storage pressure policy')
     apps = state.get('apps') if state.get('schema_version') == 2 else None
     groups = apps if apps is not None else [state]
+    legacy = marker is None and not active
     classes, declared, caps = {}, set(), set()
     for group in groups:
+        values = group.get('volume_storage_classes', {})
+        if not isinstance(values, dict):
+            raise ValueError('volume_storage_classes must be a map')
+        if legacy:
+            if values:
+                raise ValueError('storage classes require policy activation')
+            continue  # do not impose new ownership rules on legacy configurations
         volumes = group.get('volumes' if apps is not None else 'app_volumes') or []
         for volume in volumes:
             path = volume.get('path')
@@ -30,9 +38,6 @@ def storage_policy(state, *, active=False, previous=None):
                     or len(path[len(APP_ROOT) + 1:].split('/')) != 2):
                 raise ValueError('invalid app-volume ownership path')
             declared.add(path)
-        values = group.get('volume_storage_classes', {})
-        if not isinstance(values, dict):
-            raise ValueError('volume_storage_classes must be a map')
         for path, value in values.items():
             if not isinstance(value, str) or value not in ('bulk', 'state'):
                 raise ValueError('unknown volume storage class')
@@ -44,9 +49,7 @@ def storage_policy(state, *, active=False, previous=None):
         raise ValueError('storage class refers to an undeclared volume')
     if classes.keys() & caps:
         raise ValueError('volume cannot have both a legacy cap and storage class')
-    if not marker and not active:
-        if classes:
-            raise ValueError('storage classes require policy activation')
+    if legacy:
         return None
     if caps:
         raise ValueError('resolve legacy volume caps before policy activation')

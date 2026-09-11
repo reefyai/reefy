@@ -3,14 +3,15 @@
 Lifecycle operations publish a complete inventory while writers are held.
 This module does no recursive filesystem work and never deletes app data.
 """
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import time
 
-from reefy.storage_pressure import Consumer, PressureError, allocate, apply_allocation
+from reefy.storage_pressure import Consumer, PressureError, QUANTUM, allocate, apply_allocation
 from reefy.storage_quota import (
     Registry, RUN_DIR, atomic_json, physical_sample, read_quotas,
-    require_enforcement, set_quota, state_lock,
+    require_enforcement, set_quota, state_lock, mount_info,
 )
+from reefy.storage_runtime import LAYER_SIZE
 
 
 class Guard:
@@ -40,6 +41,7 @@ class Guard:
             if not registry.data.get('inventory_complete'):
                 raise PressureError('storage writer inventory is incomplete')
             records = registry.data['projects']
+            self.peak = max(self.peak, registry.data.get('peak_bytes_per_second', self.peak))
             if any(not r.get('complete') for r in records.values() if not r.get('retired')):
                 raise PressureError('project migration is incomplete')
             sample = self.sample()
@@ -47,11 +49,20 @@ class Guard:
             if elapsed and self.previous_physical is not None:
                 observed = max(0, sample.used - self.previous_physical) / elapsed
                 if observed > self.peak:
-                    raise PressureError('physical allocation exceeded the validated response bound')
+                    # Never retain a disproven bound or shrink it to manufacture
+                    # capacity. The enlarged envelope can deny further admission.
+                    self.peak = int(observed * 2) + 1
+                    registry.data['peak_bytes_per_second'] = self.peak
+                    registry.save()
             reports = {}
             for record in records.values():
                 if record.get('retired'):
                     continue
+                current = mount_info(record['path'])
+                if (current['uuid'] != record['filesystem']
+                        or current['maj:min'] != record['device']
+                        or current['target'] != record['mount']):
+                    raise PressureError('governed volume mount identity changed')
                 mount = record['mount']
                 if mount not in reports:
                     require_enforcement(mount)
@@ -66,7 +77,7 @@ class Guard:
                     raise PressureError('duplicate project in physical ledger')
                 accounted.add(domain)
                 quota = reports[record['mount']].get(record['project'])
-                if quota is None or quota['soft']:
+                if quota is None or (quota['soft'] and not record.get('native_docker')):
                     raise PressureError('missing project or conflicting soft quota')
                 rate = self.demand.get(key, 0)
                 if elapsed and key in self.previous:
@@ -89,13 +100,50 @@ class Guard:
                         if quota['used']:
                             raise PressureError('unowned project-zero allocation in managed filesystem')
                         continue
+                    if not quota['used'] and not quota['hard']:
+                        continue  # empty retired/probe dquot, no outstanding allowance
                     key = f'{mount}:unregistered:{project}'
-                    consumers.append(Consumer(key, 'runtime', quota['used'], quota['hard']))
-                    by_key[key] = {'mount': mount, 'project': project}
+                    docker = registry.data.get('docker') or {}
+                    native = (project >= docker.get('base_project', 2**32) + 2
+                              and any(r['mount'] == mount and r['filesystem'] == docker.get('filesystem')
+                                      for r in records.values()))
+                    maximum = max(quota['used'], LAYER_SIZE if native else QUANTUM)
+                    consumers.append(Consumer(key, 'runtime', quota['used'], quota['hard'],
+                                              max_hard=maximum))
+                    by_key[key] = {'mount': mount, 'project': project, 'native_docker': native}
+            leases = registry.data.get('leases', {})
+            pending_bytes += sum(lease['bytes'] for lease in leases.values())
             allocation = allocate(
                 sample, consumers, pending_bytes=pending_bytes,
                 peak_bytes_per_second=self.peak, response_seconds=self.response,
                 in_flight_bytes=self.in_flight)
+
+            admitted = []
+            extra = {}
+            # Pending reservations already reduce the shared allocator budget.
+            # Grant reserved bytes only to their named consumer, and only below
+            # the requested class boundary. Non-targeted leases cover native
+            # Docker creation or snapshot COW outside logical quota growth.
+            if not allocation.quiesce:
+                total = sample.used + pending_bytes + self.peak * self.response
+                for identity, lease in leases.items():
+                    ceiling = getattr(allocation.boundaries, lease['storage_class'])
+                    if total >= ceiling:
+                        continue
+                    target = lease.get('target')
+                    if target:
+                        record = by_key.get(target)
+                        if not record or record.get('retired'):
+                            raise PressureError('admission destination disappeared')
+                        if record['storage_class'] != lease['storage_class']:
+                            raise PressureError('admission class does not match destination')
+                        extra[target] = extra.get(target, 0) + lease['bytes']
+                    admitted.append(identity)
+                limits = dict(allocation.limits)
+                for target, amount in extra.items():
+                    limits[target] += amount
+                allocation = replace(allocation, limits=limits,
+                                     granted=allocation.granted + sum(extra.values()))
 
             def deadline():
                 if self.clock() - started > 20:
@@ -111,6 +159,16 @@ class Guard:
                 record = by_key[key]
                 return read_quotas(record['mount']).get(record['project'], {}).get('hard')
 
+            # Docker initially sets soft==hard. Normalize its soft limit without
+            # adding allowance; app-owned unexpected soft quotas are an error.
+            for consumer in consumers:
+                record = by_key[consumer.key]
+                quota = reports[record['mount']][record['project']]
+                if quota['soft'] and record.get('native_docker'):
+                    target = min(consumer.hard, allocation.limits[consumer.key])
+                    set_limit(consumer.key, target)
+                    if read_limit(consumer.key) != target:
+                        raise PressureError('Docker soft quota normalization failed')
             apply_allocation(consumers, allocation, set_limit, read_limit)
             deadline()
             # Only a completely successful pass refreshes liveness. Exceptions
@@ -119,6 +177,8 @@ class Guard:
             self.previous = {c.key: c.used for c in consumers}
             self.previous_time, self.previous_physical = started, sample.used
             result = {'sampled_monotonic': started, 'completed_monotonic': finished,
+                      'generation': registry.data.get('generation', 0),
+                      'admitted_leases': admitted,
                       'elapsed_seconds': finished - started, 'sample': asdict(sample),
                       'allocation': asdict(allocation)}
             atomic_json(RUN_DIR + '/status.json', result)

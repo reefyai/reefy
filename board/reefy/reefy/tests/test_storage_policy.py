@@ -42,6 +42,13 @@ class PolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             storage_policy(state)
 
+    def test_legacy_paths_keep_their_existing_validation_and_null_is_not_absence(self):
+        state = {'app_volumes': [{'path': '/legacy/data'}]}
+        self.assertIsNone(storage_policy(state))
+        state['storage_pressure_policy'] = None
+        with self.assertRaises(ValueError):
+            storage_policy(state)
+
 
 if __name__ == '__main__':
     unittest.main()

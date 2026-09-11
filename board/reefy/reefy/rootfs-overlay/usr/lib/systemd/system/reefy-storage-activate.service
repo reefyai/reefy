@@ -1,0 +1,13 @@
+[Unit]
+Description=Activate Reefy storage quotas
+After=reefy-storage.service
+Requires=reefy-storage.service
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/usr/lib/reefy
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m reefy.storage_service activate
+TimeoutStartSec=1800
+TimeoutStopSec=30
+CPUWeight=100

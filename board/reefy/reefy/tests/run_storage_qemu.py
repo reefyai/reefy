@@ -22,6 +22,10 @@ def main():
             _, output, _ = vm.ssh_exec('python3 /tmp/kernel_storage_probe.py', timeout_s=300)
             print(output)
             (args.output / 'kernel-results.json').write_text(output)
+            vm.scp_to(Path(__file__).with_name('controller_storage_probe.py'), '/tmp/controller_storage_probe.py')
+            _, output, _ = vm.ssh_exec('python3 /tmp/controller_storage_probe.py', timeout_s=600)
+            print(output)
+            (args.output / 'controller-results.json').write_text(output)
         finally:
             _, kernel, _ = vm.ssh_exec('dmesg', timeout_s=10)
             kernel = re.sub(r'password=\S+', 'password=[redacted]', kernel)
