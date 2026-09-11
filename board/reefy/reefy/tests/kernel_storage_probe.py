@@ -51,11 +51,12 @@ def run():
             assign_tree(str(config), 1025, attributes=attrs)
             set_quota(str(mount), 1024, 8 * 1024**2)
             set_quota(str(mount), 1025, 16 * 1024**2)
+            assert read_quotas(str(mount))[1024]['hard'] == 8 * 1024**2, read_quotas(str(mount))
             recordings = media / 'recordings'
             recordings.mkdir()
             assert attrs.read(str(recordings))[3] == 1024
             free_before = shutil.disk_usage(recordings).free
-            assert 0 < free_before <= 8 * 1024**2
+            assert 0 < free_before <= 8 * 1024**2, (free_before, read_quotas(str(mount)))
             set_quota(str(mount), 1024, 4 * 1024**2)
             assert shutil.disk_usage(recordings).free < free_before
             try:

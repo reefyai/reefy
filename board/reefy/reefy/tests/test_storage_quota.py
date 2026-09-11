@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import _bootstrap  # noqa: F401
 from reefy.storage_quota import (
-    Registry, check_hardlinks, owned_tree, read_quotas, require_enforcement,
+    Registry, check_hardlinks, owned_tree, read_quotas, require_enforcement, set_quota,
 )
 from reefy.storage_pressure import PressureError
 
@@ -58,6 +58,11 @@ class OwnershipTests(unittest.TestCase):
 
 
 class ToolParsingTests(unittest.TestCase):
+    def test_limit_uses_kib_not_xfs_basic_block_suffix(self):
+        with patch('reefy.storage_quota.command') as run:
+            set_quota('/test', 1024, 8 * 1024**2)
+        self.assertIn('bhard=8192k', run.call_args.args[0][3])
+
     def test_report_uses_exact_units_and_retains_zero_hard_as_unlimited(self):
         with patch('reefy.storage_quota.command', return_value=(
                 '#1024 123 0 456 00 [--------]\n#1025 789 0 0 00 [--------]\n')):
