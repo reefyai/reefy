@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import threading
 import time
 
 from reefy.storage_pressure import PressureError
@@ -99,16 +100,68 @@ def unhealthy_reason(status, sample, now, *, stale_seconds):
 
 
 
+class BoundedSampler:
+    """One in-flight sample, even when killing its subprocess cannot finish.
+
+    A subprocess in uninterruptible kernel I/O can outlive communicate's
+    timeout. Only this daemon worker waits for it; the observer keeps running.
+    Later calls neither reuse an expired result nor launch parallel samples.
+    The observer is the sole caller; the event publishes the worker's result.
+    """
+    def __init__(self, sample=None):
+        self.sample = sample
+        self.pending = None
+
+    def read(self, *, timeout=2):
+        pending = self.pending
+        if pending is None:
+            pending = {'done': threading.Event(),
+                       'deadline': time.monotonic() + timeout}
+            self.pending = pending
+
+            def work():
+                try:
+                    # Leave part of the observer budget for process cleanup
+                    # after a normal command timeout. A stuck cleanup is still
+                    # bounded by the outer event wait.
+                    pending['result'] = (self.sample or physical_sample)(timeout=timeout * 0.9)
+                except Exception as error:
+                    pending['error'] = error
+                finally:
+                    pending['completed'] = time.monotonic()
+                    pending['done'].set()
+
+            try:
+                threading.Thread(target=work, name='storage-physical-sample', daemon=True).start()
+            except Exception:
+                self.pending = None
+                raise
+        remaining = max(0, pending['deadline'] - time.monotonic())
+        if not pending['done'].wait(remaining):
+            raise TimeoutError('physical sample worker is still pending')
+        self.pending = None
+        if (pending['completed'] > pending['deadline']
+                or time.monotonic() > pending['deadline']):
+            raise TimeoutError('late physical sample is not fresh evidence')
+        if 'error' in pending:
+            raise pending['error']
+        return pending['result']
+
+
+_observer_sampler = BoundedSampler()
+
+
 def sample_with_retry():
-    # Each complete status+table pair shares a two-second deadline. One retry
-    # handles transient device-mapper/CPU latency during image extraction.
+    # Each status+table pair and process cleanup share a two-second observer
+    # budget. One retry handles transient device-mapper/CPU latency. A worker
+    # still blocked after its deadline prevents parallel replacement commands.
     # The freeze request is nonblocking. Sampling stays below systemd's
     # eight-second watchdog while queued I/O drains independently.
     # Only a fresh successful sample authorizes continued writes.
     try:
-        return physical_sample(timeout=2)
+        return _observer_sampler.read(timeout=2)
     except (subprocess.TimeoutExpired, TimeoutError):
-        return physical_sample(timeout=2)
+        return _observer_sampler.read(timeout=2)
 
 
 def check(*, active, stale_seconds, sample=None, writers=None,

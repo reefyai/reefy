@@ -3,6 +3,8 @@ from contextlib import contextmanager
 import subprocess
 from pathlib import Path
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -36,7 +38,7 @@ class WatchdogTests(unittest.TestCase):
                    side_effect=[subprocess.TimeoutExpired('dmsetup', 2), healthy]) as sample:
             self.assertEqual(sample_with_retry(), healthy)
             self.assertEqual(sample.call_count, 2)
-            self.assertTrue(all(call.kwargs == {'timeout': 2} for call in sample.call_args_list))
+            self.assertTrue(all(call.kwargs == {'timeout': 1.8} for call in sample.call_args_list))
         with patch('reefy.storage_watchdog.physical_sample', side_effect=TimeoutError) as sample:
             with self.assertRaises(TimeoutError):
                 sample_with_retry()
@@ -45,6 +47,43 @@ class WatchdogTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 sample_with_retry()
             self.assertEqual(sample.call_count, 1)
+
+    def test_stuck_sample_has_bounded_wait_and_never_fans_out(self):
+        from reefy.storage_watchdog import BoundedSampler
+        entered, release = threading.Event(), threading.Event()
+        calls = []
+        def sample(**kwargs):
+            calls.append(kwargs)
+            entered.set()
+            release.wait(1)
+            return 'too late'
+        reader = BoundedSampler(sample)
+        started = time.monotonic()
+        try:
+            with self.assertRaises(TimeoutError):
+                reader.read(timeout=0.02)
+            self.assertTrue(entered.is_set())
+            for _ in range(10):
+                with self.assertRaises(TimeoutError):
+                    reader.read(timeout=0.02)
+            self.assertLess(time.monotonic() - started, 0.2)
+            self.assertEqual(len(calls), 1)
+            pending = reader.pending
+        finally:
+            release.set()
+        self.assertTrue(pending['done'].wait(1))
+        with self.assertRaisesRegex(TimeoutError, 'late'):
+            reader.read(timeout=0.02)
+        reader.sample = lambda **kwargs: 'fresh'
+        self.assertEqual(reader.read(timeout=0.1), 'fresh')
+
+    def test_fresh_worker_result_does_not_get_reused(self):
+        from reefy.storage_watchdog import BoundedSampler
+        sample = Mock(side_effect=['first', 'second'])
+        reader = BoundedSampler(sample)
+        self.assertEqual(reader.read(timeout=0.1), 'first')
+        self.assertEqual(reader.read(timeout=0.1), 'second')
+        self.assertEqual(sample.call_count, 2)
 
     def test_failed_sampler_freezes_writers_without_docker_api(self):
         with tempfile.TemporaryDirectory() as directory:
