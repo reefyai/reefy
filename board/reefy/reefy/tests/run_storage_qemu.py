@@ -36,6 +36,14 @@ def main():
                 print(f'{source.name} FAILED: {error}', flush=True)
                 (args.output / (result + '.error.log')).write_text(str(error))
                 failures.append(source.name)
+                # Independent of Docker, which may be frozen or unresponsive.
+                _, evidence, _ = vm.ssh_exec(
+                    'journalctl -b -u reefy-storage-guard -u reefy-storage-watchdog '
+                    '-u reefy-storage-hold --no-pager -n 100; '
+                    'cat /run/reefy/storage-pressure/hold.json; '
+                    'cat /sys/fs/cgroup/system.slice/docker.service/cgroup.events',
+                    timeout_s=20, check=False)
+                (args.output / (source.stem + '-protection.log')).write_text(evidence)
                 return False
             finally:
                 _, kernel_log, _ = vm.ssh_exec('dmesg', timeout_s=10)
@@ -56,10 +64,15 @@ def main():
                           'python3 /tmp/pressure_storage_probe.py', 'pressure-results.json', 660)
                     _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-pressure-trace.json', timeout_s=20, check=False)
                     (args.output / 'pressure-trace.json').write_text(trace)
-                    probe(Path(__file__).with_name('cow_storage_probe.py'),
-                          'python3 /tmp/cow_storage_probe.py', 'cow-results.json', 180)
+                    cow_ready = probe(Path(__file__).with_name('cow_storage_probe.py'),
+                                      'python3 /tmp/cow_storage_probe.py', 'cow-results.json', 180)
                     _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-cow-trace.json', timeout_s=20, check=False)
                     (args.output / 'cow-trace.json').write_text(trace)
+                    if cow_ready:
+                        probe(Path(__file__).with_name('amplification_storage_probe.py'),
+                              'python3 /tmp/amplification_storage_probe.py', 'amplification-results.json', 120)
+                        _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-sparse-trace.json', timeout_s=20, check=False)
+                        (args.output / 'amplification-trace.json').write_text(trace)
             ready = False
             if args.suite != 'thin':
                 ready = probe(Path(__file__).with_name('controller_storage_probe.py'),
@@ -80,6 +93,10 @@ def main():
                     vm.scp_to(Path(__file__).with_name('frigate_storage_probe.py'), '/tmp/frigate_storage_probe.py')
                     probe(Path(__file__).with_name('frigate_multi_probe.py'),
                           'python3 /tmp/frigate_multi_probe.py', 'frigate-multi-results.json', 1500)
+                    for name in ('low', 'high'):
+                        _, evidence, _ = vm.ssh_exec('cat /tmp/synthetic-frigate-' + name + '.log',
+                                                     timeout_s=20, check=False)
+                        (args.output / ('frigate-' + name + '-worker.log')).write_text(evidence)
                 if recovered and args.suite in ('all', 'migration'):
                     from run_storage_boot import run_boot_migration
                     try:

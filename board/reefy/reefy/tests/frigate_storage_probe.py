@@ -253,7 +253,15 @@ if __name__ == '__main__':
         status_path = Path('/run/reefy/storage-pressure/status.json')
         if status_path.exists():
             print(status_path.read_text(), file=sys.stderr)
-        cid = container()
-        if cid:
-            print(command(['docker', 'logs', '--tail', '200', cid]), file=sys.stderr)
+        for evidence in ('hold.json', 'session.json'):
+            path = Path('/run/reefy/storage-pressure') / evidence
+            if path.exists():
+                print(evidence + ': ' + path.read_text(), file=sys.stderr)
+        print(json.dumps({'persisted_peak': Registry().data.get('peak_bytes_per_second')}), file=sys.stderr)
+        try:
+            cid = container()
+            if cid:
+                print(command(['docker', 'logs', '--tail', '80', cid]), file=sys.stderr)
+        except Exception as diagnostic_error:
+            print('Docker diagnostics unavailable: ' + str(diagnostic_error), file=sys.stderr)
         raise
