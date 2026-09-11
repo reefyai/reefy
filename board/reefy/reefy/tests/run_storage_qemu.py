@@ -11,7 +11,7 @@ def main():
     parser.add_argument('--service-repo', type=Path, required=True)
     parser.add_argument('--firmware', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--suite', choices=('all', 'core', 'thin', 'frigate', 'migration'), default='all')
+    parser.add_argument('--suite', choices=('all', 'core', 'thin', 'frigate', 'frigate-multi', 'migration'), default='all')
     args = parser.parse_args()
     sys.path.insert(0, str(args.service_repo / 'tests/e2e'))
     from lib.qemu_device import QemuDevice, QemuBlockDisk
@@ -75,6 +75,10 @@ def main():
                 if args.suite in ('all', 'frigate'):
                     probe(Path(__file__).with_name('frigate_storage_probe.py'),
                           'python3 /tmp/frigate_storage_probe.py', 'frigate-results.json', 1500)
+                if args.suite in ('all', 'frigate-multi'):
+                    vm.scp_to(Path(__file__).with_name('frigate_storage_probe.py'), '/tmp/frigate_storage_probe.py')
+                    probe(Path(__file__).with_name('frigate_multi_probe.py'),
+                          'python3 /tmp/frigate_multi_probe.py', 'frigate-multi-results.json', 1500)
                 if recovered and args.suite in ('all', 'migration'):
                     from run_storage_boot import run_boot_migration
                     try:
