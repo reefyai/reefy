@@ -1,4 +1,6 @@
 import json
+import os
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -25,12 +27,13 @@ class SnapshotRecoveryTests(unittest.TestCase):
 
     def test_cleanup_unmounts_owned_snapshot_and_verifies_lv_absence(self):
         mounts = json.dumps({'filesystems': [
-            {'source': '/dev/reefy/' + SNAPSHOT, 'target': TARGET},
-            {'source': '/dev/reefy/app', 'target': '/mnt/reefy-data/apps/synthetic/data'},
+            {'source': '/dev/mapper/alternate-alias[/]', 'target': TARGET, 'maj:min': '253:8'},
+            {'source': '/dev/reefy/app', 'target': '/mnt/reefy-data/apps/synthetic/data', 'maj:min': '253:9'},
         ]})
         with patch('reefy.storage_snapshots.backup_snapshots', side_effect=[[SNAPSHOT], []]), \
                 patch('reefy.storage_snapshots.command', side_effect=[mounts, '', '']) as command, \
-                patch('reefy.storage_snapshots.Path.rmdir'):
+                patch('reefy.storage_snapshots.Path.rmdir'), \
+                patch('reefy.storage_snapshots.os.stat', return_value=SimpleNamespace(st_rdev=os.makedev(253, 8))):
             self.assertEqual(cleanup_orphans(), 1)
         self.assertEqual(command.call_args_list[1].args[0], ['umount', TARGET])
         self.assertEqual(command.call_args_list[2].args[0], ['lvremove', '-f', 'reefy/' + SNAPSHOT])
@@ -39,10 +42,11 @@ class SnapshotRecoveryTests(unittest.TestCase):
         for target, failure in ((TARGET, PressureError('device busy')),
                                 ('/unrelated', None)):
             mounts = json.dumps({'filesystems': [
-                {'source': '/dev/reefy/' + SNAPSHOT, 'target': target}]})
+                {'source': '/dev/reefy/' + SNAPSHOT, 'target': target, 'maj:min': '253:8'}]})
             with self.subTest(target=target), \
                     patch('reefy.storage_snapshots.backup_snapshots', return_value=[SNAPSHOT]), \
-                    patch('reefy.storage_snapshots.command', side_effect=[mounts, failure]) as command:
+                    patch('reefy.storage_snapshots.command', side_effect=[mounts, failure]) as command, \
+                    patch('reefy.storage_snapshots.os.stat', return_value=SimpleNamespace(st_rdev=os.makedev(253, 8))):
                 with self.assertRaises(PressureError):
                     cleanup_orphans()
                 self.assertFalse(any(call.args[0][0] == 'lvremove'

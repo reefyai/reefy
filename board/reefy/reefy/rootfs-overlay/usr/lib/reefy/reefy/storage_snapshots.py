@@ -41,19 +41,30 @@ def cleanup_orphans():
     if not snapshots:
         return 0
     report = json.loads(command(['findmnt', '--json', '--list',
-                                 '-o', 'SOURCE,TARGET']))
+                                 '-o', 'SOURCE,TARGET,MAJ:MIN']))
     mounts = report.get('filesystems')
     if not isinstance(mounts, list):
         raise PressureError('cannot inventory orphan snapshot mounts')
     for snapshot in snapshots:
-        device = os.path.realpath(f'/dev/{VG}/{snapshot}')
+        try:
+            device = os.stat(f'/dev/{VG}/{snapshot}').st_rdev
+            device_id = f'{os.major(device)}:{os.minor(device)}'
+        except FileNotFoundError:
+            # An inactive orphan has no mountable device node. If the alias is
+            # unexpectedly missing for an open LV, lvremove refuses removal
+            # and the reservation is retained.
+            device_id = None
         targets = [row['target'] for row in mounts
-                   if os.path.realpath(row['source']) == device]
+                   if device_id is not None and row.get('maj:min') == device_id]
         for target in targets:
             if not target.startswith(MOUNT_ROOT + '/'):
                 raise PressureError('snapshot mounted outside the backup namespace')
             command(['umount', target], timeout=15)
-        command(['lvremove', '-f', f'{VG}/{snapshot}'], timeout=15)
+        try:
+            command(['lvremove', '-f', f'{VG}/{snapshot}'], timeout=15)
+        except PressureError as error:
+            raise PressureError(f'orphan removal failed after unmounting '
+                                f'{len(targets)} matching mount(s): {error}') from error
         # Empty mount directories are not evidence that a thin LV is gone.
         for target in targets:
             for directory in (Path(target), Path(target).parent):
