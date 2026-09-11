@@ -45,10 +45,20 @@ def metadata_fault(counter):
     wrapper = folder / 'dmsetup'
     mode = folder / 'mode'
     marker = folder / 'timeout-observed'
+    stall = folder / 'stall-observed'
+    stall_calls = folder / 'stall-calls'
     mode.write_text('timeout-once')
     wrapper.write_text('#!/usr/bin/python3\nimport subprocess, sys, pathlib, time\n'
         'mode = pathlib.Path(' + repr(str(mode)) + ').read_text()\n'
         'marker = pathlib.Path(' + repr(str(marker)) + ')\n'
+        'stall = pathlib.Path(' + repr(str(stall)) + ')\n'
+        'stall_calls = pathlib.Path(' + repr(str(stall_calls)) + ')\n'
+        "if sys.argv[1] == 'status' and mode == 'cleanup-stall':\n"
+        "    with stall_calls.open('a') as out: out.write('call\\n')\n"
+        "    if not stall.exists():\n"
+        "        stall.write_text('injected')\n"
+        "        subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(8)'])\n"
+        "        time.sleep(12)\n"
         "if sys.argv[1] == 'status' and mode == 'timeout-once' and not marker.exists():\n"
         "    marker.write_text('injected'); time.sleep(3)\n"
         'result = subprocess.run(' + repr([binary]) + ' + sys.argv[1:], capture_output=True, text=True)\n'
@@ -77,6 +87,40 @@ def metadata_fault(counter):
             assert not Path(RUN_DIR, 'hold.json').exists(), 'one sampler timeout latched protection'
             time.sleep(0.1)
         assert counter.stat().st_mtime_ns > before
+        # A grandchild holds command pipes open after the timed-out parent is
+        # killed. This recreates delayed subprocess cleanup without changing
+        # the actual kernel or exhausting the physical metadata LV.
+        observer_pid = command(['systemctl', 'show', '--property=MainPID', '--value',
+                                'reefy-storage-watchdog.service']).strip()
+        mode.write_text('cleanup-stall')
+        stalled_at = time.monotonic()
+        while not stall.exists():
+            assert time.monotonic() - stalled_at < 4
+            time.sleep(0.1)
+        stall_observed = time.monotonic()
+        while not Path(RUN_DIR, 'hold.json').exists():
+            assert time.monotonic() - stalled_at < 5, 'command cleanup blocked observer'
+            time.sleep(0.1)
+        assert 'protection evidence unavailable' in json.loads(
+            Path(RUN_DIR, 'hold.json').read_text())['reason']
+        completed_drain()
+        stopped = counter.stat().st_mtime_ns
+        until = stall_observed + 6
+        while time.monotonic() < until:
+            assert counter.stat().st_mtime_ns == stopped
+            time.sleep(0.1)
+        assert stall_calls.read_text().splitlines() == ['call'], 'stuck sample spawned replacements'
+        assert command(['systemctl', 'show', '--property=MainPID', '--value',
+                        'reefy-storage-watchdog.service']).strip() == observer_pid
+        mode.write_text('normal')
+        while time.monotonic() - stalled_at < 11:
+            assert Path(RUN_DIR, 'hold.json').exists(), 'late sample cleared the latched hold'
+            time.sleep(0.1)
+        command(['systemctl', 'start', 'reefy-storage-recover.service'], timeout=60)
+        deadline = time.monotonic() + 10
+        while counter.stat().st_mtime_ns == stopped:
+            assert time.monotonic() < deadline
+            time.sleep(0.1)
         mode.write_text('metadata')
         started = time.monotonic()
         while not Path(RUN_DIR, 'hold.json').exists():
@@ -101,6 +145,8 @@ def metadata_fault(counter):
         wrapper.unlink()
         mode.unlink()
         marker.unlink(missing_ok=True)
+        stall.unlink(missing_ok=True)
+        stall_calls.unlink(missing_ok=True)
         folder.rmdir()
     command(['systemctl', 'start', 'reefy-storage-recover.service'], timeout=60)
     deadline = time.monotonic() + 10
@@ -108,6 +154,7 @@ def metadata_fault(counter):
         assert time.monotonic() < deadline
         time.sleep(0.1)
     return {'one_sampler_timeout_recovered_with_fresh_measurement': True,
+            'stuck_command_cleanup_bounded_without_worker_fanout': True,
             'metadata_counter_fault_contained_and_recovered': True,
             'systemd_worker': drain_result}
 
