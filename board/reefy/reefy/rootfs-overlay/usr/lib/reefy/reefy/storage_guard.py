@@ -193,6 +193,7 @@ class Guard:
                       'physical_stop_bytes': max(0, allocation.boundaries.state
                           - max(sample.chunk_bytes, int(self.peak * self.response))
                           - pending_bytes - protected - len(consumers) * sample.chunk_bytes),
+                      'response_seconds': self.response,
                       'generation': registry.data.get('generation', 0),
                       'admitted_leases': admitted,
                       'elapsed_seconds': finished - started, 'sample': asdict(sample),

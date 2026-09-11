@@ -14,6 +14,22 @@ def sample(used, capacity=512 * GB):
 
 
 class BudgetTests(unittest.TestCase):
+    def test_production_response_budget_charges_detection_freeze_and_drain(self):
+        from reefy.storage_service import INITIAL_RATE, RESPONSE_SECONDS, IN_FLIGHT
+        from reefy.storage_watchdog import DETECTION_SECONDS, FREEZE_SECONDS, DRAIN_SECONDS
+        self.assertEqual(RESPONSE_SECONDS,
+                         DETECTION_SECONDS + FREEZE_SECONDS + DRAIN_SECONDS)
+        self.assertEqual(RESPONSE_SECONDS, 40)
+        result = allocate(sample(4 * 1024**3, 12 * 1024**3),
+                          [Consumer('media', 'bulk', 4 * 1024**3, 5 * 1024**3)],
+                          peak_bytes_per_second=INITIAL_RATE,
+                          response_seconds=RESPONSE_SECONDS, in_flight_bytes=IN_FLIGHT)
+        self.assertGreaterEqual(result.boundaries.emergency,
+                                INITIAL_RATE * RESPONSE_SECONDS + IN_FLIGHT)
+        self.assertTrue(result.quiesce)
+        self.assertEqual(result.granted, 0)
+        self.assertGreater(result.limits['media'], 0)
+
     def test_control_state_runway_is_preserved_and_charged_to_every_band(self):
         control = Consumer('control', 'state', MIB, 256 * MIB,
                            max_hard=256 * MIB, minimum_hard=256 * MIB)

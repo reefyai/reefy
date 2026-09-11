@@ -26,14 +26,15 @@ from reefy.storage_quota import (
     verify_tree, assign_tree, flush_filesystem,
 )
 from reefy.storage_runtime import configure_daemon, register_runtime
-from reefy.storage_watchdog import Writers, check
+from reefy.storage_watchdog import (Writers, check, hold_lock, hold_writers,
+                                    DETECTION_SECONDS, FREEZE_SECONDS, DRAIN_SECONDS)
 
 
 # Initial envelope for qualification. A measured larger rate increases the
 # reserve durably; it is never lowered automatically. Physical containment on
 # representative hardware remains a release gate, not a guarantee of statfs.
 INITIAL_RATE = 128 * 1024**2
-RESPONSE_SECONDS = 30
+RESPONSE_SECONDS = DETECTION_SECONDS + FREEZE_SECONDS + DRAIN_SECONDS
 IN_FLIGHT = 64 * 1024**2
 STALE_SECONDS = 20
 
@@ -287,8 +288,9 @@ def activate(*, boot=False):
     if result['allocation']['quiesce']:
         raise PressureError('activation completed but physical capacity is unsafe')
     command(['systemctl', 'is-active', '--quiet', 'reefy-storage-watchdog.service'])
-    Writers().thaw()
-    Path(RUN_DIR + '/hold.json').unlink(missing_ok=True)
+    with hold_lock():
+        Writers().thaw()
+        Path(RUN_DIR + '/hold.json').unlink(missing_ok=True)
     atomic_json(RUN_DIR + '/session.json', {'ready': True})
     registry.data['activation_pending'] = False
     registry.save()
@@ -328,17 +330,21 @@ def run_guard():
 
 def run_watchdog():
     notify('READY=1')
+    previous_reason = None
     while True:
         started = time.monotonic()
         try:
             registry = Registry()
-            check(active=registry.data.get('active', False)
+            reason = check(active=registry.data.get('active', False)
                   and not registry.data.get('activation_pending', False)
                   and os.path.exists(RUN_DIR + '/session.json'),
                   stale_seconds=STALE_SECONDS)
         except Exception as error:
             print(f'[storage-watchdog] {type(error).__name__}: {error}', flush=True)
-            check(active=True, stale_seconds=0)
+            reason = hold_writers(f'observer failure: {type(error).__name__}')
+        if reason != previous_reason:
+            print(f'[storage-watchdog] {reason or "storage hold released"}', flush=True)
+            previous_reason = reason
         notify('WATCHDOG=1')
         time.sleep(max(0.05, 1 - (time.monotonic() - started)))
 
@@ -350,6 +356,16 @@ def recover():
         raise PressureError('incomplete activation requires migration recovery')
     if not os.path.exists(RUN_DIR + '/hold.json'):
         return
+    # Recovery cannot reopen writers while a previous request is still pending.
+    Writers().freeze(timeout=0)
+    # Flush queued filesystem work before obtaining the recovery sample. Use a
+    # bounded child so slow I/O cannot wedge the recovery coordinator.
+    mounts = sorted({r['mount'] for r in registry.data['projects'].values()
+                     if not r.get('retired')})
+    command([sys.executable, '-c',
+             'import sys; from reefy.storage_quota import flush_filesystem; '
+             '[flush_filesystem(path) for path in sys.argv[1:]]', *mounts],
+            timeout=DRAIN_SECONDS)
     # A stopped or wedged guard cannot prove its own recovery. systemd tears
     # down the old process (and releases its flock) before starting a fresh one.
     command(['systemctl', 'restart', 'reefy-storage-guard.service'], timeout=20)
@@ -357,15 +373,15 @@ def recover():
     result = new_guard().pass_once()
     if result['allocation']['quiesce']:
         raise PressureError('physical pressure still prevents writer recovery')
-    Writers().thaw()
-    Path(RUN_DIR + '/hold.json').unlink(missing_ok=True)
+    with hold_lock():
+        Writers().thaw()
+        Path(RUN_DIR + '/hold.json').unlink(missing_ok=True)
 
 
 def force_hold():
     if os.path.exists(RUN_DIR + '/session.json'):
         # OnFailure must not retry the external sampler that may have wedged.
-        atomic_json(RUN_DIR + '/hold.json', {'reason': 'storage watchdog failed'})
-        Writers().freeze()
+        hold_writers('storage watchdog failed')
 
 
 def main():

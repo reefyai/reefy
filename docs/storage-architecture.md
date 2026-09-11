@@ -272,11 +272,25 @@ controls, not exact instantaneous physical ceilings or an uninterrupted-backup
 guarantee. An independent watchdog holds unsafe writers when measurements are
 stale or physical/metadata pressure cannot be contained. Each complete physical
 sample has a two-second deadline; the independent watchdog retries one transient
-timeout, then requires fresh healthy counters or freezes writers. The four-second
-sampling budget plus three-second freezer deadline fits inside systemd's
-eight-second watchdog. A failed sample never reuses stale counters as new evidence.
-Hardware qualification
-must establish an adequate response reserve before rollout.
+timeout, then requires fresh healthy counters or requests a writer freeze. The
+request is nonblocking: the observer continues sampling and servicing systemd's
+eight-second watchdog while queued COW I/O drains. A latched hold blocks new
+writers and preserves the first deadline across observer restarts. Late freeze
+completion remains a failed response bound; it is never silently reclassified
+as timely. Recovery requires confirmed freezing and a bounded filesystem flush
+before a fresh allocation pass and writer release.
+
+The initial physical budget is 128 MiB/s over 40 seconds: ten seconds for
+observer failure detection and scheduling, 25 seconds for freeze confirmation,
+and five seconds for remaining filesystem work, plus 64 MiB in-flight allowance.
+This raises the initial emergency reserve to approximately 5.44 GB where the
+base reserve is smaller; it also increases the separately charged response
+margin. A small or occupied pool that cannot fit this envelope refuses growth.
+The dedicated stress fixture uses a 16 GiB thin pool; a 12 GiB occupied-pool
+regression verifies refusal instead of reducing the reserve. These are
+qualification parameters, not a guarantee for arbitrary hardware or workloads.
+A failed sample never reuses stale counters as new evidence. Representative
+hardware must establish an adequate response reserve before rollout.
 
 The policy protects against accidental unbounded growth. It is not a security
 boundary against privileged or deliberately hostile apps that alter project IDs
