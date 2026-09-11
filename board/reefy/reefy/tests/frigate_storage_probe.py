@@ -25,6 +25,8 @@ NAME = 'synthetic-frigate'
 ROOT = Path('/mnt/reefy-data/apps/synthetic-frigate')
 COMPOSE = '/tmp/synthetic-frigate.json'
 MIB = 1024**2
+BITRATE = 1000
+SKIP_PULL = False
 
 
 def compose_run(args, timeout=180):
@@ -60,10 +62,10 @@ socketserver.UnixStreamServer('/config/synthetic-sql.sock', Handler).serve_forev
 
 
 def start_sql_helper():
-    script = Path('/tmp/synthetic-sql-server.py')
+    script = Path('/tmp/' + NAME + '-sql-server.py')
     script.write_text(SQL_SERVER)
     with reservation('synthetic-sql-helper', 64 * MIB):
-        command(['docker', 'run', '-d', '--name', 'synthetic-frigate-sql',
+        command(['docker', 'run', '-d', '--name', NAME + '-sql',
                  '--entrypoint', 'python3', '-e', 'PYTHONDONTWRITEBYTECODE=1',
                  '-v', str(ROOT / 'config') + ':/config',
                  '-v', str(script) + ':/sql-server.py:ro', IMAGE, '/sql-server.py'])
@@ -100,13 +102,14 @@ def wait_recording(db, after, timeout=120):
 
 def run():
     policy_path = shared.desired_state_path()
-    policy = json.loads(Path(policy_path).read_text())
     paths = {str(ROOT / 'config'): 'state', str(ROOT / 'media'): 'bulk',
              str(ROOT / 'cache'): 'bulk'}
-    for path, storage_class in paths.items():
-        policy['app_volumes'].append({'path': path})
-        policy['volume_storage_classes'][path] = storage_class
-    atomic_json(policy_path, policy)
+    with state_lock():
+        policy = json.loads(Path(policy_path).read_text())
+        for path, storage_class in paths.items():
+            policy['app_volumes'].append({'path': path})
+            policy['volume_storage_classes'][path] = storage_class
+        atomic_json(policy_path, policy)
     for path, storage_class in paths.items():
         Path(path).mkdir(parents=True)
         ensure_volume(path, storage_class)
@@ -127,15 +130,16 @@ def run():
                            str(ROOT / 'cache') + ':/tmp/cache'],
                'logging': {'driver': 'json-file', 'options': {'max-size': '20m', 'max-file': '3'}}}
     atomic_json(COMPOSE, {'services': {'recorder': service}})
-    compose_run(['pull'], 600)
+    if not SKIP_PULL:
+        compose_run(['pull'], 600)
     # Generate an actual decodable constant-bitrate clip using the image's own
     # ffmpeg. No external cameras, test monkeypatches or copied customer data.
     generator = dict(service)
     generator.update(entrypoint='/bin/sh', command=['-c',
-        'ffmpeg_bin=$(find /usr/lib/ffmpeg -name ffmpeg -type f | head -n 1); '
-        'exec "$ffmpeg_bin" -hide_banner -loglevel error -y -f lavfi '
+        'ffmpeg_bin=$$(find /usr/lib/ffmpeg -name ffmpeg -type f | head -n 1); '
+        'exec "$$ffmpeg_bin" -hide_banner -loglevel error -y -f lavfi '
         '-i testsrc2=size=320x240:rate=5 -t 10 -an -c:v libx264 -threads 1 '
-        '-b:v 1000k -minrate 1000k -maxrate 1000k -bufsize 2000k '
+        f'-b:v {BITRATE}k -minrate {BITRATE}k -maxrate {BITRATE}k -bufsize {2 * BITRATE}k '
         '-x264-params nal-hrd=cbr -pix_fmt yuv420p /config/source.mp4'])
     atomic_json(COMPOSE, {'services': {'recorder': generator}})
     compose_run(['up', '--abort-on-container-exit', '--exit-code-from', 'recorder', '--pull', 'never'], 180)
@@ -212,7 +216,7 @@ def run():
     assert read_quotas(row['mount'])[row['project']]['used'] > 0
     assert not Path('/run/reefy/storage-pressure/hold.json').exists()
     compose_run(['down'])
-    command(['docker', 'rm', '--force', 'synthetic-frigate-sql'])
+    command(['docker', 'rm', '--force', NAME + '-sql'])
     (ROOT / 'config/synthetic-sql.sock').unlink()
     print(json.dumps({'image': IMAGE, 'resolved_image': command(['docker', 'image', 'inspect', IMAGE, '--format', '{{.Id}}']).strip(),
                       'normal_maintainer_seconds': time.time() - restarted,
@@ -221,6 +225,18 @@ def run():
 
 
 if __name__ == '__main__':
+    import argparse
+    import re
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--name', default=NAME)
+    parser.add_argument('--bitrate', type=int, choices=(750, 1000, 1250), default=BITRATE)
+    parser.add_argument('--skip-pull', action='store_true')
+    options = parser.parse_args()
+    assert re.fullmatch(r'synthetic-frigate(?:-[a-z]+)?', options.name)
+    NAME = options.name
+    ROOT = Path('/mnt/reefy-data/apps') / NAME
+    COMPOSE = '/tmp/' + NAME + '.json'
+    BITRATE, SKIP_PULL = options.bitrate, options.skip_pull
     try:
         run()
     except Exception:
