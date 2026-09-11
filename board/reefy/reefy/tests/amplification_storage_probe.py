@@ -17,7 +17,7 @@ from reefy.storage_quota import Registry, RUN_DIR, command, flush_filesystem, re
 from reefy.storage_service import INITIAL_RATE, RESPONSE_SECONDS, IN_FLIGHT
 from reefy import storage_watchdog
 from reefy.storage_watchdog import Writers, check, QUIESCE_SECONDS, finish_hold
-from thin_storage_probe import ROOT, VG, MIB, CHUNK, sample
+from thin_storage_probe import ROOT, VG, MIB, CHUNK, sample, settle_empty_fixture
 
 GROUP = 'synthetic-storage-sparse'
 CGROUP = Path('/sys/fs/cgroup') / GROUP
@@ -64,8 +64,7 @@ def run():
     assert mounted['target'] == ROOT
     assert os.path.realpath(mounted['source']) == os.path.realpath('/dev/' + VG + '/data')
     Path(ROOT, 'media', 'cow').unlink(missing_ok=True)
-    flush_filesystem(ROOT)
-    command(['fstrim', ROOT], timeout=60)
+    settle_empty_fixture()
     registry = Registry('/run/reefy/storage-pressure/synthetic-thin-registry.json')
     media = next(row for row in registry.data['projects'].values() if row['path'] == ROOT + '/media')
     guard = Guard(peak_bytes_per_second=INITIAL_RATE, response_seconds=RESPONSE_SECONDS,

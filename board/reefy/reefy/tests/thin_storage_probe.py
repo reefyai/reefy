@@ -45,6 +45,26 @@ def write_file(path, size):
         os.fsync(stream.fileno())
 
 
+def settle_empty_fixture():
+    """Wait for actual discard credit before measuring a new owned workload.
+
+    Only the tiny committed state sentinel and XFS metadata remain at these
+    call sites. This 16 GiB test filesystem has a 64 MiB log; 128 MiB bounds its
+    empty mapping. A timeout fails preparation rather than moving the baseline
+    while the measured writer is active.
+    """
+    deadline = time.monotonic() + 30
+    flush_filesystem(ROOT)
+    while True:
+        command(['fstrim', ROOT], timeout=30)
+        current = sample()
+        assert current.healthy
+        if current.used <= 128 * MIB:
+            return current
+        assert time.monotonic() < deadline, asdict(current)
+        time.sleep(0.2)
+
+
 def run():
     devices = json.loads(command(['lsblk', '--json', '--nodeps', '-o', 'PATH,SERIAL']))['blockdevices']
     targets = [device['path'] for device in devices if device.get('serial') == SERIAL]
@@ -102,8 +122,7 @@ def run():
     assert after.used > start.used
     results['local_quota_errors_and_independent_state'] = 'passed'
     Path(ROOT + '/media/recordings').unlink()
-    flush_filesystem(ROOT)
-    command(['fstrim', ROOT], timeout=60)
+    settle_empty_fixture()
     # A fresh guard avoids treating the synthetic fast setup workload as a
     # qualification of the long-running production rate envelope.
     guard.previous_time = None
