@@ -94,7 +94,7 @@ def wait_generation(generation, *, lease=None, volume=None, timeout=20):
 
 @contextmanager
 def reservation(kind, budget, *, storage_class='runtime', target=None,
-                release_check=None):
+                release_check=None, burst_bytes=0):
     """Reserve a bounded peak, optionally making it available to one project.
 
     target is a registry identity, not an arbitrary filesystem path. No lock
@@ -104,6 +104,8 @@ def reservation(kind, budget, *, storage_class='runtime', target=None,
     """
     if type(budget) is not int or budget <= 0 or budget % QUANTUM:
         raise ValueError('reservation requires a positive 4-KiB-aligned budget')
+    if type(burst_bytes) is not int or not 0 <= burst_bytes <= budget:
+        raise ValueError('invalid reserved physical burst')
     if storage_class not in ('bulk', 'runtime', 'state'):
         raise ValueError('unknown admission class')
     if not Registry().data.get('active', False):
@@ -126,7 +128,8 @@ def reservation(kind, budget, *, storage_class='runtime', target=None,
             registry.data.setdefault('leases', {})[identity] = {
                 'kind': kind, 'bytes': budget, 'storage_class': storage_class,
                 'target': target, 'pid': os.getpid(),
-                'boot_id': boot_identity(),
+                'boot_id': boot_identity(), 'admitted': False,
+                'burst_remaining': burst_bytes,
             }
             generation = registry.data.get('generation', 0) + 1
             registry.data['generation'] = generation
@@ -136,7 +139,7 @@ def reservation(kind, budget, *, storage_class='runtime', target=None,
         if active:
             wait_generation(generation, lease=identity)
         started = True
-        yield
+        yield identity if registered else None
     finally:
         if registered:
             if started and release_check is not None and not release_check():

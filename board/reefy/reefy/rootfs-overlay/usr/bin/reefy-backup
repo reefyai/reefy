@@ -4,7 +4,8 @@ reefy-backup — snapshot-based borg backup for app instances.
 
 For each backup-enabled volume we LVM-thin-snapshot the volume's LV,
 mount the snapshot read-only, run `borg create` from there, then
-release the snapshot. Container is never paused. DB consistency
+release the snapshot. With quota protection, writers briefly pause during
+snapshot creation and resume for the transfer. DB consistency
 follows the standard crash-consistent guarantee modern engines
 already handle (Postgres WAL, SQLite journal, InnoDB redo log).
 
@@ -275,6 +276,8 @@ def gc_orphan_snapshots():
     reservations may be reclaimed only after every owned snapshot is absent.
     """
     sys.path.insert(0, '/usr/lib/reefy')
+    from reefy.storage_snapshot_admission import abort_preparation
+    abort_preparation()
     from reefy.storage_snapshots import cleanup_orphans
     from reefy.storage_admission import release_reclaimed_snapshot_leases
     from reefy.storage_quota import Registry, state_lock
@@ -428,17 +431,22 @@ def backup_instance(inst, keep_last):
     from reefy.storage_admission import reservation
     from reefy.storage_pressure import PressureError
     from reefy.storage_snapshots import snapshots_released
+    from reefy.storage_quota import Registry
+    from reefy.storage_snapshot_admission import reservation_size
     try:
-        with reservation('backup-snapshots', 64 * 1024**2,
-                         release_check=snapshots_released):
-            return _backup_instance_admitted(inst, keep_last)
+        active = Registry().data.get('active', False)
+        budget, storage_class = reservation_size(inst['paths']) if active else (64 * 1024**2, 'runtime')
+        with reservation('backup-snapshots', budget, storage_class=storage_class,
+                         release_check=snapshots_released,
+                         burst_bytes=budget if active else 0) as lease:
+            return _backup_instance_admitted(inst, keep_last, snapshot_lease=lease)
     except PressureError as error:
         publish_status({'instance_uuid': inst['instance_uuid'], 'status': 'error',
                         'message': f'backup storage admission failed: {error}'})
         return False
 
 
-def _backup_instance_admitted(inst, keep_last):
+def _backup_instance_admitted(inst, keep_last, *, snapshot_lease=None):
     """Backup one app instance via per-volume LVM snapshots. Returns
     True if every volume succeeded."""
     iuuid = inst['instance_uuid']
@@ -490,9 +498,14 @@ def _backup_instance_admitted(inst, keep_last):
             # borg create fails with `stat: No such file or directory`
             # on the second volume.
             ts = int(time.time())
-            for path in paths:
-                snap_name, snap_mnt = snapshot_volume(path, iuuid, ts)
-                snapshots.append((snap_name, snap_mnt, path))
+            if snapshot_lease is not None:
+                from reefy.storage_snapshot_admission import create_reserved
+                snapshots = create_reserved(paths, iuuid, ts, snapshot_lease)
+            else:
+                for path in paths:
+                    snap_name, snap_mnt = snapshot_volume(path, iuuid, ts)
+                    snapshots.append((snap_name, snap_mnt, path))
+            for snap_name, snap_mnt, _ in snapshots:
                 print(f'[backup] Snapshot {snap_name} mounted at {snap_mnt}')
         except Exception as e:
             print(f'[backup] Snapshot setup failed for {iuuid}: {e}')

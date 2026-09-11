@@ -50,11 +50,30 @@ class Guard:
             sample = self.sample()
             elapsed = started - self.previous_time if self.previous_time is not None else None
             if elapsed and self.previous_physical is not None:
+                # A fully reserved operation can spend its one-time physical
+                # burst without inventing a sustained allocation rate. The full
+                # lease stays in the capacity ledger, even after this credit is
+                # spent. Persist spending so restarts cannot refill the credit.
+                growth = max(0, sample.used - self.previous_physical)
+                unbudgeted_growth = growth
+                spent = False
+                for lease in registry.data.get('leases', {}).values():
+                    if not lease.get('admitted', True):
+                        continue
+                    credit = lease.get('burst_remaining', 0)
+                    if type(credit) is not int or not 0 <= credit <= lease['bytes']:
+                        raise PressureError('invalid reserved burst accounting')
+                    used_credit = min(unbudgeted_growth, credit)
+                    if used_credit:
+                        lease['burst_remaining'] -= used_credit
+                        unbudgeted_growth -= used_credit
+                        spent = True
+                if spent:
+                    registry.save()
                 # The envelope is rate * elapsed + in-flight bytes. Admission
                 # wakes can sample only milliseconds apart; charging an allowed
                 # burst as a sustained rate permanently invents a huge reserve.
-                observed = max(0, sample.used - self.previous_physical
-                               - self.burst_credit) / elapsed
+                observed = max(0, unbudgeted_growth - self.burst_credit) / elapsed
                 if observed > self.peak:
                     # Never retain a disproven bound or shrink it to manufacture
                     # capacity. The enlarged envelope can deny further admission.
@@ -64,7 +83,7 @@ class Guard:
                 # Carry one shared burst allowance across frequent admission
                 # wakes. It replenishes only with elapsed time; every new sample
                 # must not receive a fresh 64 MiB exemption.
-                growth = max(0, sample.used - self.previous_physical)
+                growth = unbudgeted_growth
                 self.burst_credit = min(self.in_flight, max(0,
                     self.burst_credit + self.peak * elapsed - growth))
             # A managed container replacement can remove a previously
@@ -144,7 +163,30 @@ class Guard:
                     consumers.append(Consumer(key, 'runtime', quota['used'], quota['hard'],
                                               max_hard=maximum))
                     by_key[key] = {'mount': mount, 'project': project, 'native_docker': native}
-            leases = registry.data.get('leases', {})
+            proposals = registry.data.get('leases', {})
+            leases = {key: lease for key, lease in proposals.items()
+                      if lease.get('admitted', True)}
+            protected = sum(max(0, c.minimum_hard - c.used) for c in consumers)
+            # An oversized request must not manufacture physical pressure and
+            # freeze unrelated apps. Only commit requests whose complete budget
+            # fits after revoking competing ordinary growth allowances.
+            accepted = False
+            for identity, lease in proposals.items():
+                if identity in leases:
+                    continue
+                candidate = dict(leases, **{identity: lease})
+                trial = allocate(sample, consumers,
+                    pending_bytes=pending_bytes + sum(r['bytes'] for r in candidate.values()),
+                    peak_bytes_per_second=self.peak, response_seconds=self.response,
+                    in_flight_bytes=self.in_flight)
+                _, admitted = admit_reservations(trial, sample, consumers, candidate,
+                    margin=self.peak * self.response + protected + pending_bytes)
+                if identity in admitted:
+                    leases[identity] = lease
+                    lease['admitted'] = True
+                    accepted = True
+            if accepted:
+                registry.save()
             pending_bytes += sum(lease['bytes'] for lease in leases.values())
             allocation = allocate(
                 sample, consumers, pending_bytes=pending_bytes,

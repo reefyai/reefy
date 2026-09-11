@@ -248,6 +248,8 @@ def activate(*, boot=False):
             loaded = command(['systemctl', 'show', '--property=LoadState', '--value', unit]).strip()
             if loaded != 'not-found':
                 command(['systemctl', 'stop', unit], timeout=120)
+    from reefy.storage_snapshot_admission import abort_preparation
+    abort_preparation()
     # A prior backup process may be dead while its thin snapshots survive.
     # Reclaim and verify them while writers are stopped, before any old-boot
     # reservations are forgotten or migration starts changing source inodes.
@@ -352,7 +354,12 @@ def run_watchdog():
         time.sleep(max(0.05, 1 - (time.monotonic() - started)))
 
 
-def recover():
+def recover(*, preserve_snapshot_worker=False):
+    with state_lock(RUN_DIR + '/recovery.lock', timeout=5):
+        _recover(preserve_snapshot_worker=preserve_snapshot_worker)
+
+
+def _recover(*, preserve_snapshot_worker=False):
     """Resume held writers only after a fresh guard and verified quota pass."""
     registry = Registry()
     if not registry.data.get('active') or registry.data.get('activation_pending'):
@@ -367,6 +374,11 @@ def recover():
         hold['recovering'] = True
         atomic_json(RUN_DIR + '/hold.json', hold)
     try:
+        if not preserve_snapshot_worker:
+            from reefy.storage_snapshot_admission import abort_preparation
+            if abort_preparation():
+                from reefy.storage_snapshots import cleanup_orphans
+                cleanup_orphans()
         # Flush queued filesystem work before obtaining the recovery sample. Use a
         # bounded child so slow I/O cannot wedge the recovery coordinator.
         mounts = sorted({r['mount'] for r in registry.data['projects'].values()

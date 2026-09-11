@@ -33,7 +33,8 @@ def backup_snapshots():
 
 def snapshots_released():
     """Unknown or failed inventory raises; it never frees a reservation."""
-    return not backup_snapshots()
+    from reefy.storage_snapshot_admission import pending_preparation
+    return not pending_preparation() and not backup_snapshots()
 
 
 def cleanup_orphans():
