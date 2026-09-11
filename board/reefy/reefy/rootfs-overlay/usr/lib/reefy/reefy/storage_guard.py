@@ -12,7 +12,7 @@ from reefy.storage_quota import (
     Registry, RUN_DIR, atomic_json, physical_sample, read_quotas,
     require_enforcement, set_quota, state_lock, mount_info,
 )
-from reefy.storage_runtime import LAYER_SIZE
+from reefy.storage_runtime import LAYER_INITIAL_SIZE, LAYER_SIZE, active_native_projects
 
 
 class Guard:
@@ -80,6 +80,9 @@ class Guard:
                 if mount not in reports:
                     require_enforcement(mount)
                     reports[mount] = read_quotas(mount)
+            live_native = active_native_projects(registry)
+            creating = any(lease.get('target') is None
+                           for lease in registry.data.get('leases', {}).values())
             consumers, by_key = [], {}
             accounted = set()
             for key, record in records.items():
@@ -120,7 +123,13 @@ class Guard:
                     native = (project >= docker.get('base_project', 2**32) + 2
                               and any(r['mount'] == mount and r['filesystem'] == docker.get('filesystem')
                                       for r in records.values()))
-                    maximum = max(quota['used'], LAYER_SIZE if native else QUANTUM)
+                    # Empty dquots outlive removed layers. Keep them closed;
+                    # only an observed root gets ordinary writable-layer runway.
+                    # A managed create can appear between inventory and report,
+                    # so preserve its small, already-reserved initial allowance.
+                    native_maximum = (LAYER_SIZE if project in live_native else
+                                      LAYER_INITIAL_SIZE if creating else QUANTUM)
+                    maximum = max(quota['used'], native_maximum if native else QUANTUM)
                     consumers.append(Consumer(key, 'runtime', quota['used'], quota['hard'],
                                               max_hard=maximum))
                     by_key[key] = {'mount': mount, 'project': project, 'native_docker': native}

@@ -190,7 +190,10 @@ def owned_tree(root, excluded=()):
         if path in excluded:
             continue
         metadata = os.lstat(path)
-        if path != root and (metadata.st_dev != device or os.path.ismount(path)):
+        # mountinfo already excludes same-filesystem bind mounts. st_dev
+        # catches other filesystem boundaries without two extra lstat calls
+        # per inode from os.path.ismount (which cannot identify all bind mounts).
+        if path != root and metadata.st_dev != device:
             continue
         yield path, metadata
         if stat.S_ISDIR(metadata.st_mode):
