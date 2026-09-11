@@ -19,7 +19,7 @@ from reefy.storage_quota import Registry, RUN_DIR, command, flush_filesystem, re
 from reefy.storage_service import INITIAL_RATE, RESPONSE_SECONDS, IN_FLIGHT
 from reefy import storage_watchdog
 from reefy.storage_watchdog import Writers, check
-from thin_storage_probe import ROOT, VG, MIB, CHUNK, sample, write_file
+from thin_storage_probe import ROOT, VG, MIB, CHUNK, SERIAL, sample, write_file
 
 GROUP = 'synthetic-storage-cow'
 CGROUP = Path('/sys/fs/cgroup') / GROUP
@@ -65,6 +65,12 @@ def run():
     assert sample().used < initial['physical_stop_bytes']
     quota_before = read_quotas(ROOT)[media['project']]['used']
     command(['lvcreate', '--snapshot', '--setactivationskip', 'n', '-n', 'pressure_hold', VG + '/data'])
+    if os.environ.get('REEFY_COW_DISABLE_WBT') == '1':
+        devices = json.loads(command(['lsblk', '--json', '--nodeps', '-o', 'PATH,SERIAL']))['blockdevices']
+        selected = [Path(d['path']).name for d in devices if d.get('serial') == SERIAL]
+        assert len(selected) == 1
+        (Path('/sys/class/block') / selected[0] / 'queue/wbt_lat_usec').write_text('0')
+    initial['memory_before_writer'] = Path('/proc/meminfo').read_text()
     writeback = None
     if os.environ.get('REEFY_COW_LIMIT_DIRTY') == '1':
         dev = os.stat(ROOT).st_dev
@@ -123,6 +129,13 @@ def run():
                           'physical_growth_bytes': after.used - initial['sample']['used'],
                           'sample': asdict(after)}))
     except Exception:
+        print(Path('/proc/meminfo').read_text(), file=sys.stderr)
+        for p in Path('/sys/class/bdi').glob('*/*'):
+            if p.name in ('max_bytes', 'strict_limit', 'read_ahead_kb'):
+                try:
+                    print(str(p) + ': ' + p.read_text().strip(), file=sys.stderr)
+                except OSError:
+                    pass
         # Preserve blocked kernel-task evidence before test cleanup thaws the
         # writer. A repeated dmsetup timeout is not a successful containment.
         for process in Path('/proc').iterdir():
