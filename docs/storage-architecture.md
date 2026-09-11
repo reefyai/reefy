@@ -167,7 +167,10 @@ The controller closes lower-priority grants within a 64 MiB transition window
 before opening the next band. This prevents small unusable quota fragments from
 stranding space intended for state. The physical watchdog uses the controller's
 response margin as well, so snapshot growth can trigger containment before
-that margin is consumed.
+that margin is consumed. Rate observations share one 64 MiB burst allowance,
+replenished with elapsed time. Short admission-triggered samples do not turn a
+permitted burst into an assumed sustained rate; repeated growth beyond the
+rate-plus-burst envelope increases the persisted safety bound.
 
 ### Application and Docker behavior
 
