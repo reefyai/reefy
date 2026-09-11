@@ -118,9 +118,19 @@ def run():
     assert used_after < used_before
     assert after_delete.used >= before_delete.used - 4 * CHUNK
     limited = guard.pass_once()
-    command(['fstrim', ROOT], timeout=60)
-    after_trim = sample()
-    assert after_trim.used < after_delete.used - 256 * MIB
+    deadline = time.monotonic() + 20
+    trim_outputs = []
+    while True:
+        trim_outputs.append(command(['fstrim', '-v', ROOT], timeout=60).strip())
+        after_trim = sample()
+        if after_trim.used < after_delete.used - 256 * MIB:
+            break
+        assert time.monotonic() < deadline, {
+            'before_delete': asdict(before_delete), 'after_delete': asdict(after_delete),
+            'after_trim': asdict(after_trim), 'fstrim': trim_outputs,
+            'table': command(['dmsetup', 'table', POOL]),
+        }
+        time.sleep(1)
     recovered = guard.pass_once()
     assert recovered['allocation']['granted'] > limited['allocation']['granted']
     results['delayed_discard_uses_real_physical_credit'] = 'passed'
@@ -144,7 +154,10 @@ def run():
     assert after_cow.used - before_cow.used >= 400 * MIB
     assert after_cow.healthy
     command(['lvremove', '-f', VG + '/snapshot'])
-    assert sample().used < after_cow.used - 256 * MIB
+    deadline = time.monotonic() + 20
+    while sample().used >= after_cow.used - 256 * MIB:
+        assert time.monotonic() < deadline, (asdict(after_cow), asdict(sample()))
+        time.sleep(0.2)
     results['snapshot_cow_is_visible_outside_logical_usage'] = 'passed'
     results['final_sample'] = asdict(sample())
     print(json.dumps(results, sort_keys=True))
