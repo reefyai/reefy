@@ -19,7 +19,7 @@ from reefy.storage_quota import Registry, RUN_DIR, command, flush_filesystem, re
 from reefy.storage_service import INITIAL_RATE, RESPONSE_SECONDS, IN_FLIGHT
 from reefy import storage_watchdog
 from reefy.storage_watchdog import Writers, check, QUIESCE_SECONDS, finish_hold
-from thin_storage_probe import ROOT, VG, MIB, CHUNK, SERIAL, sample, write_file
+from thin_storage_probe import ROOT, VG, MIB, CHUNK, SERIAL, sample, write_file, settle_empty_fixture
 
 GROUP = 'synthetic-storage-cow'
 CGROUP = Path('/sys/fs/cgroup') / GROUP
@@ -52,7 +52,7 @@ def run():
     for row in registry.data['projects'].values():
         Path(row['path'], 'pressure-data').unlink(missing_ok=True)
     Path(ROOT, 'media', 'cow').unlink(missing_ok=True)
-    command(['fstrim', ROOT], timeout=60)
+    settle_empty_fixture()
     media = next(row for row in registry.data['projects'].values() if row['path'] == ROOT + '/media')
     # Bounded fixture preparation with no snapshot or app writer present.
     # The actual containment phase starts with fresh production measurements.
