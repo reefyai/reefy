@@ -21,7 +21,7 @@ from reefy.storage_quota import (Registry, command, flush_filesystem, physical_s
                                  read_quotas, set_quota)
 
 
-SERIAL = 'reefy-storage-e2e-pool'
+SERIAL = 'quota-e2e-pool'
 VG = 'quota_probe'
 POOL = VG + '-pool-tpool'
 ROOT = '/mnt/quota-probe'

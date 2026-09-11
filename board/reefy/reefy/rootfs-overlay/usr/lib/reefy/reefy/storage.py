@@ -1464,21 +1464,24 @@ class Storage:
                         'Existing volume exceeds or cannot confirm its cap; '
                         'preserving its data and reporting a warning')
 
+            from reefy.storage_admission import reservation
+            from reefy.storage_format import format_admission, mount_progress
+            storage_class = (self._storage_classes or {}).get(path, 'state')
             created_here = False
             if not lv_exists:
-                # Fair-share containment: a capped volume's thin LV gets a
-                # virtualsize of pct% of the pool. A thin LV can't map more
-                # physical blocks than its virtualsize, so this guarantees a
-                # (100-pct)% pool margin and ENOSPC lands only on this
-                # volume - no quota machinery needed. Uncapped -> full pool.
+                # Legacy cap_pct bounds this LV's virtual address space. It
+                # does not reserve a share of the common physical thin pool;
+                # class-aware admission and quotas govern that separately.
                 lv_ref = f'{self.STORAGE_VG}/{lv_name}'
                 try:
-                    r = subprocess.run(
-                        ['lvcreate', '--thin', '--virtualsize',
-                         f'{desired_size}B', '-n', lv_name,
-                         f'{self.STORAGE_VG}/{self.STORAGE_POOL}'],
-                        capture_output=True, text=True, timeout=15)
-                except (subprocess.SubprocessError, OSError):
+                    with reservation('volume-create', 16 * 1024**2,
+                                     storage_class=storage_class):
+                        r = subprocess.run(
+                            ['lvcreate', '--thin', '--virtualsize',
+                             f'{desired_size}B', '-n', lv_name,
+                             f'{self.STORAGE_VG}/{self.STORAGE_POOL}'],
+                            capture_output=True, text=True, timeout=15)
+                except (subprocess.SubprocessError, OSError, RuntimeError):
                     # A timed-out lvcreate may have completed in LVM before
                     # its client was killed. This LV was confirmed absent
                     # immediately above, so it is safe to attempt removal.
@@ -1502,10 +1505,11 @@ class Storage:
                 # 12-char label limit; the dm path identifies it anyway.)
                 # Existing ext4 LVs are untouched - we only mkfs on create.
                 try:
-                    r = subprocess.run(
-                        ['mkfs.xfs', '-q', lv_path],
-                        capture_output=True, text=True, timeout=60)
-                except (subprocess.SubprocessError, OSError):
+                    with format_admission(lv_path, storage_class):
+                        r = subprocess.run(
+                            ['mkfs.xfs', '-q', lv_path],
+                            capture_output=True, text=True, timeout=60)
+                except (subprocess.SubprocessError, OSError, RuntimeError):
                     self._require_new_volume_cleanup(lv_ref)
                     raise
                 if r.returncode != 0:
@@ -1523,9 +1527,13 @@ class Storage:
                 # First project accounting scans existing inodes. Allow large
                 # trees to finish instead of killing a healthy first mount.
                 mount_opts = self._fs_mount_opts(lv_path)
+                mount_started = time.monotonic()
+                mount_progress(phase='mounting', path=path, started_monotonic=mount_started)
                 r = subprocess.run(
                     ['mount', '-o', mount_opts, lv_path, path],
                     capture_output=True, text=True, timeout=900)
+                mount_progress(phase='mounted' if r.returncode == 0 else 'failed',
+                               path=path, elapsed_seconds=time.monotonic() - mount_started)
             except (subprocess.SubprocessError, OSError) as e:
                 if created_here:
                     mounted = self._resolve_new_volume_mount_failure(

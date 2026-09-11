@@ -14,7 +14,7 @@ class CacheMigrationTests(unittest.TestCase):
         record = {'path': source, 'project': 1024, 'complete': True, 'storage_class': 'bulk'}
         registry = Mock(data={'active': True, 'projects': {'volume': record}})
         container = {'Id': 'synthetic-container', 'Config': {'Labels': {
-            'com.docker.compose.service': 'recorder'}}, 'Mounts': [], 'SizeRw': 8192}
+            'com.docker.compose.service': 'recorder'}}, 'Mounts': [], 'SizeRw': 8193}
         calls = []
 
         def command(args, **kwargs):
@@ -34,7 +34,10 @@ class CacheMigrationTests(unittest.TestCase):
         actions = [args[1] for args in calls]
         self.assertLess(actions.index('update'), actions.index('stop'))
         self.assertLess(actions.index('stop'), actions.index('cp'))
+        self.assertLess(actions.index('stop'), max(i for i, action in enumerate(actions) if action == 'inspect'))
         self.assertNotIn('rm', actions)
+        self.assertEqual(reserve.call_args.args[1] % 4096, 0)
+        self.assertGreaterEqual(reserve.call_args.args[1], 8193 + 64 * 1024**2)
         self.assertIn('--restart=no', calls[actions.index('update')])
         self.assertEqual(reserve.call_args.kwargs, {'storage_class': 'bulk', 'target': 'volume'})
         verify.assert_called_once_with(source, 1024)
@@ -44,7 +47,7 @@ class CacheMigrationTests(unittest.TestCase):
         registry = Mock(data={'active': True, 'projects': {'volume': {
             'path': source, 'project': 1024, 'complete': True, 'storage_class': 'bulk'}}})
         container = {'Id': 'synthetic-container', 'Config': {'Labels': {
-            'com.docker.compose.service': 'recorder'}}, 'Mounts': [], 'SizeRw': 8192}
+            'com.docker.compose.service': 'recorder'}}, 'Mounts': [], 'SizeRw': 8193}
 
         def command(args, **kwargs):
             if args[1] == 'ps': return 'synthetic-container'

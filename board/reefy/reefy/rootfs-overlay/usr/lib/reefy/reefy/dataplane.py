@@ -794,6 +794,7 @@ class DataPlane:
         compose. Costs ~1-2s extra; in-memory state isn't a concern
         for our apps since durable state lives in mounted volumes.
         """
+        from reefy.storage_operations import compose_operation
         instance_uuid = payload.get('instance_uuid')
         if not instance_uuid:
             raise ValueError('missing instance_uuid')
@@ -867,12 +868,14 @@ class DataPlane:
 
                 self._publish_health_status(
                     instance_uuid, 'starting', phase='start')
-                result = subprocess.run(
-                    ['docker', 'compose', '-f', compose_path, '-p',
-                     project_name, 'up', '-d', '--force-recreate',
-                     '--no-deps', app.get('primary_service') or 'app'],
-                    capture_output=True, text=True,
-                    timeout=self.COMPOSE_START_TIMEOUT_SECONDS)
+                with compose_operation(compose_path, project_name,
+                                       ['up', '-d', '--force-recreate', '--no-deps']):
+                    result = subprocess.run(
+                        ['docker', 'compose', '-f', compose_path, '-p',
+                         project_name, 'up', '-d', '--force-recreate',
+                         '--no-deps', app.get('primary_service') or 'app'],
+                        capture_output=True, text=True,
+                        timeout=self.COMPOSE_START_TIMEOUT_SECONDS)
                 if result.returncode != 0:
                     raise RuntimeError(
                         result.stderr.strip()
@@ -892,10 +895,12 @@ class DataPlane:
             log('mqtt',
                 f'Recreating instance {svc_id} with current compose config')
 
-            result = subprocess.run(
-                ['docker', 'compose', '-f', self.COMPOSE_PATH, '-p', 'state',
-                 'up', '-d', '--force-recreate', '--no-deps', svc_id],
-                capture_output=True, text=True, timeout=180)
+            with compose_operation(self.COMPOSE_PATH, 'state',
+                                   ['up', '-d', '--force-recreate', '--no-deps']):
+                result = subprocess.run(
+                    ['docker', 'compose', '-f', self.COMPOSE_PATH, '-p', 'state',
+                     'up', '-d', '--force-recreate', '--no-deps', svc_id],
+                    capture_output=True, text=True, timeout=180)
             if result.returncode != 0:
                 raise RuntimeError(
                     result.stderr.strip()

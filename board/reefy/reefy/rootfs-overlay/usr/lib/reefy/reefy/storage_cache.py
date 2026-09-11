@@ -8,7 +8,7 @@ import json
 import os
 
 from reefy.storage_admission import reservation
-from reefy.storage_pressure import PressureError
+from reefy.storage_pressure import PressureError, QUANTUM
 from reefy.storage_quota import Registry, command, verify_tree
 
 
@@ -56,10 +56,11 @@ def preserve_new_mounts(compose, project_name):
             # succeeds. Disabling restart persists the barrier through reboot.
             command(['docker', 'update', '--restart=no', container['Id']])
             command(['docker', 'stop', '--time', '30', container['Id']], timeout=40)
-            size = container.get('SizeRw')
+            stopped = json.loads(command(['docker', 'inspect', '--size', container['Id']], timeout=60))[0]
+            size = stopped.get('SizeRw')
             if type(size) is not int or size < 0:
                 raise PressureError('cannot bound container-local data migration')
-            budget = ((size + 64 * 1024**2 + 1023) // 1024) * 1024
+            budget = ((size + 64 * 1024**2 + QUANTUM - 1) // QUANTUM) * QUANTUM
             with reservation('new-bind-copy', budget,
                              storage_class=record['storage_class'], target=identity):
                 try:
