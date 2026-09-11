@@ -153,6 +153,24 @@ def run():
             except (OSError, StopIteration):
                 pass
         Path('/proc/sysrq-trigger').write_text('w')
+        if os.environ.get('REEFY_COW_MEASURE_DRAIN') == '1':
+            # Diagnostic only: leave the original freeze request in place and
+            # measure its eventual completion. The failed deadline above still
+            # fails this run, even if I/O later drains with space remaining.
+            drain_started = time.monotonic()
+            events = ''
+            while time.monotonic() - drain_started < 60:
+                events = (CGROUP / 'cgroup.events').read_text()
+                if 'frozen 1' in events:
+                    break
+                time.sleep(1)
+            evidence = {'diagnostic_drain_seconds': time.monotonic() - drain_started,
+                        'events': events, 'memory': Path('/proc/meminfo').read_text()}
+            try:
+                evidence['physical'] = asdict(sample(timeout=10))
+            except Exception as error:
+                evidence['sample_error'] = type(error).__name__
+            print(json.dumps(evidence), file=sys.stderr, flush=True)
         raise
     finally:
         Path('/tmp/synthetic-cow-trace.json').write_text(json.dumps({'initial': initial, 'samples': trace}))
