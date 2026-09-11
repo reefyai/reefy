@@ -4,7 +4,7 @@ import unittest
 
 import _bootstrap  # noqa: F401
 from reefy.storage_pressure import (
-    GB, QUANTUM, Consumer, PoolSample, PressureError, allocate, apply_allocation,
+    GB, MIB, QUANTUM, Consumer, PoolSample, PressureError, allocate, apply_allocation,
     boundaries, parse_thin_sample,
 )
 
@@ -81,6 +81,27 @@ class BudgetTests(unittest.TestCase):
         plan = allocate(sample(GB), [Consumer('a', 'runtime', GB, 2 * GB,
                                                max_hard=2 * GB)])
         self.assertEqual(plan.limits['a'], (2 * GB // QUANTUM) * QUANTUM)
+
+    def test_partial_write_fragments_do_not_strand_higher_priority_bands(self):
+        used = [4096] * 6
+        hard = [4 * MIB] + [0] * 5
+        classes = ['runtime', 'bulk', 'state', 'bulk', 'runtime', 'bulk']
+        seen = set()
+        for _ in range(100):
+            physical = 128 * MIB + sum(((value + 524287) // 524288) * 524288 for value in used)
+            writers = [Consumer(str(i), cls, used[i], hard[i], 0 if i == 0 else 8 * MIB,
+                                4 * MIB if i == 0 else None) for i, cls in enumerate(classes)]
+            plan = allocate(PoolSample(12 * 1024**3, physical, 100, 1000, 524288), writers,
+                            peak_bytes_per_second=128 * MIB, response_seconds=4, in_flight_bytes=64 * MIB)
+            seen.add(plan.stage)
+            before = list(used)
+            hard = [plan.limits[str(i)] for i in range(len(used))]
+            for i in range(1, len(used)):
+                used[i] += max(0, min(80 * MIB, ((hard[i] - used[i]) // MIB) * MIB))
+            if used == before:
+                break
+        self.assertTrue({'bulk', 'runtime', 'state'} <= seen, seen)
+        self.assertGreater(used[2], used[1])
 
     def test_unknown_limits_are_closed_before_grants(self):
         writers = [Consumer('new', 'state', 0, 0),
