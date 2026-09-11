@@ -117,6 +117,7 @@ def check(*, active, stale_seconds, sample=None, writers=None,
         return None
     writers = writers or Writers()
     sample = sample or sample_with_retry
+    supplied_now = now
     try:
         with open(status_path) as source:
             status = json.load(source)
@@ -125,7 +126,7 @@ def check(*, active, stale_seconds, sample=None, writers=None,
         reason = unhealthy_reason(status, current, now, stale_seconds=stale_seconds)
     except Exception as error:
         reason = f'protection evidence unavailable: {type(error).__name__}'
-    return hold_writers(reason, writers=writers, now=now)
+    return hold_writers(reason, writers=writers, now=supplied_now)
 
 
 def hold_lock():
@@ -142,9 +143,9 @@ def hold_writers(reason=None, *, writers=None, now=None):
     deadline remains a failed response bound, even if the kernel later drains.
     """
     writers = writers or Writers()
-    now = time.monotonic() if now is None else now
     path = RUN_DIR + '/hold.json'
     with hold_lock():
+        now = time.monotonic() if now is None else now
         try:
             with open(path) as source:
                 hold = json.load(source)
