@@ -10,7 +10,7 @@ sys.path.insert(0, '/usr/lib/reefy')
 from reefy import shared
 from reefy.storage import Storage
 from reefy.storage_quota import (Registry, STATE_DIR, atomic_json, command, mount_info,
-                                 read_quotas, require_enforcement, verify_tree)
+                                 read_quotas, require_enforcement, state_lock, verify_tree)
 
 ROOT = '/mnt/reefy-data/apps/synthetic-scale/media'
 EVIDENCE = STATE_DIR + '/synthetic-scale.json'
@@ -54,6 +54,14 @@ def prepare():
     assert not any(row['path'] == ROOT for row in Registry().data['projects'].values())
     evidence = {'create_seconds': time.monotonic() - started, 'metadata': metadata,
                 'previous_boot': Path('/proc/sys/kernel/random/boot_id').read_text().strip()}
+    with state_lock():
+        registry = Registry()
+        registry.data.setdefault('leases', {})['synthetic-interrupted-operation'] = {
+            'kind': 'synthetic-interrupted-operation', 'bytes': 4096,
+            'storage_class': 'runtime', 'target': None, 'pid': os.getpid(),
+            'boot_id': evidence['previous_boot'],
+        }
+        registry.save()
     atomic_json(EVIDENCE, evidence)
     print(json.dumps(evidence))
 
@@ -64,6 +72,7 @@ def verify():
     registry = Registry()
     assert registry.data['active'] and registry.data['inventory_complete']
     assert not registry.data.get('activation_pending')
+    assert 'synthetic-interrupted-operation' not in registry.data.get('leases', {})
     assert not Path('/run/reefy/storage-pressure/hold.json').exists()
     row = next(row for row in registry.data['projects'].values() if row['path'] == ROOT)
     fresh = '/mnt/reefy-data/apps/synthetic-offline-new/config'
