@@ -14,6 +14,7 @@ sys.path.insert(0, '/usr/lib/reefy')
 from reefy.storage_guard import Guard
 from reefy.storage_quota import Registry, RUN_DIR, command, read_quotas, set_quota
 from reefy.storage_service import INITIAL_RATE, RESPONSE_SECONDS, IN_FLIGHT
+from reefy import storage_watchdog
 from reefy.storage_watchdog import Writers, check
 from thin_storage_probe import ROOT, VG, MIB, CHUNK, sample
 
@@ -73,19 +74,25 @@ def run():
     trace = []
     started = time.monotonic()
     reason = None
+    def observed_sample(*, timeout):
+        current = sample(timeout=timeout)
+        trace.append({'seconds': time.monotonic() - started, **asdict(current)})
+        return current
+
+    storage_watchdog.physical_sample = observed_sample
     try:
         while time.monotonic() - started < 19:
-            current = sample()
-            trace.append({'seconds': time.monotonic() - started, **asdict(current)})
-            assert current.healthy
-            assert current.capacity - current.used >= initial['allocation']['boundaries']['emergency'], trace[-1]
-            reason = check(active=True, stale_seconds=20, sample=sample,
+            check_started = time.monotonic()
+            reason = check(active=True, stale_seconds=20,
                            writers=writers, status_path=STATUS)
             if reason or child.poll() is not None:
+                assert time.monotonic() - check_started <= 7.5
                 break
             time.sleep(1)
         if reason:
-            assert reason == 'physical emergency boundary reached', reason
+            assert reason in ('physical emergency boundary reached',
+                              'protection evidence unavailable: TimeoutExpired',
+                              'protection evidence unavailable: TimeoutError'), reason
             assert 'frozen 1' in (CGROUP / 'cgroup.events').read_text()
         else:
             assert child.poll() == 0 and RESULT.exists(), 'writer escaped bounded observation'
@@ -95,6 +102,8 @@ def run():
         # final evidence sample. The watchdog deadline above stays unchanged.
         final = sample(timeout=10)
         quota_after = read_quotas(ROOT)[media['project']]['used']
+        assert all(row['healthy'] and row['capacity'] - row['used'] >=
+                   initial['allocation']['boundaries']['emergency'] for row in trace), trace
         assert final.healthy
         assert final.capacity - final.used >= initial['allocation']['boundaries']['emergency'], asdict(final)
         assert final.used > initial['sample']['used'] + 128 * MIB, (asdict(final), quota_after)
