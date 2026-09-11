@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 import _bootstrap  # noqa: F401
-from reefy.storage_admission import reservation, quiesced_reservation
+from reefy.storage_admission import reservation, quiesced_reservation, release_previous_boot_leases
 from reefy.storage_pressure import (GB, Consumer, PoolSample, PressureError,
                                     allocate, admit_reservations)
 from reefy.storage_quota import Registry
@@ -63,6 +63,22 @@ class AdmissionTests(unittest.TestCase):
 
 
 class BootAdmissionTests(unittest.TestCase):
+    def test_only_proven_previous_boot_leases_are_reclaimed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            registry = Registry(str(Path(directory) / 'registry.json'))
+            registry.data['leases'] = {
+                'old': {'boot_id': 'previous-boot', 'pid': 100},
+                'live': {'boot_id': 'current-boot', 'pid': 100},
+                'unknown': {'pid': 101},
+            }
+            registry.save()
+            with patch('reefy.storage_admission.boot_identity', return_value='current-boot'):
+                self.assertEqual(release_previous_boot_leases(registry), 1)
+            self.assertEqual(set(Registry(registry.path).data['leases']), {'live', 'unknown'})
+            with patch('reefy.storage_admission.boot_identity', return_value=None):
+                with self.assertRaises(PressureError):
+                    release_previous_boot_leases(registry)
+
     def test_boot_can_budget_with_guard_unavailable_but_writers_stopped(self):
         sample = PoolSample(32 * GB, GB, 100, 1000, 524288)
         with patch('reefy.storage_admission.command', return_value='0'), \

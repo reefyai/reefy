@@ -11,9 +11,37 @@ import os
 import signal
 import time
 import uuid
+from pathlib import Path
 
 from reefy.storage_pressure import PressureError, QUANTUM
 from reefy.storage_quota import Registry, RUN_DIR, command, state_lock
+
+
+def boot_identity():
+    try:
+        return Path('/proc/sys/kernel/random/boot_id').read_text().strip() or None
+    except FileNotFoundError:
+        return None  # Unknown identity never authorizes lease reclamation.
+
+
+def release_previous_boot_leases(registry):
+    """Old-boot processes cannot still write; PIDs alone are not sufficient.
+
+    Call during boot activation before writers start. Same-boot and unknown
+    leases remain reserved, including a dead parent with a surviving child.
+    """
+    current = boot_identity()
+    if not current:
+        raise PressureError('cannot establish storage lease boot identity')
+    leases = registry.data.get('leases', {})
+    stale = [identity for identity, lease in leases.items()
+             if lease.get('boot_id') and lease['boot_id'] != current]
+    for identity in stale:
+        del leases[identity]
+    if stale:
+        registry.data['generation'] = registry.data.get('generation', 0) + 1
+        registry.save()
+    return len(stale)
 
 
 def wait_generation(generation, *, lease=None, volume=None, timeout=20):
@@ -74,6 +102,7 @@ def reservation(kind, budget, *, storage_class='runtime', target=None):
             registry.data.setdefault('leases', {})[identity] = {
                 'kind': kind, 'bytes': budget, 'storage_class': storage_class,
                 'target': target, 'pid': os.getpid(),
+                'boot_id': boot_identity(),
             }
             generation = registry.data.get('generation', 0) + 1
             registry.data['generation'] = generation

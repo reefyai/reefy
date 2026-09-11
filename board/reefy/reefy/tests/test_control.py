@@ -91,6 +91,9 @@ class CompatibilityManifestTests(unittest.TestCase):
             manifest['protocols']['desired_state']['features']
             ['app_run_state'], 1)
         self.assertEqual(
+            manifest['protocols']['desired_state']['features']
+            ['storage_pressure_quotas'], 1)
+        self.assertEqual(
             manifest['protocols']['events']['instance_health'], 2)
         self.assertEqual(
             manifest['protocols']['commands']['restart_instance'], 2)

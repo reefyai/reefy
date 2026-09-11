@@ -11,6 +11,7 @@ def main():
     parser.add_argument('--service-repo', type=Path, required=True)
     parser.add_argument('--firmware', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--suite', choices=('all', 'core', 'thin', 'frigate', 'migration'), default='all')
     args = parser.parse_args()
     sys.path.insert(0, str(args.service_repo / 'tests/e2e'))
     from lib.qemu_device import QemuDevice, QemuBlockDisk
@@ -36,22 +37,29 @@ def main():
                 return False
 
         try:
-            probe(Path(__file__).with_name('kernel_storage_probe.py'),
-                  'python3 /tmp/kernel_storage_probe.py', 'kernel-results.json', 300)
-            probe(Path(__file__).with_name('thin_storage_probe.py'),
-                  'python3 /tmp/thin_storage_probe.py', 'thin-results.json', 600)
-            ready = probe(Path(__file__).with_name('controller_storage_probe.py'),
-                          'python3 /tmp/controller_storage_probe.py', 'controller-results.json', 600)
+            if args.suite in ('all', 'core', 'thin'):
+                probe(Path(__file__).with_name('kernel_storage_probe.py'),
+                      'python3 /tmp/kernel_storage_probe.py', 'kernel-results.json', 300)
+            if args.suite in ('all', 'thin'):
+                probe(Path(__file__).with_name('thin_storage_probe.py'),
+                      'python3 /tmp/thin_storage_probe.py', 'thin-results.json', 600)
+            ready = False
+            if args.suite != 'thin':
+                ready = probe(Path(__file__).with_name('controller_storage_probe.py'),
+                              'python3 /tmp/controller_storage_probe.py', 'controller-results.json', 600)
             if ready:
-                probe(Path(__file__).with_name('image_retention_probe.py'),
-                      'python3 /tmp/image_retention_probe.py', 'retention-results.json', 180)
-                probe(args.service_repo / 'tests/e2e/lib/phases/backup_quota_guest.py',
-                      'REEFY_E2E_QUOTA_GUEST=1 python3 /tmp/backup_quota_guest.py', 'backup-results.log', 600)
-                probe(Path(__file__).with_name('frigate_storage_probe.py'),
-                      'python3 /tmp/frigate_storage_probe.py', 'frigate-results.json', 1500)
-                recovered = probe(Path(__file__).with_name('storage_failure_probe.py'),
-                                  'python3 /tmp/storage_failure_probe.py', 'failure-results.json', 180)
-                if recovered:
+                recovered = True
+                if args.suite in ('all', 'core'):
+                    probe(Path(__file__).with_name('image_retention_probe.py'),
+                          'python3 /tmp/image_retention_probe.py', 'retention-results.json', 180)
+                    probe(args.service_repo / 'tests/e2e/lib/phases/backup_quota_guest.py',
+                          'REEFY_E2E_QUOTA_GUEST=1 python3 /tmp/backup_quota_guest.py', 'backup-results.log', 600)
+                    recovered = probe(Path(__file__).with_name('storage_failure_probe.py'),
+                                      'python3 /tmp/storage_failure_probe.py', 'failure-results.json', 180)
+                if args.suite in ('all', 'frigate'):
+                    probe(Path(__file__).with_name('frigate_storage_probe.py'),
+                          'python3 /tmp/frigate_storage_probe.py', 'frigate-results.json', 1500)
+                if recovered and args.suite in ('all', 'migration'):
                     from run_storage_boot import run_boot_migration
                     try:
                         run_boot_migration(vm, args.output)
