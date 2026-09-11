@@ -5,14 +5,22 @@ from contextlib import ExitStack
 import json
 import os
 from pathlib import Path
+import runpy
 import sys
 import time
 sys.path.insert(0, '/usr/lib/reefy')
 from reefy.dataplane import DataPlane
+from reefy import shared
+from reefy.storage import Storage
 from reefy.storage_admission import reservation
-from reefy.storage_quota import Registry, RUN_DIR, command, physical_sample
-from frigate_multi_probe import DB_SCRIPT, ROOT
+from reefy.storage_pressure import PressureError
+from reefy.storage_quota import Registry, RUN_DIR, command, physical_sample, atomic_json, state_lock
+from reefy.storage_snapshot_admission import reservation_size, create_reserved
+from reefy.storage_snapshots import snapshots_released
+from frigate_multi_probe import DB_SCRIPT
 from frigate_storage_probe import IMAGE
+
+ROOT = Path('/mnt/reefy-data/apps/synthetic-soak-database/data')
 
 
 def run(seconds):
@@ -20,14 +28,20 @@ def run(seconds):
     assert Registry().data.get('active')
     assert not Path(RUN_DIR, 'hold.json').exists()
     database = 'synthetic-soak-database'
-    source = json.loads(command(['findmnt', '--json', '--target', '/mnt/reefy-data',
-                                '-o', 'SOURCE']))['filesystems'][0]['source']
-    # The runner owns this disposable VM; resolve the exact mounted LV rather
-    # than guessing a live-device disk from size or ordinal.
-    lv = json.loads(command(['lvs', '--reportformat', 'json', '-o', 'vg_name,lv_name', source]))
-    row = lv['report'][0]['lv'][0]
-    target = row['vg_name'].strip() + '/' + row['lv_name'].strip()
-    snapshot = row['vg_name'].strip() + '/synthetic_soak_hold'
+    # A fresh dedicated app LV exercises the production snapshot coordinator.
+    # Do not create a raw default-LV snapshot with an undersized synthetic lease.
+    assert not ROOT.exists(), 'soak requires a fresh disposable app instance'
+    with state_lock():
+        policy_path = shared.desired_state_path()
+        policy = json.loads(Path(policy_path).read_text())
+        policy['app_volumes'].append({'path': str(ROOT)})
+        policy['volume_storage_classes'][str(ROOT)] = 'state'
+        atomic_json(policy_path, policy)
+    storage = Storage()
+    storage.set_storage_classes({str(ROOT): 'state'})
+    storage._prepare_app_dirs([{'path': str(ROOT), 'uid': 0}], {str(ROOT)})
+    (ROOT / 'commits').write_text('0')
+    release_snapshot = runpy.run_path('/usr/bin/reefy-backup')['release_snapshot']
     names = ('synthetic-frigate-low', 'synthetic-frigate-high')
     previous = int((ROOT / 'commits').read_text())
     script = Path('/tmp/synthetic-soak-database.py')
@@ -37,8 +51,10 @@ def run(seconds):
                  '-e', 'PYTHONDONTWRITEBYTECODE=1', '-v', str(ROOT) + ':/data',
                  '-v', str(script) + ':/writer.py:ro', IMAGE, '/writer.py'])
     traces, cleanup_seen = [], set()
-    lease, snapshot_started = None, None
-    started = last_progress = last_snapshot = time.monotonic()
+    lease, snapshot_started, created = None, None, []
+    snapshots_created = snapshots_postponed = 0
+    started = last_progress = time.monotonic()
+    next_snapshot = started + 30
     last_recording_check = started
     try:
         for name in names:
@@ -73,17 +89,37 @@ def run(seconds):
                            'guard_cpu_ticks': int(stat[11]) + int(stat[12]),
                            'guard_rss_kib': int(memory)})
             if snapshot_started is not None and now - snapshot_started >= 30:
-                command(['lvremove', '-f', snapshot], timeout=30)
+                for name, mount, _ in created:
+                    assert release_snapshot(name, mount)
+                created = []
                 snapshot_started = None
                 lease.close()
                 lease = None
-                command(['fstrim', '/mnt/reefy-data'], timeout=60)
-            elif snapshot_started is None and now - last_snapshot >= 600:
+                command(['fstrim', str(ROOT)], timeout=60)
+            elif snapshot_started is None and now >= next_snapshot:
+                next_snapshot = now + 600
+                budget, storage_class = reservation_size([str(ROOT)])
                 lease = ExitStack()
-                lease.enter_context(reservation('synthetic-soak-snapshot', 64 * 1024**2))
-                command(['lvcreate', '--snapshot', '--setactivationskip', 'n',
-                         '-n', 'synthetic_soak_hold', target], timeout=30)
-                snapshot_started = last_snapshot = now
+                try:
+                    identity = lease.enter_context(reservation('backup-snapshots', budget,
+                        storage_class=storage_class, burst_bytes=budget,
+                        release_check=snapshots_released))
+                except PressureError as error:
+                    assert str(error) in ('operation exceeds its storage class ceiling',
+                                          'physical capacity cannot admit this operation'), str(error)
+                    assert not Path(RUN_DIR, 'hold.json').exists()
+                    assert snapshots_released()
+                    lease.close()
+                    lease = None
+                    snapshots_postponed += 1
+                else:
+                    created = create_reserved([str(ROOT)], database, int(time.time()), identity)
+                    assert len(created) == 1
+                    snapshot_started = time.monotonic()
+                    snapshots_created += 1
+                    # Snapshot setup includes a deliberate writer barrier.
+                    # Resume the progress deadline after that completed barrier.
+                    last_progress = snapshot_started
             if now - last_recording_check >= 300:
                 for name in names:
                     cid = command(['docker', 'ps', '-q', '--filter',
@@ -101,20 +137,23 @@ def run(seconds):
             time.sleep(5)
         if seconds >= 1800:
             assert cleanup_seen == set(names), cleanup_seen
+        assert snapshots_created > 0, 'soak never exercised an admitted snapshot'
         result = command(['docker', 'exec', database, 'python3', '-c',
             "import sqlite3; c=sqlite3.connect('/data/state.db'); "
             "assert c.execute('PRAGMA integrity_check').fetchone()[0]=='ok'; "
             "assert c.execute('PRAGMA wal_checkpoint(PASSIVE)').fetchone()[0]==0; print('ok')"])
         assert result.strip() == 'ok'
         print(json.dumps({'mixed_storage_soak': 'passed', 'seconds': seconds,
-                          'cleanup_instances': sorted(cleanup_seen), 'database_commits': previous}))
+                          'cleanup_instances': sorted(cleanup_seen), 'database_commits': previous,
+                          'snapshots_created': snapshots_created,
+                          'snapshots_postponed': snapshots_postponed}))
     finally:
         Path('/tmp/synthetic-soak-trace.json').write_text(json.dumps(traces))
         # On a hold, preserve the stopped VM for diagnosis. Normal completion
         # releases only this scenario's snapshot and containers.
         if not Path(RUN_DIR, 'hold.json').exists():
-            if snapshot_started is not None:
-                command(['lvremove', '-f', snapshot], timeout=30)
+            for name, mount, _ in created:
+                assert release_snapshot(name, mount)
             if lease:
                 lease.close()
             command(['docker', 'rm', '--force', database])
