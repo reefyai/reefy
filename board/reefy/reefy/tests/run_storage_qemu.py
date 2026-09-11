@@ -14,7 +14,7 @@ def main():
     parser.add_argument('--service-repo', type=Path, required=True)
     parser.add_argument('--firmware', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--suite', choices=('all', 'core', 'core-nvme', 'core-legacy-state', 'thin', 'frigate', 'frigate-multi', 'migration', 'soak', 'cow', 'cow-writeback', 'cow-memory', 'cow-nowbt', 'migration-cow', 'amplification'), default='all')
+    parser.add_argument('--suite', choices=('all', 'core', 'core-nvme', 'core-legacy-state', 'thin', 'frigate', 'frigate-multi', 'migration', 'soak', 'cow', 'cow-writeback', 'cow-memory', 'cow-nowbt', 'cow-drain', 'migration-cow', 'amplification'), default='all')
     args = parser.parse_args()
     sys.path.insert(0, str(args.service_repo / 'tests/e2e'))
     from lib.qemu_device import QemuDevice, QemuBlockDisk
@@ -66,7 +66,7 @@ def main():
             if args.suite in ('all', 'core', 'core-nvme', 'core-legacy-state', 'thin'):
                 probe(Path(__file__).with_name('kernel_storage_probe.py'),
                       'python3 /tmp/kernel_storage_probe.py', 'kernel-results.json', 300)
-            if args.suite in ('all', 'thin', 'cow', 'cow-writeback', 'cow-memory', 'cow-nowbt', 'migration-cow', 'amplification'):
+            if args.suite in ('all', 'thin', 'cow', 'cow-writeback', 'cow-memory', 'cow-nowbt', 'cow-drain', 'migration-cow', 'amplification'):
                 thin_ready = probe(Path(__file__).with_name('thin_storage_probe.py'),
                                    'python3 /tmp/thin_storage_probe.py', 'thin-results.json', 600)
                 if thin_ready and args.suite == 'migration-cow':
@@ -85,7 +85,8 @@ def main():
                         (args.output / 'pressure-trace.json').write_text(trace)
                     cow_ready = probe(Path(__file__).with_name('cow_storage_probe.py'),
                                       ('REEFY_COW_LIMIT_DIRTY=1 ' if args.suite == 'cow-writeback' else
-                                       'REEFY_COW_DISABLE_WBT=1 ' if args.suite == 'cow-nowbt' else '') +
+                                       'REEFY_COW_DISABLE_WBT=1 ' if args.suite == 'cow-nowbt' else
+                                       'REEFY_COW_MEASURE_DRAIN=1 ' if args.suite == 'cow-drain' else '') +
                                       'python3 /tmp/cow_storage_probe.py', 'cow-results.json', 180)
                     _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-cow-trace.json', timeout_s=20, check=False)
                     (args.output / 'cow-trace.json').write_text(trace)
@@ -95,7 +96,7 @@ def main():
                         _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-sparse-trace.json', timeout_s=20, check=False)
                         (args.output / 'amplification-trace.json').write_text(trace)
             ready = False
-            if args.suite not in ('thin', 'cow', 'cow-writeback', 'cow-memory', 'cow-nowbt', 'migration-cow', 'amplification'):
+            if args.suite not in ('thin', 'cow', 'cow-writeback', 'cow-memory', 'cow-nowbt', 'cow-drain', 'migration-cow', 'amplification'):
                 ready = probe(Path(__file__).with_name('controller_storage_probe.py'),
                               'python3 /tmp/controller_storage_probe.py' +
                               (' --legacy-state' if args.suite == 'core-legacy-state' else ''),
