@@ -14,7 +14,7 @@ def main():
     parser.add_argument('--service-repo', type=Path, required=True)
     parser.add_argument('--firmware', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--suite', choices=('all', 'core', 'core-nvme', 'thin', 'frigate', 'frigate-multi', 'migration'), default='all')
+    parser.add_argument('--suite', choices=('all', 'core', 'core-nvme', 'thin', 'frigate', 'frigate-multi', 'migration', 'soak'), default='all')
     args = parser.parse_args()
     sys.path.insert(0, str(args.service_repo / 'tests/e2e'))
     from lib.qemu_device import QemuDevice, QemuBlockDisk
@@ -122,14 +122,19 @@ def main():
                               'python3 /tmp/frigate_exports_probe.py', 'exports-results.json', 180)
                         probe(Path(__file__).with_name('sqlite_full_probe.py'),
                               'python3 /tmp/sqlite_full_probe.py', 'sqlite-results.json', 180)
-                if args.suite in ('all', 'frigate-multi'):
+                if args.suite in ('all', 'frigate-multi', 'soak'):
                     vm.scp_to(Path(__file__).with_name('frigate_storage_probe.py'), '/tmp/frigate_storage_probe.py')
-                    probe(Path(__file__).with_name('frigate_multi_probe.py'),
+                    multi_ready = probe(Path(__file__).with_name('frigate_multi_probe.py'),
                           'python3 /tmp/frigate_multi_probe.py', 'frigate-multi-results.json', 1500)
                     for name in ('low', 'high'):
                         _, evidence, _ = vm.ssh_exec('cat /tmp/synthetic-frigate-' + name + '.log',
                                                      timeout_s=20, check=False)
                         (args.output / ('frigate-' + name + '-worker.log')).write_text(evidence)
+                if args.suite == 'soak' and multi_ready:
+                    probe(Path(__file__).with_name('soak_storage_probe.py'),
+                          'python3 /tmp/soak_storage_probe.py', 'soak-results.json', 18500)
+                    _, trace, _ = vm.ssh_exec('cat /tmp/synthetic-soak-trace.json', timeout_s=20, check=False)
+                    (args.output / 'soak-trace.json').write_text(trace)
                 if recovered and args.suite in ('all', 'migration'):
                     from run_storage_boot import run_boot_migration
                     try:
