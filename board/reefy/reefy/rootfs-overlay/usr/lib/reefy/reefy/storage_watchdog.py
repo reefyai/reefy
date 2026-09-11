@@ -3,16 +3,16 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
 
 from reefy.storage_pressure import PressureError
-from reefy.storage_quota import RUN_DIR, atomic_json, physical_sample, state_lock
+from reefy.storage_quota import RUN_DIR, atomic_json, physical_sample, state_lock, command, Registry
 
 
 # Eight seconds for systemd to detect a stuck observer, plus scheduling margin.
 DETECTION_SECONDS = 10
-FREEZE_SECONDS = 25
-DRAIN_SECONDS = 5
+QUIESCE_SECONDS = 30
 
 
 WRITER_GROUPS = (
@@ -172,7 +172,7 @@ def hold_writers(reason=None, *, writers=None, now=None):
         writers.request_freeze()
         frozen = bool(writers.frozen())
         changed = hold.get('frozen') != frozen
-        if hold.get('frozen') is not True and now - started > FREEZE_SECONDS:
+        if not hold.get('drained') and now - started > QUIESCE_SECONDS:
             changed = changed or not hold.get('deadline_exceeded')
             hold['deadline_exceeded'] = True
         hold['frozen'] = frozen
@@ -180,4 +180,89 @@ def hold_writers(reason=None, *, writers=None, now=None):
             atomic_json(path, hold)
         if hold.get('deadline_exceeded'):
             return 'writer quiescence exceeded its physical response bound'
+        if hold.get('drain_error'):
+            return 'filesystem drain failed; storage writers remain held'
         return hold.get('reason', 'storage writers held')
+
+
+def start_hold_worker():
+    """Queue one independent drain worker for this hold, without waiting on I/O."""
+    path = RUN_DIR + '/hold.json'
+    with hold_lock():
+        try:
+            with open(path) as source:
+                hold = json.load(source)
+        except FileNotFoundError:
+            return
+        if hold.get('drained') or hold.get('worker_requested') or hold.get('recovering'):
+            return
+        # Serialize the bounded, nonblocking start request with recovery. Once
+        # recovery marks this epoch, no late queued worker can refreeze apps.
+        command(['systemctl', 'start', '--no-block', 'reefy-storage-drain.service'], timeout=1)
+        hold['worker_requested'] = True
+        atomic_json(path, hold)
+
+
+def finish_hold(*, writers=None, mounts=None):
+    """Confirm freezing AND flush queued filesystem work inside one deadline.
+
+    This runs in a separate systemd worker, outside the writer cgroups. It never
+    holds the coordination lock while waiting for the freezer or filesystem I/O.
+    Explicit mount selection is used only by the disposable kernel probes.
+    """
+    writers = writers or Writers()
+    path = RUN_DIR + '/hold.json'
+    with hold_lock():
+        try:
+            with open(path) as source:
+                hold = json.load(source)
+        except FileNotFoundError:
+            return  # A previously queued start arrived after recovery.
+        if hold.get('recovering'):
+            return
+        epoch = hold['monotonic']
+        if hold.get('drained'):
+            return
+        hold['worker_requested'] = True
+        atomic_json(path, hold)
+    deadline = epoch + QUIESCE_SECONDS
+    try:
+        writers.freeze(timeout=max(0, deadline - time.monotonic()))
+        frozen_at = time.monotonic()
+        if mounts is None:
+            registry = Registry()
+            if not registry.data.get('inventory_complete'):
+                raise PressureError('cannot drain an incomplete writer inventory')
+            mounts = sorted({r['mount'] for r in registry.data['projects'].values()
+                             if not r.get('retired')})
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise PressureError('no physical response time remains for filesystem work')
+        command([sys.executable, '-c',
+                 'import sys; sys.path.insert(0, "/usr/lib/reefy"); '
+                 'from reefy.storage_quota import flush_filesystem; '
+                 '[flush_filesystem(path) for path in sys.argv[1:]]', *mounts],
+                timeout=remaining)
+        drained_at = time.monotonic()
+        with hold_lock():
+            with open(path) as source:
+                hold = json.load(source)
+            if hold['monotonic'] != epoch:
+                raise PressureError('storage hold changed during drain')
+            hold.update(frozen=True, drained=True, frozen_monotonic=frozen_at,
+                        drained_monotonic=drained_at)
+            if drained_at > deadline:
+                hold['deadline_exceeded'] = True
+            atomic_json(path, hold)
+            if hold.get('deadline_exceeded'):
+                raise PressureError('filesystem drain missed the physical response bound')
+    except Exception as error:
+        with hold_lock():
+            with open(path) as source:
+                hold = json.load(source)
+            if hold['monotonic'] == epoch:
+                hold['drain_error'] = type(error).__name__
+                if time.monotonic() > deadline:
+                    hold['deadline_exceeded'] = True
+                atomic_json(path, hold)
+        raise

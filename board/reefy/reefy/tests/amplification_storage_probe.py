@@ -16,7 +16,7 @@ from reefy.storage_guard import Guard
 from reefy.storage_quota import Registry, RUN_DIR, command, flush_filesystem, read_quotas, set_quota
 from reefy.storage_service import INITIAL_RATE, RESPONSE_SECONDS, IN_FLIGHT
 from reefy import storage_watchdog
-from reefy.storage_watchdog import Writers, check, FREEZE_SECONDS, DRAIN_SECONDS
+from reefy.storage_watchdog import Writers, check, QUIESCE_SECONDS, finish_hold
 from thin_storage_probe import ROOT, VG, MIB, CHUNK, sample
 
 GROUP = 'synthetic-storage-sparse'
@@ -52,6 +52,10 @@ def writer():
     RESULT.write_text(json.dumps({'written': written, 'errno': error_number}))
 
 
+def drain():
+    finish_hold(writers=Writers(groups=(GROUP,)), mounts=[ROOT])
+
+
 def run():
     assert not Registry().data.get('active'), 'disposable pre-activation VM required'
     assert not Path(RUN_DIR, 'hold.json').exists()
@@ -77,6 +81,7 @@ def run():
     CGROUP.mkdir()
     writers = Writers(groups=(GROUP,))
     child = subprocess.Popen([sys.executable, __file__, 'writer'])
+    drainer = None
     trace = []
     started = time.monotonic()
     reason = None
@@ -99,9 +104,11 @@ def run():
             assert reason in ('physical emergency boundary reached',
                               'protection evidence unavailable: TimeoutExpired',
                               'protection evidence unavailable: TimeoutError'), reason
+            drainer = subprocess.Popen([sys.executable, __file__, 'drain'], start_new_session=True)
             hold = json.loads(Path(RUN_DIR, 'hold.json').read_text())
-            while not hold.get('frozen'):
-                assert time.monotonic() - hold['monotonic'] <= FREEZE_SECONDS
+            while not hold.get('drained'):
+                assert not hold.get('drain_error'), hold
+                assert time.monotonic() - hold['monotonic'] <= QUIESCE_SECONDS
                 time.sleep(1)
                 tick = time.monotonic()
                 check(active=True, stale_seconds=20, writers=writers, status_path=STATUS)
@@ -112,9 +119,13 @@ def run():
         else:
             assert child.poll() == 0 and RESULT.exists(), 'writer escaped bounded observation'
             assert json.loads(RESULT.read_text())['errno'] in (errno.ENOSPC, errno.EDQUOT)
-        command([sys.executable, '-c',
-                 'import sys; from reefy.storage_quota import flush_filesystem; '
-                 'flush_filesystem(sys.argv[1])', ROOT], timeout=DRAIN_SECONDS)
+        if drainer is None:
+            command([sys.executable, '-c',
+                     'import sys; sys.path.insert(0, "/usr/lib/reefy"); '
+                     'from reefy.storage_quota import flush_filesystem; '
+                     'flush_filesystem(sys.argv[1])', ROOT], timeout=QUIESCE_SECONDS)
+        else:
+            assert drainer.wait(timeout=2) == 0
         # Writer is already contained; allow queued I/O to settle for this
         # final evidence sample. The watchdog deadline above stays unchanged.
         final = sample(timeout=10)
@@ -133,6 +144,10 @@ def run():
         Path('/tmp/synthetic-sparse-trace.json').write_text(json.dumps({'initial': initial, 'samples': trace}))
         if child.poll() is None:
             child.send_signal(signal.SIGKILL)
+        if drainer is not None:
+            if drainer.poll() is None:
+                os.killpg(drainer.pid, signal.SIGKILL)
+            drainer.wait(timeout=5)
         writers.thaw()
         child.wait(timeout=10)
         FILE.unlink(missing_ok=True)
@@ -142,4 +157,5 @@ def run():
 
 
 if __name__ == '__main__':
-    (writer if sys.argv[1:] == ['writer'] else run)()
+    {'writer': writer, 'drain': drain}.get(
+        sys.argv[1] if len(sys.argv) > 1 else '', run)()

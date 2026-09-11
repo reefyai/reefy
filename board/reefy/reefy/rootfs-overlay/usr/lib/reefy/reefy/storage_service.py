@@ -27,14 +27,15 @@ from reefy.storage_quota import (
 )
 from reefy.storage_runtime import configure_daemon, register_runtime
 from reefy.storage_watchdog import (Writers, check, hold_lock, hold_writers,
-                                    DETECTION_SECONDS, FREEZE_SECONDS, DRAIN_SECONDS)
+                                    DETECTION_SECONDS, QUIESCE_SECONDS,
+                                    start_hold_worker, finish_hold)
 
 
 # Initial envelope for qualification. A measured larger rate increases the
 # reserve durably; it is never lowered automatically. Physical containment on
 # representative hardware remains a release gate, not a guarantee of statfs.
 INITIAL_RATE = 128 * 1024**2
-RESPONSE_SECONDS = DETECTION_SECONDS + FREEZE_SECONDS + DRAIN_SECONDS
+RESPONSE_SECONDS = DETECTION_SECONDS + QUIESCE_SECONDS
 IN_FLIGHT = 64 * 1024**2
 STALE_SECONDS = 20
 
@@ -339,6 +340,8 @@ def run_watchdog():
                   and not registry.data.get('activation_pending', False)
                   and os.path.exists(RUN_DIR + '/session.json'),
                   stale_seconds=STALE_SECONDS)
+            if reason:
+                start_hold_worker()
         except Exception as error:
             print(f'[storage-watchdog] {type(error).__name__}: {error}', flush=True)
             reason = hold_writers(f'observer failure: {type(error).__name__}')
@@ -358,36 +361,55 @@ def recover():
         return
     # Recovery cannot reopen writers while a previous request is still pending.
     Writers().freeze(timeout=0)
-    # Flush queued filesystem work before obtaining the recovery sample. Use a
-    # bounded child so slow I/O cannot wedge the recovery coordinator.
-    mounts = sorted({r['mount'] for r in registry.data['projects'].values()
-                     if not r.get('retired')})
-    command([sys.executable, '-c',
-             'import sys; from reefy.storage_quota import flush_filesystem; '
-             '[flush_filesystem(path) for path in sys.argv[1:]]', *mounts],
-            timeout=DRAIN_SECONDS)
-    # A stopped or wedged guard cannot prove its own recovery. systemd tears
-    # down the old process (and releases its flock) before starting a fresh one.
-    command(['systemctl', 'restart', 'reefy-storage-guard.service'], timeout=20)
-    command(['systemctl', 'is-active', '--quiet', 'reefy-storage-watchdog.service'])
-    result = new_guard().pass_once()
-    if result['allocation']['quiesce']:
-        raise PressureError('physical pressure still prevents writer recovery')
     with hold_lock():
-        Writers().thaw()
-        Path(RUN_DIR + '/hold.json').unlink(missing_ok=True)
+        with open(RUN_DIR + '/hold.json') as source:
+            hold = json.load(source)
+        hold['recovering'] = True
+        atomic_json(RUN_DIR + '/hold.json', hold)
+    try:
+        # Flush queued filesystem work before obtaining the recovery sample. Use a
+        # bounded child so slow I/O cannot wedge the recovery coordinator.
+        mounts = sorted({r['mount'] for r in registry.data['projects'].values()
+                         if not r.get('retired')})
+        command([sys.executable, '-c',
+                 'import sys; sys.path.insert(0, "/usr/lib/reefy"); '
+                 'from reefy.storage_quota import flush_filesystem; '
+                 '[flush_filesystem(path) for path in sys.argv[1:]]', *mounts],
+                timeout=QUIESCE_SECONDS)
+        command(['systemctl', 'stop', 'reefy-storage-drain.service'], timeout=10)
+        # A stopped or wedged guard cannot prove its own recovery. systemd tears
+        # down the old process (and releases its flock) before starting a fresh one.
+        command(['systemctl', 'restart', 'reefy-storage-guard.service'], timeout=20)
+        command(['systemctl', 'is-active', '--quiet', 'reefy-storage-watchdog.service'])
+        result = new_guard().pass_once()
+        if result['allocation']['quiesce']:
+            raise PressureError('physical pressure still prevents writer recovery')
+        with hold_lock():
+            Writers().thaw()
+            Path(RUN_DIR + '/hold.json').unlink(missing_ok=True)
+    finally:
+        with hold_lock():
+            try:
+                with open(RUN_DIR + '/hold.json') as source:
+                    hold = json.load(source)
+            except FileNotFoundError:
+                pass
+            else:
+                hold.pop('recovering', None)
+                atomic_json(RUN_DIR + '/hold.json', hold)
 
 
 def force_hold():
     if os.path.exists(RUN_DIR + '/session.json'):
         # OnFailure must not retry the external sampler that may have wedged.
         hold_writers('storage watchdog failed')
+        start_hold_worker()
 
 
 def main():
     actions = {'guard': run_guard, 'watchdog': run_watchdog,
                'activate': activate, 'boot': boot_gate,
-               'hold': force_hold, 'recover': recover}
+               'hold': force_hold, 'drain': finish_hold, 'recover': recover}
     if len(sys.argv) != 2 or sys.argv[1] not in actions:
         raise SystemExit('expected internal storage role')
     actions[sys.argv[1]]()
