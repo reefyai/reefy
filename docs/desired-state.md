@@ -71,7 +71,7 @@ protection; unknown policy revisions are rejected.
 New volumes receive ownership and a verified allowance before seeds, downloads,
 or restores write into them. Restores use the destination volume's project,
 and verification must succeed before the app is started. See
-[storage architecture](storage-architecture.md) for migration and pressure rules.
+[storage architecture](https://reefy.ai/docs/internals/storage-architecture) for migration and pressure rules.
 
 ## App ports and routes
 
