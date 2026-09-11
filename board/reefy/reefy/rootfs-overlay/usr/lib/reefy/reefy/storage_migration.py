@@ -17,6 +17,10 @@ from reefy.storage_quota import (
 )
 
 
+# Keep metadata-copy runway outside the emergency reserve between checkpoints.
+MIGRATION_IN_FLIGHT = 64 * 1024**2
+
+
 class Migration:
     def __init__(self, *, registry=None, attributes=None, sample=physical_sample,
                  report=None):
@@ -33,7 +37,7 @@ class Migration:
         # space, so never begin or continue by assuming tagging is free.
         if (not sample.healthy
                 or sample.metadata_used * 100 >= sample.metadata_capacity * 80
-                or sample.used >= boundaries(sample.capacity).state):
+                or sample.used >= boundaries(sample.capacity).state - MIGRATION_IN_FLIGHT):
             raise PressureError('migration paused: physical or metadata headroom exhausted')
         self.report({'phase': phase, 'elapsed_seconds': time.monotonic() - self.started,
                      **details})
