@@ -3810,8 +3810,16 @@ Environment=MQTT_PORT={self.port}
             marker_dir = os.path.join(self.BACKUP_DIR, iuuid)
             marker_path = os.path.join(marker_dir, '.restored')
 
-            # Skip if already restored
+            # A content marker is not evidence of current quota ownership.
             if os.path.exists(marker_path):
+                try:
+                    from reefy.storage_service import verify_restore
+                    verify_restore(inst.get('paths', []))
+                except Exception as error:
+                    self._publish_restore_status(iuuid, 'error', restore_from,
+                                                 error=str(error))
+                    failed.add(iuuid)
+                    continue
                 log('mqtt', f'Instance {iuuid} already restored, skipping')
                 continue
 
@@ -3936,7 +3944,7 @@ Environment=MQTT_PORT={self.port}
                         continue
                     log('mqtt', f'borg extract completed for {iuuid}')
                     from reefy.storage_service import verify_restore
-                    verify_restore(paths)
+                    verify_restore(paths, repair=True)
 
             except Exception as e:
                 log('mqtt', f'Restore error: {e}')
