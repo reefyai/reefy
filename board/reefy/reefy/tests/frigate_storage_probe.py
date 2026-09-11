@@ -8,7 +8,7 @@ import json
 import os
 from pathlib import Path
 import shutil
-import sqlite3
+import socket
 import sys
 import time
 
@@ -38,15 +38,61 @@ def container():
                     'label=com.docker.compose.project=' + NAME]).strip()
 
 
+
+# Firmware Python intentionally omits SQLite. Run all SQL against the real
+# database using the pinned image's SQLite library through a local Unix socket.
+SQL_SERVER = r"""import json, socketserver, sqlite3
+class Handler(socketserver.StreamRequestHandler):
+    def handle(self):
+        request = json.loads(self.rfile.readline())
+        connection = sqlite3.connect('/config/frigate.db', timeout=30)
+        try:
+            result = connection.execute(request['sql'], request.get('parameters', [])).fetchall()
+            connection.commit()
+            response = {'rows': result}
+        except Exception as error:
+            response = {'error': str(error)}
+        finally:
+            connection.close()
+        self.wfile.write(json.dumps(response).encode() + b'\n')
+socketserver.UnixStreamServer('/config/synthetic-sql.sock', Handler).serve_forever()
+"""
+
+
+def start_sql_helper():
+    script = Path('/tmp/synthetic-sql-server.py')
+    script.write_text(SQL_SERVER)
+    with reservation('synthetic-sql-helper', 64 * MIB):
+        command(['docker', 'run', '-d', '--name', 'synthetic-frigate-sql',
+                 '--entrypoint', 'python3', '-e', 'PYTHONDONTWRITEBYTECODE=1',
+                 '-v', str(ROOT / 'config') + ':/config',
+                 '-v', str(script) + ':/sql-server.py:ro', IMAGE, '/sql-server.py'])
+    deadline = time.monotonic() + 30
+    while not (ROOT / 'config/synthetic-sql.sock').exists():
+        assert time.monotonic() < deadline, 'SQLite helper did not start'
+        time.sleep(0.1)
+
+
+def sql(statement, parameters=()):
+    with socket.socket(socket.AF_UNIX) as client:
+        client.settimeout(40)
+        client.connect(str(ROOT / 'config/synthetic-sql.sock'))
+        client.sendall(json.dumps({'sql': statement, 'parameters': parameters}).encode() + b'\n')
+        with client.makefile('rb') as stream:
+            response = json.loads(stream.readline())
+    if 'error' in response:
+        raise RuntimeError(response['error'])
+    return response['rows']
+
+
 def wait_recording(db, after, timeout=120):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            with sqlite3.connect(db, timeout=5) as connection:
-                row = connection.execute('SELECT max(start_time) FROM recordings').fetchone()
+            row = sql('SELECT max(start_time) FROM recordings')[0]
             if row[0] is not None and row[0] > after:
                 return row[0]
-        except sqlite3.OperationalError:
+        except RuntimeError:
             pass
         time.sleep(2)
     raise AssertionError('Frigate did not persist a new recording segment')
@@ -96,6 +142,7 @@ def run():
     clip = ROOT / 'config/source.mp4'
     assert clip.stat().st_size > 512 * 1024
     atomic_json(COMPOSE, {'services': {'recorder': service}})
+    start_sql_helper()
     first_start = time.time()
     compose_run(['up', '-d', '--force-recreate', '--pull', 'never'])
     db = ROOT / 'config/frigate.db'
@@ -107,8 +154,7 @@ def run():
     media_key = next(key for key, row in Registry().data['projects'].items()
                      if row['path'] == str(ROOT / 'media'))
     seed_budget = ((clip_size * 380 + 4095) // 4096) * 4096
-    with reservation('synthetic-recording-history', seed_budget, storage_class='bulk', target=media_key), \
-            sqlite3.connect(db, timeout=30) as connection:
+    with reservation('synthetic-recording-history', seed_budget, storage_class='bulk', target=media_key):
         for index in range(370):
             # The regular age-retention worker keeps these recent recordings;
             # only the free-space maintainer should remove this history.
@@ -119,13 +165,12 @@ def run():
             path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(clip, path)
             seed_paths.append(path)
-            connection.execute('INSERT INTO recordings '
+            sql('INSERT INTO recordings '
                 '(id, camera, path, start_time, end_time, duration, segment_size) '
                 'VALUES (?, ?, ?, ?, ?, ?, ?)',
                 (f'synthetic-seed-{index}', 'synthetic', '/media/frigate/' + str(relative),
                  start, start + 10, 10, clip_size / MIB))
-        connection.commit()
-        assert connection.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
+        assert sql('PRAGMA integrity_check')[0][0] == 'ok'
     # Set only an internal test cap. The ordinary allocator applies it, so a
     # background pass cannot silently replace the experiment's limit.
     with state_lock():
@@ -145,8 +190,7 @@ def run():
     cid = container()
     deadline = time.monotonic() + 420
     while time.monotonic() < deadline:
-        with sqlite3.connect(db, timeout=5) as connection:
-            remaining = connection.execute("SELECT count(*) FROM recordings WHERE id LIKE 'synthetic-seed-%'").fetchone()[0]
+        remaining = sql("SELECT count(*) FROM recordings WHERE id LIKE 'synthetic-seed-%'")[0][0]
         if remaining < 370:
             logs = command(['docker', 'logs', cid], timeout=15)
             assert 'Less than 1 hour of recording space left' in logs, logs[-6000:]
@@ -160,15 +204,16 @@ def run():
     assert removed == 370 - remaining and removed > 300, (removed, remaining)
     after_cleanup = time.time()
     wait_recording(db, after_cleanup)
-    with sqlite3.connect(db, timeout=30) as connection:
-        assert connection.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
-        assert connection.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone()[0] == 0
+    assert sql('PRAGMA integrity_check')[0][0] == 'ok'
+    assert sql('PRAGMA wal_checkpoint(TRUNCATE)')[0][0] == 0
     Path(ROOT / 'config/state-write-after-cleanup').write_text('config remains writable')
     row = next(row for row in Registry().data['projects'].values() if row['path'] == str(ROOT / 'media'))
     verify_tree(str(ROOT / 'media'), row['project'])
     assert read_quotas(row['mount'])[row['project']]['used'] > 0
     assert not Path('/run/reefy/storage-pressure/hold.json').exists()
     compose_run(['down'])
+    command(['docker', 'rm', '--force', 'synthetic-frigate-sql'])
+    (ROOT / 'config/synthetic-sql.sock').unlink()
     print(json.dumps({'image': IMAGE, 'resolved_image': command(['docker', 'image', 'inspect', IMAGE, '--format', '{{.Id}}']).strip(),
                       'normal_maintainer_seconds': time.time() - restarted,
                       'deleted_segments': removed, 'segment_bytes': clip_size,
