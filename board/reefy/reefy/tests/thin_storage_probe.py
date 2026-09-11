@@ -140,7 +140,7 @@ def run():
     write_file(ROOT + '/media/cow', 512 * MIB)
     flush_filesystem(ROOT)
     quota_before = read_quotas(ROOT)[media['project']]['used']
-    command(['lvcreate', '--snapshot', '--setactivationskip', 'n', '-n', 'snapshot', VG + '/data'])
+    command(['lvcreate', '--snapshot', '--setactivationskip', 'n', '-n', 'cow_hold', VG + '/data'])
     before_cow = sample()
     with open(ROOT + '/media/cow', 'r+b', buffering=0) as stream:
         for offset in range(0, 512 * MIB, CHUNK):
@@ -153,7 +153,7 @@ def run():
     assert abs(quota_after - quota_before) < 4 * MIB
     assert after_cow.used - before_cow.used >= 400 * MIB
     assert after_cow.healthy
-    command(['lvremove', '-f', VG + '/snapshot'])
+    command(['lvremove', '-f', VG + '/cow_hold'])
     deadline = time.monotonic() + 20
     while sample().used >= after_cow.used - 256 * MIB:
         assert time.monotonic() < deadline, (asdict(after_cow), asdict(sample()))
