@@ -1,0 +1,15 @@
+[Unit]
+Description=Create Reefy snapshots with reserved physical capacity
+After=reefy-storage-guard.service reefy-storage-watchdog.service
+OnFailure=reefy-storage-hold.service
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/usr/lib/reefy
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m reefy.storage_snapshot_admission
+TimeoutStartSec=120
+TimeoutStopSec=10
+MemoryMax=128M
+CPUWeight=1000
+OOMScoreAdjust=-900
