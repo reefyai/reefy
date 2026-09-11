@@ -36,12 +36,32 @@ def release_previous_boot_leases(registry):
     leases = registry.data.get('leases', {})
     stale = [identity for identity, lease in leases.items()
              if lease.get('boot_id') and lease['boot_id'] != current]
+    if any(leases[identity].get('kind') == 'backup-snapshots' for identity in stale):
+        from reefy.storage_snapshots import snapshots_released
+        if not snapshots_released():
+            raise PressureError('backup snapshot leases outlive their owner boot')
     for identity in stale:
         del leases[identity]
     if stale:
         registry.data['generation'] = registry.data.get('generation', 0) + 1
         registry.save()
     return len(stale)
+
+
+def release_reclaimed_snapshot_leases(registry):
+    """Call only with serialized backups or stopped writers after orphan GC."""
+    from reefy.storage_snapshots import snapshots_released
+    if not snapshots_released():
+        raise PressureError('cannot release leases for surviving backup snapshots')
+    leases = registry.data.get('leases', {})
+    reclaimed = [key for key, lease in leases.items()
+                 if lease.get('kind') == 'backup-snapshots']
+    for key in reclaimed:
+        del leases[key]
+    if reclaimed:
+        registry.data['generation'] = registry.data.get('generation', 0) + 1
+        registry.save()
+    return len(reclaimed)
 
 
 def wait_generation(generation, *, lease=None, volume=None, timeout=20):
@@ -73,11 +93,14 @@ def wait_generation(generation, *, lease=None, volume=None, timeout=20):
 
 
 @contextmanager
-def reservation(kind, budget, *, storage_class='runtime', target=None):
+def reservation(kind, budget, *, storage_class='runtime', target=None,
+                release_check=None):
     """Reserve a bounded peak, optionally making it available to one project.
 
     target is a registry identity, not an arbitrary filesystem path. No lock
     survives the yield. Normal quotas continue to bound the operation's writes.
+    Persistent resources require release_check to confirm teardown. Failure or
+    an unreadable result retains the durable lease until verified recovery.
     """
     if type(budget) is not int or budget <= 0 or budget % QUANTUM:
         raise ValueError('reservation requires a positive 4-KiB-aligned budget')
@@ -88,6 +111,7 @@ def reservation(kind, budget, *, storage_class='runtime', target=None):
         return
     identity = uuid.uuid4().hex
     registered = False
+    started = False
     with state_lock():
         registry = Registry()
         active = registry.data.get('active', False)
@@ -111,9 +135,12 @@ def reservation(kind, budget, *, storage_class='runtime', target=None):
     try:
         if active:
             wait_generation(generation, lease=identity)
+        started = True
         yield
     finally:
         if registered:
+            if started and release_check is not None and not release_check():
+                raise PressureError('operation resources remain; storage reservation retained')
             with state_lock():
                 registry = Registry()
                 registry.data.get('leases', {}).pop(identity, None)

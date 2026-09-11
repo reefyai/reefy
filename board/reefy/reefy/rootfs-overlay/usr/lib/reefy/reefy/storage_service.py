@@ -14,7 +14,8 @@ import time
 
 from reefy import shared
 from reefy.storage import Storage
-from reefy.storage_admission import wait_generation, release_previous_boot_leases
+from reefy.storage_admission import (wait_generation, release_previous_boot_leases,
+                                     release_reclaimed_snapshot_leases)
 from reefy.storage_guard import Guard
 from reefy.storage_migration import Migration
 from reefy.storage_policy import storage_policy
@@ -245,7 +246,13 @@ def activate(*, boot=False):
             loaded = command(['systemctl', 'show', '--property=LoadState', '--value', unit]).strip()
             if loaded != 'not-found':
                 command(['systemctl', 'stop', unit], timeout=120)
-    else:
+    # A prior backup process may be dead while its thin snapshots survive.
+    # Reclaim and verify them while writers are stopped, before any old-boot
+    # reservations are forgotten or migration starts changing source inodes.
+    from reefy.storage_snapshots import cleanup_orphans
+    cleanup_orphans()
+    release_reclaimed_snapshot_leases(registry)
+    if boot:
         release_previous_boot_leases(registry)
     storage = Storage()
     storage.boot_mount(quiesced_admission=True)
