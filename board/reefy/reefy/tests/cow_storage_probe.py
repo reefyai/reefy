@@ -65,6 +65,13 @@ def run():
     assert sample().used < initial['physical_stop_bytes']
     quota_before = read_quotas(ROOT)[media['project']]['used']
     command(['lvcreate', '--snapshot', '--setactivationskip', 'n', '-n', 'pressure_hold', VG + '/data'])
+    writeback = None
+    if os.environ.get('REEFY_COW_LIMIT_DIRTY') == '1':
+        dev = os.stat(ROOT).st_dev
+        writeback = Path('/sys/class/bdi') / f'{os.major(dev)}:{os.minor(dev)}'
+        (writeback / 'max_bytes').write_text(str(MIB))
+        (writeback / 'strict_limit').write_text('1')
+        assert 0 < int((writeback / 'max_bytes').read_text()) <= MIB
     CGROUP.mkdir()
     writers = Writers(groups=(GROUP,))
     child = subprocess.Popen([sys.executable, __file__, 'writer'])
@@ -112,6 +119,7 @@ def run():
         assert after.used > initial['sample']['used'] + 128 * MIB
         print(json.dumps({'snapshot_cow_independent_containment': 'passed',
                           'freeze_seconds': time.monotonic() - started, 'containment_reason': reason,
+                          'writeback_limit_experiment': bool(writeback),
                           'physical_growth_bytes': after.used - initial['sample']['used'],
                           'sample': asdict(after)}))
     except Exception:
