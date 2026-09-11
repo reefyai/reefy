@@ -331,6 +331,12 @@ cmd_set_next() {
         *) die "Usage: reefy-efi set-next <a|b>" ;;
     esac
 
+    resolve_slots
+    case "$LABEL" in
+        reefy-a) QUOTA_SLOT_PART=1 ;;
+        reefy-b) QUOTA_SLOT_PART=2 ;;
+    esac
+    PYTHONPATH=/usr/lib/reefy python3 -m reefy.storage_firmware slot "$(part_dev "$DISK" "$QUOTA_SLOT_PART")"
     fix_entries
     BOOTNUM=$(boot_num_for_label "$LABEL")
     [ -n "$BOOTNUM" ] || die "Could not find boot entry for ${LABEL}"
@@ -356,6 +362,10 @@ cmd_update() {
     [ -z "$EFI_FILE" ] && die "Usage: reefy-efi update <efi-file> [-r]"
     [ ! -f "$EFI_FILE" ] && die "File not found: $EFI_FILE"
     mountpoint -q "$REEFY_MNT" || die "$REEFY_MNT not mounted"
+
+    # Inspect the target's existing capability manifest before touching either
+    # boot slot. A newer version alone does not prove quota compatibility.
+    PYTHONPATH=/usr/lib/reefy python3 -m reefy.storage_firmware "$EFI_FILE"
 
     # Acquire lock
     LOCK_FILE="/var/lock/reefy-update.lock"
