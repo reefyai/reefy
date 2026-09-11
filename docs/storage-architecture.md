@@ -240,6 +240,27 @@ the owner exits or the device reboots. Activation removes owned orphan snapshots
 while writers are stopped and verifies their absence before reclaiming those
 reservations. Other uncertain or same-boot reservations remain conservative.
 
+Before creating backup snapshots, Reefy reserves the complete currently mapped
+allocation of every source LV, plus bounded setup slack. This covers the case
+where apps overwrite all existing source blocks while snapshots retain their
+old contents. It uses exact device-mapper allocated sectors, not the LV's
+virtual size or a rounded percentage. The lowest-priority source determines
+the reservation's storage class. If the budget cannot fit alongside existing
+reservations, protected allowances and emergency headroom, Reefy postpones the
+backup without stopping apps.
+
+After admission, a separate snapshot worker briefly holds and drains managed
+writers, rechecks source allocation, creates the snapshots, and validates fresh
+quotas before resuming apps. Source growth beyond the admitted budget postpones
+the backup before snapshot creation. Borg transfers run after apps resume.
+The full reservation remains charged until snapshots are verified removed;
+its one-time growth credit prevents reserved COW from being mistaken for an
+unbounded sustained write rate. Physical usage is still counted throughout.
+Recovery stops a queued or interrupted snapshot worker before absence of LVs
+can authorize reservation release. This policy can defer backups on busy or
+nearly full devices; it does not promise a backup deadline or bounded kernel
+I/O latency on unqualified hardware.
+
 Legacy `cap_pct` continues to limit an LV's virtual size. It is not reinterpreted
 as a physical threshold. The catalog retains the last classless manifest for
 older firmware, and class-aware releases require compatible firmware. Existing
