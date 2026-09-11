@@ -78,9 +78,14 @@ def run():
             trace.append({'seconds': elapsed, **asdict(current)})
             if current.used >= initial['physical_stop_bytes'] and crossed is None:
                 crossed = time.monotonic()
+            check_started = time.monotonic()
             reason = check(active=True, stale_seconds=20, sample=sample,
                            writers=writers, status_path=STATUS)
             if reason:
+                # The watchdog takes its own independent sample. It can see a
+                # crossing that happened immediately after the trace sample.
+                if crossed is None and sample().used >= initial['physical_stop_bytes']:
+                    crossed = check_started
                 break
             time.sleep(1)  # same independent observer cadence as firmware
         assert reason == 'physical emergency boundary reached', (reason, initial, trace)

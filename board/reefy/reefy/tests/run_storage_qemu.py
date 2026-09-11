@@ -11,12 +11,13 @@ def main():
     parser.add_argument('--service-repo', type=Path, required=True)
     parser.add_argument('--firmware', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--suite', choices=('all', 'core', 'thin', 'frigate', 'frigate-multi', 'migration'), default='all')
+    parser.add_argument('--suite', choices=('all', 'core', 'core-nvme', 'thin', 'frigate', 'frigate-multi', 'migration'), default='all')
     args = parser.parse_args()
     sys.path.insert(0, str(args.service_repo / 'tests/e2e'))
     from lib.qemu_device import QemuDevice, QemuBlockDisk
     args.output.mkdir(parents=True, exist_ok=True)
     with QemuDevice(raw_image=args.firmware, log_path=args.output / 'qemu.log',
+                    boot_disk_type='nvme' if args.suite == 'core-nvme' else 'virtio',
                     extra_block_disks=(QemuBlockDisk(size='16G', serial='quota-e2e-pool'),)) as vm:
         vm.wait_for_boot(timeout_s=240)
         vm.scp_to(Path(__file__).with_name('setup_storage_probe.py'), '/tmp/setup_storage_probe.py')
@@ -44,7 +45,7 @@ def main():
                     failures.append(source.name + ': kernel storage failure')
 
         try:
-            if args.suite in ('all', 'core', 'thin'):
+            if args.suite in ('all', 'core', 'core-nvme', 'thin'):
                 probe(Path(__file__).with_name('kernel_storage_probe.py'),
                       'python3 /tmp/kernel_storage_probe.py', 'kernel-results.json', 300)
             if args.suite in ('all', 'thin'):
@@ -65,7 +66,7 @@ def main():
                               'python3 /tmp/controller_storage_probe.py', 'controller-results.json', 600)
             if ready:
                 recovered = True
-                if args.suite in ('all', 'core'):
+                if args.suite in ('all', 'core', 'core-nvme'):
                     probe(Path(__file__).with_name('image_retention_probe.py'),
                           'python3 /tmp/image_retention_probe.py', 'retention-results.json', 180)
                     probe(args.service_repo / 'tests/e2e/lib/phases/backup_quota_guest.py',
