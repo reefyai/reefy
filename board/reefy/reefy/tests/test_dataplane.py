@@ -979,11 +979,13 @@ class AppsV2PullRecoveryTests(unittest.TestCase):
                 side_effect=pull), \
                 mock.patch.object(
                     self.dp, '_run_compose_command', side_effect=run), \
+                mock.patch.object(dataplane.app_restart, 'restore_policies') as restore, \
                 mock.patch.object(self.dp, '_publish_health_status') as health:
             result = self.dp._apply_app_project_compose(
                 'reefy-synthetic-app', compose, 'synthetic-app', 'app')
 
         self.assertEqual(result, (True, []))
+        self.assertEqual(restore.call_args.args[2], ['app'])
         self.assertEqual(calls[0][0], 'pull')
         self.assertEqual(calls[0][1], [
             'pull', '--policy', 'missing', 'app', 'seed', 'setup'])
@@ -2878,10 +2880,13 @@ class AppLifecycleContractTests(unittest.TestCase):
             'instance_uuid': app['instance_uuid'],
         }
 
-        with mock.patch.object(self.dp, '_write_project_compose'), \
+        ordering = []
+        with mock.patch.object(dataplane.app_restart, 'set_policy',
+                               side_effect=lambda *a: ordering.append('policy')) as policy, \
+                mock.patch.object(self.dp, '_write_project_compose'), \
                 mock.patch.object(
                     self.dp, '_run_compose_command',
-                    return_value=(True, '')) as compose, \
+                    side_effect=lambda *a, **kw: (ordering.append('stop') or True, '')) as compose, \
                 mock.patch.object(
                     self.dp, '_clear_project_failed_sigs'), \
                 mock.patch.object(
@@ -2891,8 +2896,39 @@ class AppLifecycleContractTests(unittest.TestCase):
                 prepared=prepared)
 
         self.assertEqual(result, (True, ''))
+        policy.assert_called_once_with(app['project_name'], 'no')
+        self.assertEqual(ordering, ['policy', 'stop'])
         self.assertEqual(compose.call_args.args[2], ['stop'])
         health.assert_called_once_with('synthetic-app', 'stopped')
+
+    def test_failed_restart_barrier_cannot_report_stopped(self):
+        app = self._app(status='stopped')
+        with mock.patch.object(dataplane.app_restart, 'set_policy',
+                               side_effect=RuntimeError('synthetic policy failure')), \
+                mock.patch.object(self.dp, '_run_compose_command') as compose, \
+                mock.patch.object(self.dp, '_publish_health_status') as health:
+            result = self.dp._reconcile_v2_app(app, migration=False, restore_failed=False)
+        self.assertEqual(result, (False, 'app_stop_failed'))
+        compose.assert_not_called()
+        self.assertEqual(health.call_args.args, ('synthetic-app', 'failed'))
+
+    def test_start_restores_policy_after_compose_success(self):
+        compose_config = {'services': {'app': {'restart': 'on-failure'},
+                                       'setup': {'restart': 'no'}}}
+        with mock.patch.object(self.dp, '_run_compose_command', return_value=(True, '')), \
+                mock.patch.object(self.dp, '_read_json', return_value=compose_config), \
+                mock.patch.object(dataplane.app_restart, 'restore_policies') as restore:
+            result = self.dp._start_project_services('/synthetic/compose.json', 'synthetic-project', ['app'])
+        self.assertTrue(result[0])
+        restore.assert_called_once_with('synthetic-project', compose_config, ['app'])
+
+    def test_start_does_not_report_success_if_policy_restore_fails(self):
+        with mock.patch.object(self.dp, '_run_compose_command', return_value=(True, '')), \
+                mock.patch.object(dataplane.app_restart, 'restore_policies',
+                                  side_effect=RuntimeError('synthetic restore failure')):
+            result = self.dp._start_project_services('/synthetic/compose.json', 'synthetic-project', ['app'])
+        self.assertFalse(result[0])
+        self.assertEqual(result[2], 'restart policy restore failed')
 
     def test_restart_rejects_stopped_or_busy_app(self):
         stopped = self._app(status='stopped', generation=2)

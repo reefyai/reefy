@@ -31,6 +31,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 
 from reefy import shared
+from reefy import app_restart
 from reefy.apply_results import ApplyResultStore, TERMINAL_STATUSES
 from reefy.shared import _part_dev, log
 from reefy.storage import Storage
@@ -1594,6 +1595,17 @@ class DataPlane:
 
         with self._project_lock(project_name):
             if prepared.get('stopped'):
+                try:
+                    # Persist the no-restart barrier before sending a stop
+                    # signal, including already stopped containers/orphans.
+                    # Do not report Stop complete if that barrier failed.
+                    app_restart.set_policy(project_name, 'no')
+                    if migration:
+                        app_restart.set_policy('state', 'no', instance_uuid)
+                except RuntimeError as error:
+                    self._publish_health_status(
+                        instance_uuid, 'failed', message=str(error), phase='stop')
+                    return False, 'app_stop_failed'
                 if migration:
                     ok, output = self._run_compose_command(
                         self.COMPOSE_PATH, 'state',
@@ -2507,6 +2519,13 @@ class DataPlane:
                 compose_path, project_name, args,
                 timeout=remaining)
             if ok:
+                try:
+                    # Compose may reuse a container whose config hash is
+                    # unchanged, so `up` alone need not undo Stop's policy.
+                    app_restart.restore_policies(
+                        project_name, self._read_json(compose_path), services)
+                except RuntimeError as error:
+                    return False, str(error), 'restart policy restore failed'
                 return True, output, ''
             last_output = output
             classification = self._classify_compose_failure(output)
