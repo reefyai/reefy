@@ -1889,29 +1889,6 @@ class ControlPlane:
                         self._last_disconnect_ts = 0
         threading.Thread(target=_watchdog, daemon=True).start()
 
-    def _start_network_monitor(self):
-        """Watch for IP address changes and trigger immediate MQTT reconnect.
-        Complements the existing backoff loop (1s-60s) — if ip monitor fails
-        or hangs, the backoff loop still reconnects."""
-        def _monitor():
-            while True:
-                try:
-                    proc = subprocess.Popen(
-                        ['ip', 'monitor', 'address'],
-                        stdout=subprocess.PIPE, text=True
-                    )
-                    for line in proc.stdout:
-                        if not self.client.is_connected():
-                            try:
-                                log('mqtt', f'Network change detected, triggering reconnect')
-                                self.client.reconnect()
-                            except Exception:
-                                pass
-                except Exception as e:
-                    log('mqtt', f'ip monitor error: {e}')
-                    time.sleep(10)
-        threading.Thread(target=_monitor, daemon=True).start()
-
     def run(self):
         """Start MQTT client loop"""
         # Configure TLS/mTLS
@@ -1940,8 +1917,10 @@ class ControlPlane:
         # (A control-side offline apply would race the data-plane socket,
         # which isn't up until the data plane finishes its own boot apply.)
 
-        # Start network monitor thread for instant MQTT reconnect
-        self._start_network_monitor()
+        # Paho's network loop exclusively owns reconnect attempts (1-60s
+        # backoff, configured in setup). Address events from Docker bridges
+        # must not call reconnect from another thread: that closes a socket
+        # even while its TLS/MQTT connection is still being established.
 
         # Device metrics collection lives in the reefy-metrics-publisher
         # service (sibling of reefy-log-publisher) - this reconciler only
