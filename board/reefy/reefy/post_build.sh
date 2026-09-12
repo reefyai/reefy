@@ -130,6 +130,7 @@ OVERLAY_DIR="$(cd "$(dirname "$0")" && pwd)/rootfs-overlay"
 if command -v rsync >/dev/null 2>&1 && [ -d "${OVERLAY_DIR}/usr/lib/reefy" ]; then
   rsync -a --delete "${OVERLAY_DIR}/usr/lib/reefy/" "${TARGET_DIR}/usr/lib/reefy/"
 fi
+bash "$(dirname "$0")/scripts/prune_overlay_cache.sh" "${OVERLAY_DIR}" "${TARGET_DIR}"
 
 # Files this branch renamed away from (overlay no longer ships them).
 # Append future renamed/deleted reefy files here.
