@@ -26,10 +26,18 @@ class OverlayCacheTests(unittest.TestCase):
             source = overlay / retained
             source.parent.mkdir(parents=True, exist_ok=True)
             source.write_text('current unit\n')
+            wants = target / 'etc/systemd/system/multi-user.target.wants'
+            wants.mkdir(parents=True)
+            stale_link = wants / Path(obsolete).name
+            stale_link.symlink_to('/' + obsolete)
+            current_link = wants / Path(retained).name
+            current_link.symlink_to('/' + retained)
             for _ in range(2):
                 subprocess.run(['bash', str(script), str(overlay), str(target)], check=True)
                 self.assertFalse((target / obsolete).exists())
                 self.assertFalse((target / dropin).exists())
+                self.assertFalse(stale_link.is_symlink())
+                self.assertTrue(current_link.is_symlink())
                 for name in (retained, current, package):
                     self.assertEqual((target / name).read_text(), 'synthetic unit\n')
 

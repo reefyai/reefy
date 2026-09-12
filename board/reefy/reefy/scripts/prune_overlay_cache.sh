@@ -23,5 +23,11 @@ for relative in \
     usr/lib/systemd/system/reefy-storage-watchdog.service; do
     if [ ! -e "$overlay/$relative" ] && [ ! -L "$overlay/$relative" ]; then
         rm -f -- "$target/$relative"
+        if [[ "$relative" == usr/lib/systemd/system/*.service ]] \
+            && [ -d "$target/etc/systemd/system" ]; then
+            # systemd presets can also leave generated enablement symlinks.
+            find "$target/etc/systemd/system" -type l \
+                -name "${relative##*/}" -delete
+        fi
     fi
 done
