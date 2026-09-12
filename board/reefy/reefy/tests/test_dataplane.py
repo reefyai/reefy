@@ -985,7 +985,8 @@ class AppsV2PullRecoveryTests(unittest.TestCase):
                 'reefy-synthetic-app', compose, 'synthetic-app', 'app')
 
         self.assertEqual(result, (True, []))
-        self.assertEqual(restore.call_args.args[2], ['app'])
+        self.assertEqual(restore.call_args.args[2], ['app', 'seed'])
+        self.assertNotIn('setup', restore.call_args.args[2])
         self.assertEqual(calls[0][0], 'pull')
         self.assertEqual(calls[0][1], [
             'pull', '--policy', 'missing', 'app', 'seed', 'setup'])
