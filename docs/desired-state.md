@@ -58,9 +58,12 @@ app-spec class.
 
 The reconciler validates the marker, paths, classes, and legacy-cap conflicts
 before persisting a request. Unsupported existing filesystems are rejected
-before the cached legacy configuration is replaced. Legacy `cap_pct` keeps its
-virtual-LV meaning; a package must explicitly move to storage classes rather
-than relying on a percentage-to-class guess.
+before the cached legacy configuration is replaced. For capable firmware the
+backend omits legacy `volume_caps`, ignores app-spec `cap_pct`, and sends a
+class for every declared volume, including stopped apps. Missing classes
+default to `state`; an old percentage never disables another app's protection.
+Older firmware continues receiving legacy virtual-LV caps. Existing smaller
+LVs keep their sizes when the new policy activates.
 
 A device may keep booting its cached legacy configuration until the new policy
 arrives. First activation holds writers while the coordinator establishes and

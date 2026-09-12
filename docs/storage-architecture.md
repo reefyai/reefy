@@ -85,8 +85,8 @@ or manually migrated.
 
 ### Per-app thin LVs
 
-An app volume receives its own thin LV when it is backup-enabled or declares a
-capacity percentage. Reefy derives a stable LV name from the absolute host
+An app volume receives its own thin LV when it is backup-enabled, or when a
+legacy policy requests a capacity percentage. Reefy derives a stable LV name from the absolute host
 path, creates XFS on first use, and mounts it before Docker.
 
 Backup volumes need their own LV so Reefy can take a consistent LVM snapshot.
@@ -261,11 +261,15 @@ can authorize reservation release. This policy can defer backups on busy or
 nearly full devices; it does not promise a backup deadline or bounded kernel
 I/O latency on unqualified hardware.
 
-Legacy `cap_pct` continues to limit an LV's virtual size. It is not reinterpreted
-as a physical threshold. The catalog retains the last classless manifest for
-older firmware, and class-aware releases require compatible firmware. Existing
-LVs are not shrunk or reformatted during quota activation. Once active, an
-accidentally omitted activation marker does not remove protection.
+Legacy `cap_pct` limits an LV's virtual size only on older firmware. For
+firmware advertising `storage_pressure_quotas: 1`, the backend ignores those
+percentages and sends quota policy for all declared volumes, including stopped
+apps. A volume without an explicit class defaults to `state`; no percentage is
+reinterpreted as a class or physical threshold. The catalog retains the last
+classless manifest for older firmware, and class-aware releases require
+compatible firmware. Existing LVs keep their current sizes and data during
+quota activation. Once active, an accidentally omitted activation marker does
+not remove protection.
 
 Before first activation, the existing boot-health service confirms the running
 slot so automatic fallback cannot select the previous quota-unaware image after

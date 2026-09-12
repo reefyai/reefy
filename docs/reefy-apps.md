@@ -202,9 +202,11 @@ container mount point it requests:
   for databases and configuration. Omission means `state`. Classes require
   firmware advertising `storage_pressure_quotas: 1`; they do not express a
   fixed size or guaranteed reservation.
-- Legacy `cap_pct` retains its thin-LV virtual-size meaning. It cannot appear
-  with `storage_class`. Publish an explicitly classified replacement before
-  activating the physical-pool policy; do not infer a class from a percentage.
+- Legacy `cap_pct` limits thin-LV virtual size on older firmware. For firmware
+  advertising `storage_pressure_quotas: 1`, the backend ignores it and applies
+  the default `state` class. Existing smaller LVs keep their current sizes.
+  New app releases should use `storage_class`; it cannot appear with `cap_pct`
+  on the same volume. Percentages are never used to infer a class.
 
 Media and recording scratch should use separate `bulk` volumes when an app
 also has a database/config volume. Quotas apply to each app-instance volume,

@@ -12,9 +12,10 @@ import time
 sys.path.insert(0, '/usr/lib/reefy')
 from reefy import shared
 from reefy.dataplane import DataPlane
-from reefy.storage_admission import reservation
+from reefy.storage import Storage
+from reefy.storage_admission import reservation, wait_generation
 from reefy.storage_quota import (Registry, RUN_DIR, FileAttributes, atomic_json,
-                                 command, physical_sample, read_quotas, verify_tree)
+                                 command, physical_sample, read_quotas, state_lock, verify_tree)
 from reefy.storage_runtime import LAYER_INITIAL_SIZE
 from reefy.storage_service import ensure_volume
 
@@ -179,12 +180,22 @@ def run():
         legacy_control_state()
     media = '/mnt/reefy-data/apps/synthetic-recorder/media'
     config = '/mnt/reefy-data/apps/synthetic-recorder/config'
+    legacy = '/mnt/reefy-data/apps/synthetic-legacy/scratch'
+    # Reproduce a stopped app provisioned before the class-aware policy arrives.
+    # The backend now omits its old percentage from the activation request.
+    storage = Storage({legacy: 80})
+    storage._prepare_app_dirs([{'path': legacy}])
+    lv = '/dev/reefy/' + storage._volume_lv_name(legacy)
+    size_before = int(command(['blockdev', '--getsize64', lv]).strip())
+    Path(legacy, 'preserved').write_text('legacy contents')
+    command(['docker', 'create', '--name', 'synthetic-stopped-legacy',
+             '-v', legacy + ':/scratch', image, 'sleep', '3600'])
     for path in (media, config):
         Path(path).mkdir(parents=True, exist_ok=True)
         Path(path, 'preserved').write_text('synthetic contents')
     policy = {'storage_pressure_policy': {'version': 1},
-              'app_volumes': [{'path': media}, {'path': config}],
-              'volume_storage_classes': {media: 'bulk', config: 'state'}}
+              'app_volumes': [{'path': media}, {'path': config}, {'path': legacy}],
+              'volume_storage_classes': {media: 'bulk', config: 'state', legacy: 'state'}}
     atomic_json(shared.desired_state_path(), policy)
     command(['systemctl', 'start', 'reefy-storage-activate.service'], timeout=300)
     registry, status = wait_ready()
@@ -195,6 +206,16 @@ def run():
         verify_tree(path, record['project'])
         assert Path(path, 'preserved').read_text() == 'synthetic contents'
     results['live_policy_activation_preserves_existing_files'] = 'passed'
+    legacy_key, legacy_record = next((key, row) for key, row in registry.data['projects'].items()
+                                    if row['path'] == legacy)
+    assert legacy_record['storage_class'] == 'state'
+    verify_tree(legacy, legacy_record['project'])
+    assert read_quotas(legacy_record['mount'])[legacy_record['project']]['hard'] > 0
+    assert int(command(['blockdev', '--getsize64', lv]).strip()) == size_before
+    assert Path(legacy, 'preserved').read_text() == 'legacy contents'
+    stopped = json.loads(command(['docker', 'inspect', 'synthetic-stopped-legacy']))[0]
+    assert not stopped['State']['Running'], 'activation started a stopped legacy container'
+    results['legacy_cap_removed_existing_lv_preserved_and_governed'] = 'passed'
     if '--legacy-state' in sys.argv:
         control = next(r for r in registry.data['projects'].values()
                        if r['path'] == '/mnt/reefy-data/state')
@@ -212,6 +233,7 @@ def run():
     with reservation('probe-container-create', 4 * LAYER_INITIAL_SIZE):
         command(['docker', 'run', '-d', '--name', 'storage-probe',
                  '-v', media + ':/media', '-v', config + ':/config',
+                 '-v', legacy + ':/scratch',
                  image, 'sleep', '3600'])
     row = json.loads(command(['docker', 'inspect', 'storage-probe']))[0]
     project = FileAttributes().read(os.path.dirname(row['GraphDriver']['Data']['UpperDir']))[3]
@@ -221,7 +243,7 @@ def run():
     # Compare the actual container statfs view with the governed bind mount.
     # BusyBox df associates same-device bind mounts with the first mount name.
     # stat -f performs statfs on the requested path, as Frigate disk_usage does.
-    for host, guest in ((media, '/media'), (config, '/config')):
+    for host, guest in ((media, '/media'), (config, '/config'), (legacy, '/scratch')):
         output = command(['docker', 'exec', 'storage-probe', 'stat', '-f', '-c', '%S %a', guest])
         block, available = map(int, output.split())
         actual = os.statvfs(host)
@@ -230,6 +252,44 @@ def run():
              'echo committed > /config/probe; echo segment > /media/probe'])
     assert Path(config, 'probe').read_text().strip() == 'committed'
     results['docker_native_projects_and_governed_bind_mounts'] = 'passed'
+
+    # Bound only the disposable migrated volume through the actual controller.
+    # A naive writer must fail locally while neighbours continue writing.
+    with state_lock():
+        registry = Registry()
+        record = registry.data['projects'][legacy_key]
+        previous = record.get('max_hard')
+        used = read_quotas(record['mount'])[record['project']]['used']
+        record['max_hard'] = ((used + 4 * 1024**2 + 4095) // 4096) * 4096
+        registry.data['generation'] = registry.data.get('generation', 0) + 1
+        generation = registry.data['generation']
+        registry.save()
+    wait_generation(generation, volume=legacy_key)
+    try:
+        output = command(['docker', 'exec', 'storage-probe', 'sh', '-c',
+            'dd if=/dev/zero of=/scratch/fill bs=1048576 count=8 2>/tmp/fill-error; '
+            'rc=$?; cat /tmp/fill-error; test "$rc" -ne 0'])
+        assert 'quota' in output.lower() or 'space' in output.lower(), output
+        command(['docker', 'exec', 'storage-probe', 'sh', '-c',
+                 'echo alive > /config/after-pressure; echo segment > /media/after-pressure'])
+        assert physical_sample().healthy
+        assert not Path(RUN_DIR, 'hold.json').exists()
+        assert Path(legacy, 'preserved').read_text() == 'legacy contents'
+        results['migrated_legacy_volume_quota_failure_is_isolated'] = 'passed'
+    finally:
+        Path(legacy, 'fill').unlink(missing_ok=True)
+        with state_lock():
+            registry = Registry()
+            record = registry.data['projects'][legacy_key]
+            if previous is None:
+                record.pop('max_hard', None)
+            else:
+                record['max_hard'] = previous
+            registry.data['generation'] = registry.data.get('generation', 0) + 1
+            generation = registry.data['generation']
+            registry.save()
+        wait_generation(generation, volume=legacy_key)
+    command(['docker', 'rm', 'synthetic-stopped-legacy'])
 
     additional = '/mnt/reefy-data/apps/synthetic-new/state'
     policy['app_volumes'].append({'path': additional})
