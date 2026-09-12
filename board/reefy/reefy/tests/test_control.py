@@ -47,6 +47,34 @@ def _load_control_module():
     return module
 
 
+class ConnectionOwnershipTests(unittest.TestCase):
+    def test_network_loop_is_the_only_reconnect_owner(self):
+        control = _load_control_module()
+        instance = object.__new__(control.ControlPlane)
+        instance.client = mock.Mock()
+        instance.client.loop_forever.side_effect = KeyboardInterrupt
+        instance.ca_cert = 'synthetic-ca'
+        instance.client_cert = 'synthetic-cert'
+        instance.client_key = 'synthetic-key'
+        instance.transport = 'tcp'
+        instance.broker = 'broker.example.invalid'
+        instance.port = 8883
+        instance._start_connection_watchdog = mock.Mock()
+        instance._start_control_varlink = mock.Mock()
+        with mock.patch.object(control.threading, 'Thread') as thread, \
+                mock.patch.object(control.subprocess, 'Popen') as process:
+            with self.assertRaises(KeyboardInterrupt):
+                instance.run()
+        instance.client.connect.assert_called_once_with(
+            'broker.example.invalid', 8883, keepalive=30)
+        instance.client.loop_forever.assert_called_once_with(retry_first_connection=True)
+        instance.client.reconnect.assert_not_called()
+        thread.assert_not_called()
+        process.assert_not_called()
+        instance._start_connection_watchdog.assert_called_once()
+        instance._start_control_varlink.assert_called_once()
+
+
 class CompatibilityManifestTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
