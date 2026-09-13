@@ -226,7 +226,7 @@ class Guard:
 
     def pass_once(self, classes):
         self.worker_result()
-        sample = physical_sample(timeout=4)
+        physical_sample(timeout=4)  # Fail before mutations if the pool is unreadable.
         groups, errors = self.inventory(classes)
         # Retired/pending projects can still own files, including open deleted
         # files. Count them until the kernel releases usage, rather than making
@@ -279,6 +279,10 @@ class Guard:
                     active[key] = mountpoint, project
             except Exception as error:
                 errors.append(str(error))
+        # Inventory and ownership checks can be slow. Sample again after them;
+        # an old observation must not authorize more growth.
+        sample = physical_sample(timeout=4)
+        sample_deadline = time.monotonic() + INTERVAL
         desired = targets(sample, usage)
         for key in desired:
             if not groups[key]['roots']:
@@ -291,6 +295,8 @@ class Guard:
             return read_quotas(mountpoint).get(project, {}).get('hard', 0)
 
         def write(key, limit):
+            if current[key] and limit > current[key] and time.monotonic() >= sample_deadline:
+                raise StorageError('physical sample expired before quota increase')
             mountpoint, project = active[key]
             set_quota(mountpoint, project, limit)
 

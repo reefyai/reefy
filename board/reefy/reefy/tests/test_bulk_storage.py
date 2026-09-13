@@ -101,6 +101,22 @@ class OwnershipTests(unittest.TestCase):
         self.assertFalse(valid_root(None))
         self.assertFalse(valid_root('/mnt/reefy-data/apps/../state'))
 
+    def test_pressure_is_resampled_after_inventory(self):
+        events = []
+        def sample(**kwargs):
+            events.append('sample')
+            return pool()
+        def inventory(classes):
+            events.append('inventory')
+            return {}, []
+        with tempfile.TemporaryDirectory() as directory, patch(
+                'reefy.bulk_storage.FileAttributes'), patch(
+                'reefy.bulk_storage.physical_sample', side_effect=sample):
+            guard = Guard(directory, directory)
+            guard.inventory = inventory
+            guard.pass_once({})
+        self.assertEqual(events, ['sample', 'inventory', 'sample'])
+
     def test_sampling_failure_never_changes_quota(self):
         with tempfile.TemporaryDirectory() as directory, patch(
                 'reefy.bulk_storage.FileAttributes'), patch(
