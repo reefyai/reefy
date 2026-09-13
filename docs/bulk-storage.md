@@ -70,3 +70,11 @@ before discard returns thin chunks. Snapshots, filesystem overhead and partial
 chunks also decouple physical usage from file usage. The controller uses real
 pool counters and preserves headroom, but cannot guarantee containment of every
 burst or unrelated writer. Quota-only failure reports degraded coverage.
+
+The standard weekly `fstrim.timer` also reclaims accumulated free extents. Reefy
+overrides `fstrim.service` to use `--all`, including dynamically mounted app
+filesystems absent from `/etc/fstab`. The upstream `--listed-in` fallback stops
+at a nonempty fstab and otherwise misses those volumes. This complements online
+`discard`; it does not run trim in the ten-second guard loop. Trim output reports
+ranges submitted for discard, not actual bytes recovered; only thin-pool counters
+determine new quota allowances.
