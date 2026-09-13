@@ -80,7 +80,7 @@ class FsMountOptsTests(unittest.TestCase):
     def test_xfs_excludes_commit(self):
         with mock.patch.object(storage.subprocess, 'run',
                                self._run_returning('xfs\n')):
-            self.assertEqual(self.s._fs_mount_opts('/dev/x'), 'noatime,discard')
+            self.assertEqual(self.s._fs_mount_opts('/dev/x'), 'noatime,discard,pquota')
 
     def test_ext4_uses_default_opts(self):
         with mock.patch.object(storage.subprocess, 'run',
@@ -1160,7 +1160,7 @@ class MountStateLvTests(unittest.TestCase):
         _, _, final = self._capture(fstype='xfs')
         self.assertTrue(final, 'state LV was not mounted at /mnt/reefy-data/state')
         opts = final[0][final[0].index('-o') + 1]
-        self.assertEqual(opts, 'noatime,discard')
+        self.assertEqual(opts, 'noatime,discard,pquota')
 
     def test_seeds_empty_lv_from_tmpfs_state(self):
         # Fresh LV (tmp empty) + existing tmpfs state dir has content -> copy.

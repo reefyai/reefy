@@ -870,7 +870,7 @@ class Storage:
         existing per-app LVs are ext4."""
         fstype = self._fs_type(dev)
         if fstype == 'xfs':
-            return 'noatime,discard'
+            return 'noatime,discard,pquota'
         return self.REEFY_DATA_MOUNT_OPTS
 
     def _repair_owned_xfs_volume(self, path, lv_name, lv_path):
