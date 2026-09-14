@@ -188,7 +188,7 @@ setup_data_partition() {
                         # both layouts mount correctly across an upgrade.
                         LV_FS=$(blkid -o value -s TYPE "${lv_path}" 2>/dev/null)
                         if [ "${LV_FS}" = "xfs" ]; then
-                            LV_OPTS="noatime,discard"
+                            LV_OPTS="noatime,discard,pquota"
                             if mount_primary_xfs "${lv_path}" \
                                     "${REEFY_DATA_MNT}" "${LV_OPTS}"; then
                                 echo "[reefy] Mounted LVM LV ${lv} (${LV_FS}) at ${REEFY_DATA_MNT}"
@@ -438,7 +438,7 @@ setup_internal_storage() {
     mkdir -p "${REEFY_DATA_MNT}"
     LV_FS=$(blkid -o value -s TYPE "${lv_path}" 2>/dev/null)
     if [ "${LV_FS}" = "xfs" ]; then
-        INTERNAL_OPTS="noatime,discard"
+        INTERNAL_OPTS="noatime,discard,pquota"
         mount_primary_xfs "${lv_path}" "${REEFY_DATA_MNT}" \
             "${INTERNAL_OPTS}" || {
             echo "[reefy] WARNING: Internal drive mount failed"

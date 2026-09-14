@@ -343,3 +343,10 @@ validation reports are welcome.
   <a href="https://reefy.ai">Get started</a> ·
   <a href="https://reefy.ai/docs">Read the documentation</a>
 </p>
+
+## Bulk storage protection
+
+Volumes declared `bulk` share a bounded storage allowance, adjusted from real
+thin-pool free space. Config and database volumes default to `state`; this first
+implementation adds no state or Docker quotas. Setup and repair run in the
+background without restarting Docker. See [bulk storage details](docs/bulk-storage.md).

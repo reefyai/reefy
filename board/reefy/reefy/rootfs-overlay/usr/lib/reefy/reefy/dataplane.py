@@ -3830,55 +3830,56 @@ Environment=MQTT_PORT={self.port}
                         parts[2] == 'apps':
                     strip_n = 4
 
-                cmd = ['borg', '--log-json', 'extract', '--progress']
-                if strip_n:
-                    cmd += ['--strip-components', str(strip_n)]
-                cmd.append(f'{repo_path}::{archive_name}')
-                EXTRACT_TIMEOUT = 6 * 3600  # 6h cap for huge archives
-                extract_proc = subprocess.Popen(
-                    cmd, env=env, cwd=new_inst_dir,
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE
-                )
+                from reefy.bulk_ownership import restore_scope
+                with restore_scope(new_inst_dir):
+                    cmd = ['borg', '--log-json', 'extract', '--progress']
+                    if strip_n:
+                        cmd += ['--strip-components', str(strip_n)]
+                    cmd.append(f'{repo_path}::{archive_name}')
+                    EXTRACT_TIMEOUT = 6 * 3600  # 6h cap for huge archives
+                    extract_proc = subprocess.Popen(
+                        cmd, env=env, cwd=new_inst_dir,
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                    )
 
-                # Stream borg's --log-json stderr through to our log.
-                # Pass everything except in-flight progress_percent
-                # frames, which can fire many times per second on big
-                # archives - throttle those to one every PROGRESS_EVERY_S.
-                # log_message lines (warnings, errors) and the final
-                # `finished: true` always pass through.
-                PROGRESS_EVERY_S = 5.0
-                last_progress_t = 0.0
-                deadline = time.time() + EXTRACT_TIMEOUT
-                for raw in iter(extract_proc.stderr.readline, b''):
-                    if time.time() > deadline:
-                        extract_proc.kill()
-                        break
-                    line = raw.decode('utf-8', errors='replace').rstrip()
-                    if not line:
-                        continue
-                    try:
-                        obj = json.loads(line)
-                    except ValueError:
-                        log('mqtt', f'borg: {line}')
-                        continue
-                    if obj.get('type') == 'progress_percent' \
-                            and not obj.get('finished'):
-                        now = time.time()
-                        if now - last_progress_t < PROGRESS_EVERY_S:
+                    # Stream borg's --log-json stderr through to our log.
+                    # Pass everything except in-flight progress_percent
+                    # frames, which can fire many times per second on big
+                    # archives - throttle those to one every PROGRESS_EVERY_S.
+                    # log_message lines (warnings, errors) and the final
+                    # `finished: true` always pass through.
+                    PROGRESS_EVERY_S = 5.0
+                    last_progress_t = 0.0
+                    deadline = time.time() + EXTRACT_TIMEOUT
+                    for raw in iter(extract_proc.stderr.readline, b''):
+                        if time.time() > deadline:
+                            extract_proc.kill()
+                            break
+                        line = raw.decode('utf-8', errors='replace').rstrip()
+                        if not line:
                             continue
-                        last_progress_t = now
-                    log('mqtt', f'borg: {line}')
+                        try:
+                            obj = json.loads(line)
+                        except ValueError:
+                            log('mqtt', f'borg: {line}')
+                            continue
+                        if obj.get('type') == 'progress_percent' \
+                                and not obj.get('finished'):
+                            now = time.time()
+                            if now - last_progress_t < PROGRESS_EVERY_S:
+                                continue
+                            last_progress_t = now
+                        log('mqtt', f'borg: {line}')
 
-                extract_proc.wait()
-                if extract_proc.returncode != 0:
-                    log('mqtt',
-                        f'borg extract failed (rc={extract_proc.returncode})')
-                    self._publish_restore_status(
-                        iuuid, 'error', archive_name,
-                        error=f'borg extract rc={extract_proc.returncode}')
-                    failed.add(iuuid)
-                    continue
-                log('mqtt', f'borg extract completed for {iuuid}')
+                    extract_proc.wait()
+                    if extract_proc.returncode != 0:
+                        log('mqtt',
+                            f'borg extract failed (rc={extract_proc.returncode})')
+                        self._publish_restore_status(
+                            iuuid, 'error', archive_name,
+                            error=f'borg extract rc={extract_proc.returncode}')
+                        raise RuntimeError(f'borg extract rc={extract_proc.returncode}')
+                    log('mqtt', f'borg extract completed for {iuuid}')
 
             except Exception as e:
                 log('mqtt', f'Restore error: {e}')
