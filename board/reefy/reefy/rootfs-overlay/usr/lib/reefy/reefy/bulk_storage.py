@@ -164,6 +164,9 @@ def repair(roots, project, filesystem, connection):
             for root, fd in descriptors.items():
                 if project:
                     ownership.complete(fd, root, filesystem, project)
+                else:
+                    # Persist removal before the parent retires its mapping.
+                    ownership.sync_filesystem(fd)
             if relevant_mounts(roots) != mounts or any(
                     fingerprint(root) != value for root, value in identity.items()):
                 for fd in descriptors.values():
