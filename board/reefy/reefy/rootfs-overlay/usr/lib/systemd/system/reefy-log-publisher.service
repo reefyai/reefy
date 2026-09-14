@@ -6,7 +6,7 @@ Wants=reefy-control.service
 [Service]
 Type=simple
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/bin/reefy-log-publisher --units reefy-control,reefy-reconciler
+ExecStart=/usr/bin/reefy-log-publisher --units reefy-control,reefy-reconciler,reefy-storage-guard
 Restart=always
 RestartSec=10
 

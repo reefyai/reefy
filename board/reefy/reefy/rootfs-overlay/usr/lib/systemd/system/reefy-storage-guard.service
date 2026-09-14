@@ -1,0 +1,24 @@
+[Unit]
+Description=Reefy bulk storage protection
+After=reefy-storage.service reefy-app-volumes.service
+Wants=reefy-storage.service
+# No Docker dependency, app startup gate, or quota-driven remount.
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/reefy-storage-guard
+Restart=always
+RestartSec=10
+TimeoutStopSec=5
+KillMode=control-group
+CPUWeight=10
+IOWeight=10
+Nice=10
+Environment=PYTHONUNBUFFERED=1
+Environment=LC_ALL=C
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=reefy-storage-guard
+
+[Install]
+WantedBy=multi-user.target

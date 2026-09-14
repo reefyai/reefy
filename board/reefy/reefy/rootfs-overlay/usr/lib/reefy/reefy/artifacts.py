@@ -533,8 +533,13 @@ class ArtifactManager:
     def activate_cached_state(self, state_path):
         state = _read_json(state_path)
         results = []
+        attempted = set()
         for app in state.get('apps') or []:
             for artifact in app.get('artifacts') or []:
+                key = (artifact['ref'], artifact.get('kind') or 'app')
+                if key in attempted:
+                    continue
+                attempted.add(key)
                 try:
                     results.append(self.prepare(
                         artifact['ref'], artifact.get('kind') or 'app',

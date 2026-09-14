@@ -6,7 +6,8 @@
         2
       ],
       "features": {
-        "app_run_state": 1
+        "app_run_state": 1,
+        "bulk_storage_quotas": 1
       }
     },
     "commands": {

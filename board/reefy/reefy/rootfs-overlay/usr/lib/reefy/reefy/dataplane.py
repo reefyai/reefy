@@ -27,7 +27,7 @@ import tempfile
 import threading
 import time
 import uuid as uuid_mod
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from io import BytesIO
 
 from reefy import shared
@@ -198,6 +198,27 @@ def _wait_for_requested_devices(
         sleep(min(interval, remaining))
 
 
+class _SharedPreparation:
+    """Share work, including failures, only for the lifetime of one apply."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._results = {}
+
+    def run(self, key, prepare):
+        with self._lock:
+            future = self._results.get(key)
+            owner = future is None
+            if owner:
+                future = self._results[key] = Future()
+        if owner:
+            try:
+                future.set_result(prepare())
+            except BaseException as exception:
+                future.set_exception(exception)
+        return future.result()
+
+
 def _desired_state_log_summary(state):
     """Return a value-free structural summary for desired-state logging."""
     state = state if isinstance(state, dict) else {}
@@ -273,6 +294,7 @@ class DataPlane:
         self._project_targets_lock = threading.Lock()
         self._project_targets = {}
         self._app_reconcile_local = threading.local()
+        self._preparation_local = threading.local()
         self._health_operation_local = threading.local()
         self._artifact_retry_lock = threading.Lock()
         self._artifact_retry_timer = None
@@ -327,8 +349,6 @@ class DataPlane:
     def _submit_apply_job(
             self, kind, state=None, force_retry=None, wait_for_idle=False):
         """Persist and enqueue one apply, replacing only the pending job."""
-        if kind == 'apply':
-            self._set_project_targets(state)
         request_id = str(uuid_mod.uuid4())
         job = {
             'request_id': request_id,
@@ -341,12 +361,26 @@ class DataPlane:
                    and (self._running_job is not None
                         or self._pending_job is not None)):
                 self._job_condition.wait()
+            # Only reuse the newest queued intent. If a different state is
+            # pending, the running job may already have cancelled app work;
+            # a request reverting to that state must enqueue a fresh apply.
+            newest = self._pending_job or self._running_job
+            if (kind == 'apply' and newest is not None
+                    and newest['kind'] == kind
+                    and newest['state'] == state
+                    and newest.get('force_retry') == force_retry
+                    and self._apply_results.get(newest['request_id'])['status']
+                    not in TERMINAL_STATUSES):
+                return {'ok': True, 'request_id': newest['request_id'],
+                        'error': ''}
             if not self._apply_results.create(request_id, kind):
                 return {
                     'ok': False,
                     'request_id': '',
                     'error': 'cannot persist apply request',
                 }
+            if kind == 'apply':
+                self._set_project_targets(state)
             if self._running_job is None:
                 self._running_job = job
                 try:
@@ -1203,6 +1237,7 @@ class DataPlane:
         ]
 
         apps = list(state.get('apps') or [])
+        preparation = _SharedPreparation()
         prepared_apps = {}
         if migration:
             # Migration is a two-phase handoff. Pull every required image
@@ -1229,10 +1264,12 @@ class DataPlane:
                                 and force_retry.get('project_name')
                                 == app.get('project_name')):
                             future = pool.submit(
+                                self._in_preparation_pass, preparation,
                                 self._prepare_v2_app, app, restore_failed,
                                 force_retry=force_retry)
                         else:
                             future = pool.submit(
+                                self._in_preparation_pass, preparation,
                                 self._prepare_v2_app, app, restore_failed)
                         futures[future] = app
                     for future in as_completed(futures):
@@ -1307,6 +1344,7 @@ class DataPlane:
             with ThreadPoolExecutor(max_workers=len(apps)) as pool:
                 futures = {
                     pool.submit(
+                        self._in_preparation_pass, preparation,
                         self._reconcile_v2_app, app, migration,
                         app.get('instance_uuid') in failed_restores,
                         prepared_apps.get(
@@ -1510,6 +1548,29 @@ class DataPlane:
             if timer is not None:
                 timer.cancel()
 
+    def _in_preparation_pass(self, preparation, action, *args, **kwargs):
+        previous = getattr(self._preparation_local, 'value', None)
+        self._preparation_local.value = preparation
+        try:
+            return action(*args, **kwargs)
+        finally:
+            self._preparation_local.value = previous
+
+    def _settle_provider_devices(self, app, compose, missing):
+        preparation = getattr(self._preparation_local, 'value', None)
+        if preparation is None:
+            return _wait_for_requested_devices(compose)
+        # There is no provider-to-device applicability contract. Share waits
+        # only for identical artifact dependencies and missing resources.
+        providers = tuple(sorted({
+            (item.get('ref') or '', item.get('kind') or 'app')
+            for item in app.get('artifacts') or []}))
+        preparation.run(
+            ('devices', providers, tuple(missing)),
+            lambda: _wait_for_requested_devices(compose))
+        # Read again: devices can appear while another app uses the result.
+        return _missing_requested_devices(compose)
+
     def _prepare_v2_app(self, app, restore_failed, force_retry=None):
         with self._app_reconcile_context(app):
             return self._prepare_v2_app_inner(
@@ -1552,7 +1613,8 @@ class DataPlane:
                 log('reconciler',
                     f'{project_name}: waiting for provider devices: '
                     + ', '.join(initially_missing))
-                still_missing = _wait_for_requested_devices(compose)
+                still_missing = self._settle_provider_devices(
+                    app, compose, initially_missing)
                 if still_missing:
                     log('reconciler',
                         f'{project_name}: provider device settle timed out: '
@@ -1667,14 +1729,16 @@ class DataPlane:
             return True
         self._publish_health_status(
             app.get('instance_uuid') or '', 'starting', phase='artifact')
+        preparation = getattr(self._preparation_local, 'value', None)
         with ThreadPoolExecutor(max_workers=min(2, len(artifacts))) as pool:
             futures = [
-                pool.submit(self._prepare_one_app_artifact, app, artifact)
+                pool.submit(self._prepare_one_app_artifact, app, artifact,
+                            preparation=preparation)
                 for artifact in artifacts
             ]
             return all([future.result() for future in futures])
 
-    def _prepare_one_app_artifact(self, app, artifact):
+    def _prepare_one_app_artifact(self, app, artifact, preparation=None):
         ref = artifact.get('ref') or ''
         required = artifact.get('required', True) is not False
         name = artifact.get('name') or artifact.get('id') or 'artifact'
@@ -1683,10 +1747,20 @@ class DataPlane:
         if not ref:
             log('reconciler', f'{prefix}: missing artifact reference')
             return not required
+        kind = artifact.get('kind') or 'app'
+        prepare = lambda: self._run_artifact_prepare(ref, kind, prefix)
+        ok = (preparation.run(('artifact', ref, kind), prepare)
+              if preparation is not None else prepare())
+        if not ok:
+            log('reconciler', f'{prefix}: artifact unavailable for this apply')
+        return ok or not required
+
+    @staticmethod
+    def _run_artifact_prepare(ref, kind, prefix):
         try:
             result = subprocess.run(
                 ['reefy-artifacts', 'prepare', '--ref', ref,
-                 '--kind', artifact.get('kind') or 'app'],
+                 '--kind', kind],
                 capture_output=True, text=True, timeout=3600)
         except (OSError, subprocess.TimeoutExpired) as exception:
             log('reconciler',
@@ -1698,7 +1772,7 @@ class DataPlane:
                 if output:
                     for line in str(output).splitlines():
                         log('reconciler', f'{prefix}: {line}')
-            return not required
+            return False
         for stream_name, output in (
                 ('stdout', result.stdout), ('stderr', result.stderr)):
             for line in (output or '').splitlines():
@@ -1707,7 +1781,7 @@ class DataPlane:
             log('reconciler',
                 f'{prefix}: artifact prepare failed '
                 f'(exit {result.returncode})')
-            return not required
+            return False
         return True
 
     @staticmethod
@@ -3830,55 +3904,56 @@ Environment=MQTT_PORT={self.port}
                         parts[2] == 'apps':
                     strip_n = 4
 
-                cmd = ['borg', '--log-json', 'extract', '--progress']
-                if strip_n:
-                    cmd += ['--strip-components', str(strip_n)]
-                cmd.append(f'{repo_path}::{archive_name}')
-                EXTRACT_TIMEOUT = 6 * 3600  # 6h cap for huge archives
-                extract_proc = subprocess.Popen(
-                    cmd, env=env, cwd=new_inst_dir,
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE
-                )
+                from reefy.bulk_ownership import restore_scope
+                with restore_scope(new_inst_dir):
+                    cmd = ['borg', '--log-json', 'extract', '--progress']
+                    if strip_n:
+                        cmd += ['--strip-components', str(strip_n)]
+                    cmd.append(f'{repo_path}::{archive_name}')
+                    EXTRACT_TIMEOUT = 6 * 3600  # 6h cap for huge archives
+                    extract_proc = subprocess.Popen(
+                        cmd, env=env, cwd=new_inst_dir,
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                    )
 
-                # Stream borg's --log-json stderr through to our log.
-                # Pass everything except in-flight progress_percent
-                # frames, which can fire many times per second on big
-                # archives - throttle those to one every PROGRESS_EVERY_S.
-                # log_message lines (warnings, errors) and the final
-                # `finished: true` always pass through.
-                PROGRESS_EVERY_S = 5.0
-                last_progress_t = 0.0
-                deadline = time.time() + EXTRACT_TIMEOUT
-                for raw in iter(extract_proc.stderr.readline, b''):
-                    if time.time() > deadline:
-                        extract_proc.kill()
-                        break
-                    line = raw.decode('utf-8', errors='replace').rstrip()
-                    if not line:
-                        continue
-                    try:
-                        obj = json.loads(line)
-                    except ValueError:
-                        log('mqtt', f'borg: {line}')
-                        continue
-                    if obj.get('type') == 'progress_percent' \
-                            and not obj.get('finished'):
-                        now = time.time()
-                        if now - last_progress_t < PROGRESS_EVERY_S:
+                    # Stream borg's --log-json stderr through to our log.
+                    # Pass everything except in-flight progress_percent
+                    # frames, which can fire many times per second on big
+                    # archives - throttle those to one every PROGRESS_EVERY_S.
+                    # log_message lines (warnings, errors) and the final
+                    # `finished: true` always pass through.
+                    PROGRESS_EVERY_S = 5.0
+                    last_progress_t = 0.0
+                    deadline = time.time() + EXTRACT_TIMEOUT
+                    for raw in iter(extract_proc.stderr.readline, b''):
+                        if time.time() > deadline:
+                            extract_proc.kill()
+                            break
+                        line = raw.decode('utf-8', errors='replace').rstrip()
+                        if not line:
                             continue
-                        last_progress_t = now
-                    log('mqtt', f'borg: {line}')
+                        try:
+                            obj = json.loads(line)
+                        except ValueError:
+                            log('mqtt', f'borg: {line}')
+                            continue
+                        if obj.get('type') == 'progress_percent' \
+                                and not obj.get('finished'):
+                            now = time.time()
+                            if now - last_progress_t < PROGRESS_EVERY_S:
+                                continue
+                            last_progress_t = now
+                        log('mqtt', f'borg: {line}')
 
-                extract_proc.wait()
-                if extract_proc.returncode != 0:
-                    log('mqtt',
-                        f'borg extract failed (rc={extract_proc.returncode})')
-                    self._publish_restore_status(
-                        iuuid, 'error', archive_name,
-                        error=f'borg extract rc={extract_proc.returncode}')
-                    failed.add(iuuid)
-                    continue
-                log('mqtt', f'borg extract completed for {iuuid}')
+                    extract_proc.wait()
+                    if extract_proc.returncode != 0:
+                        log('mqtt',
+                            f'borg extract failed (rc={extract_proc.returncode})')
+                        self._publish_restore_status(
+                            iuuid, 'error', archive_name,
+                            error=f'borg extract rc={extract_proc.returncode}')
+                        raise RuntimeError(f'borg extract rc={extract_proc.returncode}')
+                    log('mqtt', f'borg extract completed for {iuuid}')
 
             except Exception as e:
                 log('mqtt', f'Restore error: {e}')
