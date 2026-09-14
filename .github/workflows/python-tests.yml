@@ -46,3 +46,8 @@ jobs:
 
       - name: unit tests
         run: python -m unittest discover -s board/reefy/reefy/tests -v
+
+      - name: Artifact and startup concurrency regressions
+        run: |
+          pip install pytest
+          python -m pytest -q board/reefy/reefy/tests/test_artifacts.py board/reefy/reefy/tests/test_startup_readiness.py
