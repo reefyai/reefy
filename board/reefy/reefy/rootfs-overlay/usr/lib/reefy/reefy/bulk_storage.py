@@ -1,5 +1,6 @@
 """Best-effort bulk quota reconciliation, independent of Docker and MQTT."""
 import hashlib
+import contextlib
 import json
 import multiprocessing
 import os
@@ -9,7 +10,8 @@ import stat
 import time
 
 from reefy import shared
-from reefy.bulk_policy import INTERVAL, StorageError, apply_targets, headroom, targets
+from reefy import bulk_ownership as ownership
+from reefy.bulk_policy import INTERVAL, SAMPLE_MAX_AGE, StorageError, apply_targets, headroom, targets
 from reefy.bulk_xfs import (
     FileAttributes, PROJINHERIT, RUN_DIR, STATE_DIR, atomic_json, command,
     mount_info, physical_sample, read_quotas, require_enforcement, set_quota,
@@ -17,7 +19,6 @@ from reefy.bulk_xfs import (
 )
 
 APP_ROOT = '/mnt/reefy-data/apps'
-REPAIR_INTERVAL = 6 * 3600
 REPAIR_TIMEOUT = 1800
 PROJECT_BASE = 0x50000000
 
@@ -86,47 +87,93 @@ def walk(root, excluded):
             entries.close()
 
 
-def repair(roots, project, connection):
+def relevant_mounts(roots):
+    """Track backing/ancestor and nested mount identities, not unrelated Docker."""
+    result = set()
+    with open('/proc/self/mountinfo') as stream:
+        for row in stream:
+            fields = row.split()
+            path = re.sub(r'\\([0-7]{3})', lambda m: chr(int(m[1], 8)), fields[4])
+            if any(path == root or root.startswith(path.rstrip('/') + '/')
+                   or path.startswith(root.rstrip('/') + '/') for root in roots):
+                # Mount ID, parent, device, filesystem root and target detect
+                # replacement/binds even when path and st_dev remain unchanged.
+                result.add(tuple(fields[:5]))
+    return result
+
+
+def repair(roots, project, filesystem, connection):
     """Worker process: slow walks never hold up physical-space observations."""
+    phase = 'preflight'
+    started = time.monotonic()
+    examined = changed = 0
     try:
         attributes = FileAttributes()
-        excluded = nested_mounts()
-        identity = {root: fingerprint(root) for root in roots}
-        links = {}
-        for root in roots:
-            for path, info in walk(root, excluded):
-                if not stat.S_ISDIR(info.st_mode) and info.st_nlink > 1:
-                    key = info.st_dev, info.st_ino
-                    seen, expected = links.get(key, (0, info.st_nlink))
-                    links[key] = seen + 1, expected
-        if any(seen != expected for seen, expected in links.values()):
-            raise StorageError('hardlink crosses bulk ownership boundary')
-        for verifying in (False, True):
-            count = 0
+        with ownership.ownership_locks(roots), contextlib.ExitStack() as stack:
+            descriptors = {root: stack.enter_context(ownership.root_fd(root)) for root in roots}
+            excluded = nested_mounts()
+            mounts = relevant_mounts(roots)
+            identity = {root: fingerprint(root) for root in roots}
+            for root, fd in descriptors.items():
+                ownership.require_not_restoring(root)
+                if [os.fstat(fd).st_dev, os.fstat(fd).st_ino] != identity[root]:
+                    raise StorageError('bulk directory changed before repair')
+                # Prove marker writes work before paying for a recursive walk.
+                # An interrupted preflight leaves an invalid checkpoint.
+                os.setxattr(fd, ownership.VERIFIED, b'pending')
+                ownership.invalidate(fd)
+            links = {}
+            phase = 'hardlinks'
             for root in roots:
                 for path, info in walk(root, excluded):
-                    try:
-                        directory = stat.S_ISDIR(info.st_mode)
-                        if verifying:
-                            values = attributes.read(path)
-                            if (values[3] != project or (directory and
-                                    bool(values[0] & PROJINHERIT) != bool(project))):
-                                raise StorageError('bulk ownership needs another repair pass')
-                        else:
-                            attributes.assign(path, project, directory)
-                        count += 1
-                        if count % 4096 == 0:
-                            shared.log('bulk-storage', f'Background ownership pass: {count} inodes')
-                            time.sleep(0.01)
-                    except FileNotFoundError:
-                        continue
-            if nested_mounts() != excluded:
-                raise StorageError('mount inventory changed during bulk repair')
-        if any(fingerprint(root) != value for root, value in identity.items()):
-            raise StorageError('bulk directory changed during repair')
+                    if not stat.S_ISDIR(info.st_mode) and info.st_nlink > 1:
+                        key = info.st_dev, info.st_ino
+                        seen, expected = links.get(key, (0, info.st_nlink))
+                        links[key] = seen + 1, expected
+            if any(seen != expected for seen, expected in links.values()):
+                raise StorageError('hardlink crosses bulk ownership boundary')
+            last_progress = time.monotonic()
+            for verifying in (False, True):
+                phase = 'verify' if verifying else 'assign'
+                count = 0
+                for root in roots:
+                    for path, info in walk(root, excluded):
+                        try:
+                            directory = stat.S_ISDIR(info.st_mode)
+                            if verifying:
+                                values = attributes.read(path)
+                                if (values[3] != project or (directory and
+                                        bool(values[0] & PROJINHERIT) != bool(project))):
+                                    raise StorageError('bulk ownership needs another repair pass')
+                            else:
+                                changed += bool(attributes.assign(path, project, directory))
+                            count += 1
+                            examined += 1
+                            if count % 4096 == 0:
+                                if time.monotonic() - last_progress >= 10:
+                                    shared.log('bulk-storage', f'Ownership {phase}: {count} inodes')
+                                    last_progress = time.monotonic()
+                                time.sleep(0.01)
+                        except FileNotFoundError:
+                            continue
+                if relevant_mounts(roots) != mounts:
+                    raise StorageError('bulk mount changed during ownership repair')
+            if any(fingerprint(root) != value for root, value in identity.items()):
+                raise StorageError('bulk directory changed during repair')
+            phase = 'checkpoint'
+            for root, fd in descriptors.items():
+                if project:
+                    ownership.complete(fd, root, filesystem, project)
+            if relevant_mounts(roots) != mounts or any(
+                    fingerprint(root) != value for root, value in identity.items()):
+                for fd in descriptors.values():
+                    ownership.invalidate(fd)
+                raise StorageError('bulk boundary changed while saving checkpoint')
+        shared.log('bulk-storage', f'Ownership repair completed: examined={examined} '
+                   f'changed={changed} elapsed={time.monotonic() - started:.3f}s')
         connection.send({'ok': True, 'identity': identity})
     except Exception as error:
-        connection.send({'ok': False, 'error': str(error)})
+        connection.send({'ok': False, 'error': str(error), 'phase': phase})
     finally:
         connection.close()
 
@@ -142,7 +189,7 @@ class Guard:
         except FileNotFoundError:
             self.registry = {'version': 1, 'filesystems': {}}
         self.worker = None
-        self.last_audit = {}
+        self.repair_errors = {}
         self.retry_after = {}
         self.last_status = None
         self.attributes = FileAttributes()
@@ -176,18 +223,22 @@ class Guard:
                     record['roots'][root] = result['identity'][root]
                 else:
                     record['roots'].pop(root, None)
-            self.last_audit[key] = time.monotonic()
+            self.repair_errors.pop(key, None)
             self.save()
         else:
-            self.retry_after[key] = time.monotonic() + 60
-            shared.log('bulk-storage', 'Ownership repair incomplete; retaining existing quotas')
+            delay = 300 if result.get('phase') in ('preflight', 'checkpoint') else 60
+            self.retry_after[key] = time.monotonic() + delay
+            error = result.get('error', 'ownership worker exited without a result')
+            self.repair_errors[key] = error
+            shared.log('bulk-storage', f'Ownership repair incomplete: {error}; '
+                       f'retaining existing quotas, retry in {delay}s')
 
     def start_repair(self, key, roots, project):
         if self.worker or time.monotonic() < self.retry_after.get(key, 0):
             return
         context = multiprocessing.get_context('fork')
         receive, send = context.Pipe(duplex=False)
-        process = context.Process(target=repair, args=(roots, project, send))
+        process = context.Process(target=repair, args=(roots, project, key, send))
         process.start()
         send.close()
         self.worker = process, receive, key, roots, project, time.monotonic()
@@ -262,13 +313,20 @@ class Guard:
                 ready = True
                 for root in group['roots']:
                     values = self.attributes.read(root)
-                    if (record['roots'].get(root) != fingerprint(root)
+                    ownership.require_not_restoring(root)
+                    if (not ownership.verified(root, key, project)
                             or values[3] != project or not values[0] & PROJINHERIT):
                         ready = False
-                audit_due = time.monotonic() - self.last_audit.get(key, -REPAIR_INTERVAL) >= REPAIR_INTERVAL
-                if group['roots'] and (not ready or audit_due):
+                    elif root not in record['roots']:
+                        # The marker can commit before worker_result persists
+                        # its mapping. Recover that crash window without a scan.
+                        record['roots'][root] = fingerprint(root)
+                        self.save()
+                if group['roots'] and not ready:
                     self.start_repair(key, group['roots'], project)
                     errors.append('bulk ownership verification pending')
+                    if key in self.repair_errors:
+                        errors.append(self.repair_errors[key])
                 quota = quotas.get(project, {'used': 0, 'hard': 0})
                 if not group['roots'] and not quota['used']:
                     if quota['hard'] != 4096:
@@ -282,7 +340,7 @@ class Guard:
         # Inventory and ownership checks can be slow. Sample again after them;
         # an old observation must not authorize more growth.
         sample = physical_sample(timeout=4)
-        sample_deadline = time.monotonic() + INTERVAL
+        sample_deadline = time.monotonic() + SAMPLE_MAX_AGE
         desired = targets(sample, usage)
         for key in desired:
             if not groups[key]['roots']:
@@ -324,6 +382,7 @@ class Guard:
 
     def run(self):
         while True:
+            started = time.monotonic()
             try:
                 self.worker_result()
                 state, _ = shared.load_desired_state()
@@ -337,7 +396,8 @@ class Guard:
                 status = {'scope': 'bulk-only', 'stage': 'degraded', 'errors': [str(error)]}
             status['updated_at'] = time.time()
             self.publish(status)
-            time.sleep(INTERVAL)
+            # No overlapping passes or accumulated catch-up work.
+            time.sleep(max(1, INTERVAL - (time.monotonic() - started)))
 
 
 def main():

@@ -3,7 +3,8 @@ from dataclasses import dataclass
 
 GB = 1_000_000_000
 QUANTUM = 4096
-INTERVAL = 10
+INTERVAL = 60
+SAMPLE_MAX_AGE = 10
 
 
 class StorageError(RuntimeError):
