@@ -5,6 +5,9 @@ fs-type-aware snapshot mount plus bounded remote-repository readiness and
 best-effort post-archive maintenance."""
 
 import importlib.util
+import json
+import tempfile
+from pathlib import Path
 import os
 import types
 import unittest
@@ -21,7 +24,17 @@ reefy_backup = importlib.util.module_from_spec(_spec)
 _loader.exec_module(reefy_backup)
 
 
-class SnapshotMountOptsTests(unittest.TestCase):
+class SnapshotFixture(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.pending = Path(directory.name) / 'pending.json'
+        patch = mock.patch.object(reefy_backup, 'PENDING_SNAPSHOT_FILE', str(self.pending))
+        patch.start()
+        self.addCleanup(patch.stop)
+
+
+class SnapshotMountOptsTests(SnapshotFixture):
     def _mount_opts_for(self, fstype):
         """Run snapshot_volume with lvcreate/blkid/mount mocked; return the
         mount option string that would be used for a snapshot of `fstype`."""
@@ -29,6 +42,8 @@ class SnapshotMountOptsTests(unittest.TestCase):
 
         def fake_run(cmd, **kw):
             calls.append(cmd)
+            if cmd[:2] == ['dmsetup', 'info']:
+                return types.SimpleNamespace(returncode=0, stdout='L--w', stderr='')
             if cmd and cmd[0] == 'blkid':
                 return types.SimpleNamespace(returncode=0, stdout=fstype + '\n', stderr='')
             return types.SimpleNamespace(returncode=0, stdout='', stderr='')
@@ -62,6 +77,193 @@ class SnapshotMountOptsTests(unittest.TestCase):
         path = '/mnt/reefy-data/apps/i1/config'
         self.assertEqual(reefy_backup.volume_lv_name(path),
                          Storage()._volume_lv_name(path))
+
+
+class SnapshotFailureRecoveryTests(SnapshotFixture):
+    def setUp(self):
+        super().setUp()
+        self.path = '/synthetic/app/config'
+        self.origin = f'/dev/reefy/{reefy_backup.volume_lv_name(self.path)}'
+        self.suspended = False
+        self.suspend_on_create = True
+        self.resume_fails = False
+        self.resume_leaves_suspended = False
+        self.create_error = reefy_backup.subprocess.TimeoutExpired(
+            cmd=['lvcreate', '--snapshot'], timeout=300)
+        self.commands = []
+
+    def run_command(self, cmd, **kwargs):
+        self.commands.append(cmd)
+        if cmd[:2] == ['dmsetup', 'info']:
+            return types.SimpleNamespace(
+                returncode=0, stdout='L-sw' if self.suspended else 'L--w',
+                stderr='')
+        if cmd[:2] == ['dmsetup', 'resume']:
+            self.assertEqual(cmd[-1], self.origin)
+            if not self.resume_fails and not self.resume_leaves_suspended:
+                self.suspended = False
+            return types.SimpleNamespace(
+                returncode=1 if self.resume_fails else 0,
+                stdout='', stderr='synthetic resume failure')
+        if cmd[0] == 'lvcreate':
+            self.assertEqual(kwargs['timeout'], 300)
+            self.assertEqual(json.loads(self.pending.read_text())['lv_path'], self.origin)
+            self.suspended = self.suspend_on_create
+            if self.create_error:
+                raise self.create_error
+            return types.SimpleNamespace(
+                returncode=5, stdout='', stderr='synthetic lvcreate failure')
+        self.fail(f'unexpected command: {cmd}')
+
+    def snapshot(self):
+        return reefy_backup.snapshot_volume(self.path, 'synthetic', 1234567890)
+
+    def release(self, *args):
+        self.assertFalse(self.suspended, 'resume origin before orphan cleanup')
+        return True
+
+    def test_timeout_resumes_origin_before_cleanup_and_preserves_error(self):
+        with mock.patch.object(reefy_backup.subprocess, 'run',
+                               side_effect=self.run_command), \
+                mock.patch.object(reefy_backup.os.path, 'exists', return_value=True), \
+                mock.patch.object(reefy_backup, 'release_snapshot',
+                                  side_effect=self.release) as release:
+            with self.assertRaisesRegex(RuntimeError, 'timed out after 300s; app volume active') as error:
+                self.snapshot()
+        self.assertIs(error.exception.__cause__, self.create_error)
+        self.assertFalse(self.pending.exists())
+        self.assertFalse(self.suspended)
+        release.assert_called_once()
+
+    def test_nonzero_exit_also_resumes_origin(self):
+        self.create_error = None
+        with mock.patch.object(reefy_backup.subprocess, 'run',
+                               side_effect=self.run_command), \
+                mock.patch.object(reefy_backup.os.path, 'exists', return_value=True), \
+                mock.patch.object(reefy_backup, 'release_snapshot',
+                                  side_effect=self.release):
+            with self.assertRaisesRegex(RuntimeError, 'synthetic lvcreate failure'):
+                self.snapshot()
+        self.assertFalse(self.suspended)
+
+    def test_active_origin_is_not_resumed_after_failure(self):
+        self.suspend_on_create = False
+        with mock.patch.object(reefy_backup.subprocess, 'run',
+                               side_effect=self.run_command), \
+                mock.patch.object(reefy_backup.os.path, 'exists', return_value=True), \
+                mock.patch.object(reefy_backup, 'release_snapshot', return_value=True):
+            with self.assertRaisesRegex(RuntimeError, 'timed out after 300s; app volume active'):
+                self.snapshot()
+        self.assertFalse(any(cmd[:2] == ['dmsetup', 'resume']
+                             for cmd in self.commands))
+
+    def test_preexisting_suspension_is_not_owned_by_this_snapshot(self):
+        self.suspended = True
+        with mock.patch.object(reefy_backup.subprocess, 'run',
+                               side_effect=self.run_command), \
+                mock.patch.object(reefy_backup.os.path, 'exists', return_value=True), \
+                mock.patch.object(reefy_backup, 'release_snapshot') as release:
+            with self.assertRaisesRegex(RuntimeError, 'already suspended'):
+                self.snapshot()
+        self.assertTrue(self.suspended)
+        self.assertFalse(any(cmd[0] == 'lvcreate' for cmd in self.commands))
+        self.assertFalse(any(cmd[:2] == ['dmsetup', 'resume']
+                             for cmd in self.commands))
+        release.assert_not_called()
+
+    def test_resume_failure_surfaces_without_attempting_lvremove(self):
+        self.resume_fails = True
+        with mock.patch.object(reefy_backup.subprocess, 'run',
+                               side_effect=self.run_command), \
+                mock.patch.object(reefy_backup.os.path, 'exists', return_value=True), \
+                mock.patch.object(reefy_backup, 'release_snapshot') as release:
+            with self.assertRaisesRegex(RuntimeError, 'origin recovery failed'):
+                self.snapshot()
+        self.assertTrue(self.suspended)
+        release.assert_not_called()
+        self.assertTrue(self.pending.exists())
+
+    def test_resume_exit_zero_still_requires_active_origin(self):
+        self.resume_leaves_suspended = True
+        with mock.patch.object(reefy_backup.subprocess, 'run',
+                               side_effect=self.run_command), \
+                mock.patch.object(reefy_backup.os.path, 'exists', return_value=True), \
+                mock.patch.object(reefy_backup, 'release_snapshot') as release:
+            with self.assertRaisesRegex(RuntimeError, 'origin recovery failed'):
+                self.snapshot()
+        self.assertTrue(self.suspended)
+        release.assert_not_called()
+
+    def test_cleanup_failure_does_not_hide_original_snapshot_error(self):
+        with mock.patch.object(reefy_backup.subprocess, 'run',
+                               side_effect=self.run_command), \
+                mock.patch.object(reefy_backup.os.path, 'exists', return_value=True), \
+                mock.patch.object(reefy_backup, 'release_snapshot',
+                                  side_effect=OSError('synthetic cleanup failure')):
+            with self.assertRaisesRegex(RuntimeError, 'timed out after 300s; app volume active') as error:
+                self.snapshot()
+        self.assertIs(error.exception.__cause__, self.create_error)
+        self.assertFalse(self.pending.exists())
+        self.assertFalse(self.suspended)
+
+
+class CrashCleanupTests(SnapshotFixture):
+    def write_pending(self):
+        self.pending.write_text(json.dumps({
+            'instance_uuid': 'synthetic-instance',
+            'lv_path': '/dev/reefy/reefy_backup_synthetic',
+            'snap_name': 'reefy_snap_synthetic',
+            'snap_mnt': '/synthetic/snapshot/config',
+        }))
+
+    def test_cleanup_restores_before_reporting_and_is_idempotent(self):
+        self.write_pending()
+        events = []
+        with mock.patch.object(reefy_backup, '_snapshot_origin_suspended',
+                               side_effect=[True, False]), \
+                mock.patch.object(reefy_backup.subprocess, 'run',
+                    side_effect=lambda *a, **k: (
+                        events.append('resume') or types.SimpleNamespace(returncode=0))), \
+                mock.patch.object(reefy_backup, 'release_snapshot', return_value=True), \
+                mock.patch.object(reefy_backup, 'publish_status',
+                    side_effect=lambda payload: events.append(payload)):
+            reefy_backup.recover_pending_snapshot()
+            reefy_backup.recover_pending_snapshot()
+        self.assertEqual(events[0], 'resume')
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[1]['status'], 'error')
+        self.assertIn('app volume active', events[1]['message'])
+        self.assertFalse(self.pending.exists())
+
+    def test_failed_recovery_retains_record_and_reports_failure(self):
+        self.write_pending()
+        with mock.patch.object(reefy_backup, '_snapshot_origin_suspended',
+                               side_effect=RuntimeError('synthetic state failure')), \
+                mock.patch.object(reefy_backup, 'publish_status') as publish:
+            with self.assertRaisesRegex(RuntimeError, 'synthetic state failure'):
+                reefy_backup.recover_pending_snapshot()
+        self.assertTrue(self.pending.exists())
+        self.assertIn('recovery failed', publish.call_args.args[0]['message'])
+
+    def test_queued_backup_recovers_before_reading_config(self):
+        events = []
+        with mock.patch.object(reefy_backup, 'backup_lock'), \
+                mock.patch.object(reefy_backup, 'recover_pending_snapshot',
+                                  side_effect=lambda: events.append('recover')), \
+                mock.patch.object(reefy_backup, 'run_backups',
+                                  side_effect=lambda: events.append('run')):
+            reefy_backup.main()
+        self.assertEqual(events, ['recover', 'run'])
+
+    def test_manual_backup_uses_systemd_cleanup_and_preserves_arguments(self):
+        with mock.patch.object(reefy_backup.subprocess, 'call', return_value=1) as call:
+            self.assertEqual(reefy_backup.run_supervised(['synthetic-instance']), 1)
+        cmd = call.call_args.args[0]
+        self.assertIn('--wait', cmd)
+        self.assertIn('--service-type=oneshot', cmd)
+        self.assertIn('--property=ExecStopPost=/usr/bin/env '
+                      'REEFY_BACKUP_PHASE=cleanup /usr/bin/reefy-backup', cmd)
+        self.assertEqual(cmd[-2:], ['/usr/bin/reefy-backup', 'synthetic-instance'])
 
 
 class BorgReadinessTests(unittest.TestCase):

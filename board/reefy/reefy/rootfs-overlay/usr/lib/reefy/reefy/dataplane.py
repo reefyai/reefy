@@ -3779,7 +3779,11 @@ Description=reefy backup service
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/reefy-backup
+ExecStopPost=/usr/bin/env REEFY_BACKUP_PHASE=cleanup /usr/bin/reefy-backup
 TimeoutStartSec=3600
+TimeoutStopSec=90
+Environment=REEFY_BACKUP_PHASE=run
+Environment=PYTHONUNBUFFERED=1
 Environment=MQTT_BROKER={self.broker}
 Environment=MQTT_PORT={self.port}
 """

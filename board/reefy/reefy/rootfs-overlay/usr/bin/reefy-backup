@@ -29,11 +29,16 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
+from contextlib import contextmanager
 
 BACKUP_DIR = '/mnt/reefy-data/state/backup'
 CONFIG_FILE = os.path.join(BACKUP_DIR, 'config.json')
 SNAPSHOT_MNT_BASE = '/mnt/reefy-data/snapshots'
 LOCK_FILE = '/run/reefy-backup.lock'
+BACKUP_EXECUTABLE = '/usr/bin/reefy-backup'
+PENDING_SNAPSHOT_FILE = '/run/reefy-backup-snapshot.json'
+SNAPSHOT_TIMEOUT_S = 300
+_backup_lock_fd = None
 
 # LVM names — underscore separator avoids dm-mapper's `--` escape
 # (see feedback_resource_naming_prefix.md).
@@ -317,6 +322,85 @@ def volume_lv_name(path):
     return f'reefy_backup_{h}'
 
 
+def _snapshot_origin_suspended(lv_path):
+    """Read the kernel state without taking an LVM metadata lock."""
+    result = subprocess.run(
+        ['dmsetup', 'info', '-c', '--noheadings', '-o', 'attr', lv_path],
+        capture_output=True, text=True, timeout=5)
+    attrs = result.stdout.strip()
+    # dmsetup reports live-table, inactive-table, suspended and access mode.
+    # Unknown output must not be interpreted as an active, healthy origin.
+    if (result.returncode != 0 or len(attrs) != 4
+            or attrs[0] != 'L' or attrs[1] not in '-I'
+            or attrs[2] not in '-s' or attrs[3] not in 'rw'):
+        raise RuntimeError(
+            f'cannot determine snapshot origin state for {lv_path}: '
+            f'{result.stderr.strip() or attrs}')
+    return attrs[2] == 's'
+
+
+def _recover_snapshot_creation(lv_path, snap_name, snap_mnt):
+    """Restore app I/O before attempting cleanup of an interrupted snapshot.
+
+    subprocess.run has killed and reaped lvcreate before this is called on
+    timeout. LVM can leave the origin suspended if killed between suspend
+    and resume, so removing orphan snapshots alone cannot restore the app.
+    Only touch the exact origin checked active before this snapshot attempt.
+    """
+    if _snapshot_origin_suspended(lv_path):
+        result = subprocess.run(
+            ['dmsetup', 'resume', lv_path],
+            capture_output=True, text=True, timeout=15)
+        if result.returncode != 0:
+            raise RuntimeError(f'cannot resume {lv_path}: {result.stderr.strip()}')
+        if _snapshot_origin_suspended(lv_path):
+            raise RuntimeError(f'{lv_path} is still suspended after resume')
+        print(f'[backup] Resumed snapshot origin {lv_path} after creation failure')
+
+    # Clear ownership only after the origin is confirmed active. A failed
+    # recovery leaves the record for ExecStopPost or the next backup to retry.
+    _clear_pending_snapshot()
+
+    # A killed lvcreate may already have committed the snapshot metadata.
+    # Clean that partial result even though snapshot_volume never returned it
+    # to backup_instance's normal finally block. Do not hide the original
+    # backup error if orphan cleanup fails; the next run's GC can retry it.
+    try:
+        if not release_snapshot(snap_name, snap_mnt):
+            print(f'[backup] Partial snapshot cleanup incomplete: {snap_name}')
+    except Exception as exc:
+        print(f'[backup] Partial snapshot cleanup failed for {snap_name}: {exc}')
+
+
+def _clear_pending_snapshot():
+    try:
+        os.unlink(PENDING_SNAPSHOT_FILE)
+    except FileNotFoundError:
+        pass
+
+
+def recover_pending_snapshot():
+    """Called under the backup lock after all snapshot children have exited."""
+    try:
+        with open(PENDING_SNAPSHOT_FILE) as stream:
+            pending = json.load(stream)
+    except FileNotFoundError:
+        return
+    try:
+        _recover_snapshot_creation(pending['lv_path'], pending['snap_name'],
+                                   pending['snap_mnt'])
+    except Exception as error:
+        publish_status({
+            'instance_uuid': pending['instance_uuid'], 'status': 'error',
+            'message': f'backup interrupted; app volume recovery failed: {error}',
+        })
+        raise
+    message = 'backup interrupted during snapshot creation; app volume active'
+    print(f'[backup] {message}')
+    publish_status({'instance_uuid': pending['instance_uuid'],
+                    'status': 'error', 'message': message})
+
+
 def snapshot_volume(path, instance_uuid, ts):
     """Snapshot the per-volume thin LV that backs `path`, mount the
     snapshot read-only at a path whose LEAF is the volume name (so
@@ -348,17 +432,52 @@ def snapshot_volume(path, instance_uuid, ts):
     snap_mnt = os.path.join(SNAPSHOT_MNT_BASE,
                              f'{ts}_{instance_uuid}', vol_name)
 
+    # Never take ownership of a suspension established by another operation.
+    if _snapshot_origin_suspended(lv_path):
+        raise RuntimeError(f'snapshot origin already suspended: {lv_path}')
+    if os.path.isfile(PENDING_SNAPSHOT_FILE):
+        raise RuntimeError('previous snapshot recovery incomplete')
+
+    # /run is independent of app storage. Replace atomically before lvcreate
+    # can suspend anything, so SIGKILL cannot strand an unrecorded origin.
+    pending = {'lv_path': lv_path, 'snap_name': snap_name,
+               'snap_mnt': snap_mnt, 'instance_uuid': instance_uuid}
+    with open(PENDING_SNAPSHOT_FILE + '.tmp', 'w') as stream:
+        json.dump(pending, stream)
+    os.replace(PENDING_SNAPSHOT_FILE + '.tmp', PENDING_SNAPSHOT_FILE)
+
     # Snapshot of a thin LV lives in the same pool automatically;
     # `--thin` is not a valid flag combined with `--snapshot`.
     # `--setactivationskip n` overrides the default (which leaves
     # thin snapshots inactive — without this the /dev/<vg>/<snap>
     # block device doesn't exist for `mount` to find).
-    r = subprocess.run(
-        ['lvcreate', '--snapshot', '--setactivationskip', 'n',
-         '--name', snap_name, f'{STORAGE_VG}/{lv_name}'],
-        capture_output=True, text=True, timeout=15)
-    if r.returncode != 0:
-        raise RuntimeError(f'lvcreate snapshot failed: {r.stderr}')
+    try:
+        r = subprocess.run(
+            ['lvcreate', '--snapshot', '--setactivationskip', 'n',
+             '--name', snap_name, f'{STORAGE_VG}/{lv_name}'],
+            capture_output=True, text=True, timeout=SNAPSHOT_TIMEOUT_S,
+            # Keep the lock if the Python worker dies while lvcreate lives.
+            # LVM closes extra inherited descriptors, so use stdin (this
+            # noninteractive command never reads it). systemd stops the child
+            # before ExecStopPost or the next backup can acquire the lock.
+            stdin=_backup_lock_fd)
+        if r.returncode != 0:
+            raise RuntimeError(f'lvcreate snapshot failed: {r.stderr}')
+        if _snapshot_origin_suspended(lv_path):
+            raise RuntimeError('lvcreate exited with snapshot origin suspended')
+    except Exception as error:
+        try:
+            _recover_snapshot_creation(lv_path, snap_name, snap_mnt)
+        except Exception as recovery_error:
+            raise RuntimeError(
+                f'{error}; origin recovery failed for {lv_path}: '
+                f'{recovery_error}') from error
+        if isinstance(error, subprocess.TimeoutExpired):
+            raise RuntimeError(
+                f'snapshot creation timed out after {SNAPSHOT_TIMEOUT_S}s; '
+                'app volume active') from error
+        raise RuntimeError(f'{error}; app volume active') from error
+    _clear_pending_snapshot()
 
     os.makedirs(snap_mnt, mode=0o755, exist_ok=True)
     snap_dev = f'/dev/{STORAGE_VG}/{snap_name}'
@@ -635,20 +754,37 @@ def backup_instance(inst, keep_last):
     return True
 
 
-def main():
+@contextmanager
+def backup_lock():
     # Serialize concurrent runs. The reconciler spawns one reefy-backup
     # per backup_now MQTT command, so 'backup all' fans out N parallel
     # invocations that share one BorgBase repo + local cache - they
     # race on the borg cache lock and most fail. flock LOCK_EX (no
     # LOCK_NB) blocks until any prior run releases, then proceeds.
-    lock_fd = open(LOCK_FILE, 'w')
-    try:
-        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        print("[backup] Another backup in progress; waiting for lock")
-        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
-        print("[backup] Lock acquired, proceeding")
+    global _backup_lock_fd
+    with open(LOCK_FILE, 'a') as lock_fd:
+        try:
+            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print("[backup] Another backup in progress; waiting for lock")
+            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
+            print("[backup] Lock acquired, proceeding")
+        _backup_lock_fd = lock_fd.fileno()
+        try:
+            yield
+        finally:
+            _backup_lock_fd = None
 
+
+def main():
+    with backup_lock():
+        # A queued backup can acquire the lock before the previous service's
+        # cleanup hook. Restore its origin before touching config or LVM.
+        recover_pending_snapshot()
+        run_backups()
+
+
+def run_backups():
     if not os.path.exists(CONFIG_FILE):
         print(f"[backup] No config file at {CONFIG_FILE}")
         return
@@ -695,5 +831,32 @@ def main():
     sys.exit(0 if any_success else 1)
 
 
+def run_supervised(args):
+    """Give CLI and MQTT-triggered backups the same crash cleanup as timers."""
+    cmd = [
+        'systemd-run', '--quiet', '--wait', '--pipe', '--collect',
+        '--service-type=oneshot', '--property=TimeoutStartSec=3600',
+        '--property=TimeoutStopSec=90',
+        '--property=ExecStopPost=/usr/bin/env REEFY_BACKUP_PHASE=cleanup '
+        + BACKUP_EXECUTABLE,
+        '--setenv=REEFY_BACKUP_PHASE=run', '--setenv=PYTHONUNBUFFERED=1',
+    ]
+    for key in ('MQTT_BROKER', 'MQTT_PORT', 'PATH'):
+        if key in os.environ:
+            cmd.append(f'--setenv={key}={os.environ[key]}')
+    return subprocess.call(cmd + [BACKUP_EXECUTABLE] + args)
+
+
+def entrypoint():
+    phase = os.environ.get('REEFY_BACKUP_PHASE')
+    if phase == 'cleanup':
+        with backup_lock():
+            recover_pending_snapshot()
+    elif phase == 'run':
+        main()
+    else:
+        sys.exit(run_supervised(sys.argv[1:]))
+
+
 if __name__ == '__main__':
-    main()
+    entrypoint()

@@ -52,6 +52,26 @@ class ImportIsolationTests(unittest.TestCase):
             'else lvremove fails "filesystem in use"')
 
 
+class BackupServiceTests(unittest.TestCase):
+    def test_timer_service_has_crash_cleanup(self):
+        dp = _make_dp()
+        written = {}
+        def capture_open(path, mode='r', *args, **kwargs):
+            stream = mock.MagicMock()
+            stream.__enter__.return_value = stream
+            stream.write.side_effect = lambda value: written.__setitem__(path, value)
+            return stream
+        with mock.patch('builtins.open', side_effect=capture_open), \
+                mock.patch.object(dataplane.os.path, 'exists', return_value=False), \
+                mock.patch.object(dataplane.subprocess, 'run'):
+            dp._install_backup_timer('03:00')
+        service = written[f'/etc/systemd/system/{dp.BACKUP_SERVICE}.service']
+        self.assertIn('Environment=REEFY_BACKUP_PHASE=run', service)
+        self.assertIn('ExecStopPost=/usr/bin/env REEFY_BACKUP_PHASE=cleanup '
+                      '/usr/bin/reefy-backup', service)
+        self.assertIn('TimeoutStopSec=90', service)
+
+
 class AppsV2Tests(unittest.TestCase):
     def setUp(self):
         self.dp = _make_dp()
