@@ -11,11 +11,13 @@ on:
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-control'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-reconciler'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-mount-volumes'
+      - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-backup'
       - 'board/reefy/reefy/tests/**'
       - '.github/workflows/python-tests.yml'
   pull_request:
     paths:
       - 'board/reefy/reefy/rootfs-overlay/usr/lib/reefy/**'
+      - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-backup'
       - 'board/reefy/reefy/tests/**'
 
 jobs:
@@ -34,7 +36,8 @@ jobs:
           python -m py_compile \
             "$ov/reefy/__init__.py" "$ov/reefy/shared.py" "$ov/reefy/storage.py" \
             "$ov/reefy/dataplane.py" "$ov/reefy/control.py" \
-            "$bin/reefy-control" "$bin/reefy-reconciler" "$bin/reefy-mount-volumes"
+            "$bin/reefy-control" "$bin/reefy-reconciler" "$bin/reefy-mount-volumes" \
+            "$bin/reefy-backup"
 
       - name: paho isolation (data-plane/boot-mount/shared import without paho)
         # paho-mqtt is deliberately NOT installed here: storage, dataplane
