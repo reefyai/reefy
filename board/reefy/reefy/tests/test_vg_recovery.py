@@ -124,5 +124,52 @@ class HeaderTests(unittest.TestCase):
             records_from_ring(data, info)
 
 
-if __name__ == "__main__":
+class EvidenceTests(unittest.TestCase):
+    def test_durable_bundle_is_bounded_and_not_overwritten(self):
+        import contextlib
+        import tempfile
+        import tarfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from reefy import vg_recovery
+        with tempfile.TemporaryDirectory() as directory:
+            esp = Path(directory) / 'esp'
+            work = Path(directory) / 'work'
+            esp.mkdir()
+            work.mkdir()
+            (work / 'pv-prefix.bin').write_bytes(b'synthetic original bytes')
+            with patch.object(vg_recovery, 'ESP', esp), patch.object(
+                    vg_recovery, 'writable_esp', contextlib.nullcontext):
+                vg_recovery.preserve(work)
+                archive = esp / 'recovery/vg-metadata.tar.gz'
+                before = archive.read_bytes()
+                with tarfile.open(archive) as contents:
+                    self.assertEqual(contents.extractfile('pv-prefix.bin').read(),
+                                     b'synthetic original bytes')
+                with self.assertRaisesRegex(Refused, 'previous VG recovery'):
+                    vg_recovery.preserve(work)
+                self.assertEqual(archive.read_bytes(), before)
+
+    def test_oversized_bundle_refuses_without_attempt_marker(self):
+        import contextlib
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from reefy import vg_recovery
+        with tempfile.TemporaryDirectory() as directory:
+            esp = Path(directory) / 'esp'
+            work = Path(directory) / 'work'
+            esp.mkdir()
+            work.mkdir()
+            (work / 'pv-prefix.bin').write_bytes(bytes(range(256)) * 4)
+            with patch.object(vg_recovery, 'ESP', esp), patch.object(
+                    vg_recovery, 'writable_esp', contextlib.nullcontext), patch.object(
+                    vg_recovery, 'MAX_BUNDLE', 128):
+                with self.assertRaisesRegex(Refused, 'evidence exceeds'):
+                    vg_recovery.preserve(work)
+                self.assertFalse((esp / 'recovery/vg-metadata.attempted').exists())
+                self.assertLessEqual((esp / 'recovery/vg-metadata.partial').stat().st_size, 128)
+
+
+if __name__ == '__main__':
     unittest.main()
