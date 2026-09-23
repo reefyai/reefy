@@ -57,7 +57,7 @@ mount_state_lv() {
     # (fresh provision wrote bootstrap state there), copy it into the LV
     # first so mounting doesn't hide it.
     TMP=$(mktemp -d)
-    if mount -o noatime,discard "${SLV}" "${TMP}" 2>/dev/null; then
+    if mount -o noatime,discard "${SLV}" "${TMP}"; then
         if [ -z "$(ls -A "${TMP}" 2>/dev/null)" ] && \
            [ -n "$(ls -A "${SDIR}" 2>/dev/null)" ]; then
             cp -a "${SDIR}/." "${TMP}/" 2>/dev/null || true
@@ -65,7 +65,7 @@ mount_state_lv() {
         umount "${TMP}" 2>/dev/null || true
     fi
     rmdir "${TMP}" 2>/dev/null || true
-    if mount -o noatime,discard "${SLV}" "${SDIR}" 2>/dev/null; then
+    if mount -o noatime,discard "${SLV}" "${SDIR}"; then
         echo "[reefy] Mounted reefy_state at ${SDIR}"
     fi
 }
@@ -177,8 +177,8 @@ setup_data_partition() {
                     # an LV mounted at /mnt/reefy-data. Activate the VG
                     # and mount the right LV (new `reefy_default`, or
                     # legacy `data` if this device pre-dates the rework).
-                    vgscan >/dev/null 2>&1
-                    vgchange -ay "${STORAGE_VG}" >/dev/null 2>&1
+                    vgscan
+                    vgchange -ay "${STORAGE_VG}"
                     for lv in "${STORAGE_LV}" "${LEGACY_STORAGE_LV}"; do
                         lv_path="/dev/${STORAGE_VG}/${lv}"
                         [ -e "${lv_path}" ] || continue
@@ -396,25 +396,25 @@ setup_internal_storage() {
         [ -e "/dev/mapper/${luks_name}" ] && continue
         cryptsetup luksOpen "${dev}" "${luks_name}" \
             --allow-discards --perf-submit_from_crypt_cpus --persistent \
-            --key-file "${KEY_PART}" --keyfile-size "${LUKS_KEY_SIZE}" 2>/dev/null || continue
+            --key-file "${KEY_PART}" --keyfile-size "${LUKS_KEY_SIZE}" || continue
         echo "[reefy] Opened LUKS on ${dev}"
     done
 
     # Scan for LVM and activate VG
-    vgscan >/dev/null 2>&1
-    vgs "${STORAGE_VG}" >/dev/null 2>&1 || return 0
+    vgscan
+    vgs "${STORAGE_VG}" || return 0
     # vgchange asks LVM to run upstream thin_check before pool activation.
     if ! vgchange --config "${LVM_THIN_TOOLS_CONFIG}" \
-            -ay "${STORAGE_VG}" >/dev/null 2>&1; then
+            -ay "${STORAGE_VG}"; then
         if repair_thin_pool && \
                 vgchange --config "${LVM_THIN_TOOLS_CONFIG}" \
-                    -ay "${STORAGE_VG}" >/dev/null 2>&1; then
+                    -ay "${STORAGE_VG}"; then
             echo "[reefy] Activated repaired thin pool"
         else
             # Keep the thick identity LV available even when app storage is
             # unrecoverable. This prevents a storage failure from making an
             # adopted device appear factory-fresh to the control plane.
-            lvchange -ay "${STORAGE_VG}/reefy_state" >/dev/null 2>&1 || true
+            lvchange -ay "${STORAGE_VG}/reefy_state" || true
             mount_state_lv
             return 0
         fi
