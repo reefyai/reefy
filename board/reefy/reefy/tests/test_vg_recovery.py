@@ -79,9 +79,6 @@ class ReconstructionTests(unittest.TestCase):
                 parse(text)
 
 
-if __name__ == '__main__':
-    unittest.main()
-
 class HeaderTests(unittest.TestCase):
     def prefix(self):
         import struct
@@ -125,3 +122,7 @@ class HeaderTests(unittest.TestCase):
         info['checksum'] = crc(data[4608:4628])
         with self.assertRaisesRegex(Refused, 'valid checksum'):
             records_from_ring(data, info)
+
+
+if __name__ == "__main__":
+    unittest.main()

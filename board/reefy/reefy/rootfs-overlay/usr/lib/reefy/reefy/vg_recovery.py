@@ -182,6 +182,11 @@ def validate_filesystems(pv, plan):
             sectors = seg['extent_count'] * vg['extent_size']
             if seg['type'] == 'thin':
                 device = create(str(index), f'0 {sectors} thin {thin_pool} {seg["device_id"]}')
+                status_fields = run(['dmsetup', 'status', '--noflush', device]).stdout.split()
+                require(len(status_fields) == 5 and status_fields[2] == 'thin',
+                        'invalid thin-device status')
+                require(int(status_fields[3]) == 0 or int(status_fields[4]) < sectors,
+                        'thin mappings exceed historical LV size')
             elif name == 'reefy_state':
                 offset, sectors = physical(vg, name)
                 device = create(str(index), f'0 {sectors} linear {pv} {offset}')
