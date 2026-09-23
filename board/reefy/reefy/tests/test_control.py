@@ -47,6 +47,46 @@ def _load_control_module():
     return module
 
 
+class StorageRecoveryFailureTests(unittest.TestCase):
+    def test_provisioning_refusal_precedes_storage_and_identity_changes(self):
+        control = _load_control_module()
+        plane = object.__new__(control.ControlPlane)
+        plane.client = mock.Mock()
+        plane.topic_prefix = 'reefy/synthetic-public'
+        plane._storage = mock.Mock()
+        with mock.patch.object(control.os.path, 'exists', return_value=True), \
+                mock.patch.object(control.subprocess, 'run') as run, \
+                mock.patch('builtins.open') as opened:
+            with self.assertRaisesRegex(RuntimeError, 'repair storage before provisioning'):
+                plane._handle_provision({
+                    'uuid': 'synthetic-device', 'device_cert': 'synthetic-certificate',
+                    'storage_config': {'devices': ['nvme0n1'], 'agree_destroy': True},
+                })
+        plane._storage._ensure_persistent_storage.assert_not_called()
+        run.assert_not_called()
+        opened.assert_not_called()
+        stage = json.loads(plane.client.publish.call_args.args[1])
+        self.assertEqual(stage['stage'], 'error')
+
+    def test_bootstrap_registration_survives_storage_failure(self):
+        control = _load_control_module()
+        plane = object.__new__(control.ControlPlane)
+        plane.mode = 'bootstrap'
+        plane.hostname = 'synthetic-host'
+        plane.broker = 'broker.example.invalid'
+        plane.port = 8883
+        plane._compatibility = None
+        plane._get_status_topic = mock.Mock(return_value='synthetic/status')
+        plane._handle_bootstrap_connect = mock.Mock()
+        client = mock.Mock()
+        with mock.patch.object(control.os.path, 'exists', return_value=True):
+            plane.on_connect(client, None, None, 0)
+        plane._handle_bootstrap_connect.assert_called_once_with(client)
+        status = json.loads(client.publish.call_args.args[1])
+        self.assertEqual(status['status'], 'online')
+        self.assertIn('MQTT terminal remains available', status['message'])
+
+
 class ConnectionOwnershipTests(unittest.TestCase):
     def test_network_loop_is_the_only_reconnect_owner(self):
         control = _load_control_module()

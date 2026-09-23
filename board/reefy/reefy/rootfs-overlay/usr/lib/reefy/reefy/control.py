@@ -312,9 +312,14 @@ class ControlPlane:
             if self.mode == 'bootstrap':
                 # Publish online status (clears retained LWT offline message)
                 status_topic = self._get_status_topic()
-                client.publish(status_topic, json.dumps(self._with_compatibility({
+                status = {
                     "status": "online", "hostname": self.hostname
-                })), qos=1, retain=True)
+                }
+                if os.path.exists(self.STORAGE_RECOVERY_FAILED_PATH):
+                    status['message'] = self.STORAGE_RECOVERY_ERROR
+                    log('mqtt', self.STORAGE_RECOVERY_ERROR)
+                client.publish(status_topic, json.dumps(self._with_compatibility(status)),
+                               qos=1, retain=True)
                 self._handle_bootstrap_connect(client)
             else:
                 # Subscribe FIRST — before any publishes. This ensures the
@@ -578,8 +583,15 @@ class ControlPlane:
             _fail(str(e))
             raise
 
+    STORAGE_RECOVERY_FAILED_PATH = '/run/reefy/storage-recovery-failed'
+    STORAGE_RECOVERY_ERROR = (
+        'Existing storage recovery failed; repair storage before provisioning. '
+        'MQTT terminal remains available for diagnostics.')
+
     def _do_provision(self, payload, uuid, certificate, _log_prov):
         """Internal provisioning logic — called by _handle_provision with error handling."""
+        if os.path.exists(self.STORAGE_RECOVERY_FAILED_PATH):
+            raise RuntimeError(self.STORAGE_RECOVERY_ERROR)
         _log_prov(f"Provisioning received for UUID={uuid}")
 
         # Save bootstrap state before storage setup — _ensure_persistent_storage

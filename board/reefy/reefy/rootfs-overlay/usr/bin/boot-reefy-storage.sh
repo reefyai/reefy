@@ -388,21 +388,35 @@ setup_internal_storage() {
     modprobe dm_crypt 2>/dev/null || true
     modprobe dm_mod 2>/dev/null || true
 
+    INTERNAL_PVS=""
     # Open LUKS on all internal drives with our key
     for dev in $(lsblk -dpno NAME 2>/dev/null); do
         [ "${dev}" = "/dev/${PARENT_NAME}" ] && continue
         cryptsetup isLuks "${dev}" 2>/dev/null || continue
         luks_name="reefy-$(basename ${dev})"
-        [ -e "/dev/mapper/${luks_name}" ] && continue
-        cryptsetup luksOpen "${dev}" "${luks_name}" \
-            --allow-discards --perf-submit_from_crypt_cpus --persistent \
-            --key-file "${KEY_PART}" --keyfile-size "${LUKS_KEY_SIZE}" || continue
-        echo "[reefy] Opened LUKS on ${dev}"
+        if [ ! -e "/dev/mapper/${luks_name}" ]; then
+            cryptsetup luksOpen "${dev}" "${luks_name}" \
+                --allow-discards --perf-submit_from_crypt_cpus --persistent \
+                --key-file "${KEY_PART}" --keyfile-size "${LUKS_KEY_SIZE}" || continue
+            echo "[reefy] Opened LUKS on ${dev}"
+        fi
+        INTERNAL_PVS="${INTERNAL_PVS} /dev/mapper/${luks_name}"
     done
 
-    # Scan for LVM and activate VG
-    vgscan
-    vgs "${STORAGE_VG}" || return 0
+    # A successfully unlocked internal disk is existing storage. Do not
+    # misclassify an unreadable VG as a fresh device ready for adoption.
+    [ -n "${INTERNAL_PVS}" ] || return 0
+    vgscan || echo "[reefy] WARNING: VG scan failed; inspecting existing storage"
+    if ! vgs "${STORAGE_VG}"; then
+        echo "[reefy] VG unreadable; validating guarded outer-metadata recovery"
+        if ! PYTHONPATH=/usr/lib/reefy python3 -m reefy.vg_recovery ${INTERNAL_PVS}; then
+            mkdir -p /run/reefy
+            echo 'Existing storage recovery failed; repair storage before provisioning' > /run/reefy/storage-recovery-failed
+            echo "[reefy] ERROR: Existing internal storage unavailable; bootstrap diagnostics only"
+            return 1
+        fi
+    fi
+    rm -f /run/reefy/storage-recovery-failed
     # vgchange asks LVM to run upstream thin_check before pool activation.
     if ! vgchange --config "${LVM_THIN_TOOLS_CONFIG}" \
             -ay "${STORAGE_VG}"; then
