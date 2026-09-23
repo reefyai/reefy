@@ -194,6 +194,11 @@ setup_data_partition() {
                                 echo "[reefy] Mounted LVM LV ${lv} (${LV_FS}) at ${REEFY_DATA_MNT}"
                                 mount_state_lv
                                 return 0
+                            else
+                                mkdir -p /run/reefy
+                                echo 'Existing XFS storage failed validation; repair storage before provisioning' > /run/reefy/storage-recovery-failed
+                                echo "[reefy] ERROR: Primary XFS unavailable; bootstrap diagnostics only"
+                                return 1
                             fi
                         else
                             LV_OPTS="${REEFY_DATA_MOUNT_OPTS}"
@@ -238,10 +243,10 @@ LEGACY_STORAGE_LV="data"
 THIN_POOL_LV="reefy_pool"
 LVM_THIN_TOOLS_CONFIG='global { thin_check_executable="/usr/sbin/thin_check" thin_repair_executable="/usr/sbin/thin_repair" }'
 
-# Mount the primary Reefy XFS data LV, repairing only the specific failure
-# where kernel log recovery rejects corrupt metadata with EUCLEAN. A generic
-# mount error must never trigger repair: it could be a bad option, missing
-# driver, transient I/O failure, or operator configuration problem.
+# Check the primary XFS LV before exposing it to services. Successful mount
+# only establishes that journal replay worked, not that all inode metadata
+# is healthy. Replay first, unmount, then run the upstream offline checker.
+# A generic mount/check error must never trigger repair.
 #
 # xfs_repair without -L is always attempted first. Exit 2 means the dirty log
 # cannot be replayed in userspace. The kernel mount already tried and failed
@@ -254,20 +259,49 @@ mount_primary_xfs() {
     XFS_OPTS="$3"
     XFS_REPAIR_MARKER="/run/reefy-xfs-repair-attempted"
     XFS_MOUNT_ERROR="/run/reefy-xfs-mount.$$.err"
+    XFS_CHECK_LOG="/run/reefy-xfs-check.$$.log"
+    XFS_REPLAY_FAILED=false
+    export LC_ALL=C
+
+    # Refuse an LV mounted elsewhere too, not just a busy target directory.
+    XFS_MOUNTED_RC=0
+    findmnt -rn -S "${XFS_LV}" || XFS_MOUNTED_RC=$?
+    [ "${XFS_MOUNTED_RC}" -eq 1 ] || return 1
 
     if mount -o "${XFS_OPTS}" "${XFS_LV}" "${XFS_TARGET}" \
             2>"${XFS_MOUNT_ERROR}"; then
-        rm -f "${XFS_MOUNT_ERROR}"
-        return 0
+        # No consumers can start until this storage oneshot completes.
+        # Never proceed to an offline check unless unmount really succeeded.
+        umount "${XFS_TARGET}" || return 1
+        echo "[reefy] Checking primary XFS metadata before service startup"
+        XFS_CHECK_RC=0
+        LC_ALL=C xfs_repair -n "${XFS_LV}" >"${XFS_CHECK_LOG}" 2>&1 || XFS_CHECK_RC=$?
+        cat "${XFS_CHECK_LOG}"
+        if [ "${XFS_CHECK_RC}" -eq 0 ]; then
+            rm -f "${XFS_MOUNT_ERROR}" "${XFS_CHECK_LOG}"
+            echo "[reefy] Primary XFS metadata check passed"
+            mount -o "${XFS_OPTS}" "${XFS_LV}" "${XFS_TARGET}"
+            return $?
+        fi
+        # Exit 1 also covers operational failures. Require a completed scan
+        # before considering a repair; an I/O/usage failure is not consent
+        # to write metadata. The completion text is from pinned xfsprogs.
+        if [ "${XFS_CHECK_RC}" -ne 1 ] || \
+                ! grep -Fq 'Phase 7 - verify link counts' "${XFS_CHECK_LOG}" || \
+                ! grep -Fq 'No modify flag set, skipping filesystem flush and exiting.' "${XFS_CHECK_LOG}" || \
+                grep -Eqi 'input/output error|I/O error|short read|read error|failed to read|error reading' "${XFS_CHECK_LOG}"; then
+            echo "[reefy] ERROR: XFS check did not complete; refusing automatic repair"
+            return 1
+        fi
+        echo "[reefy] Primary XFS check found corruption after successful mount"
+    else
+        cat "${XFS_MOUNT_ERROR}" >&2
+        grep -Fq "Structure needs cleaning" "${XFS_MOUNT_ERROR}" || return 1
+        XFS_REPLAY_FAILED=true
     fi
-    cat "${XFS_MOUNT_ERROR}" >&2
 
     # Keep the automatic, destructive path deliberately narrow.
     [ "${XFS_LV}" = "/dev/${STORAGE_VG}/${STORAGE_LV}" ] || {
-        rm -f "${XFS_MOUNT_ERROR}"
-        return 1
-    }
-    grep -Fq "Structure needs cleaning" "${XFS_MOUNT_ERROR}" || {
         rm -f "${XFS_MOUNT_ERROR}"
         return 1
     }
@@ -289,12 +323,12 @@ mount_primary_xfs() {
     }
     : > "${XFS_REPAIR_MARKER}"
 
-    echo "[reefy] XFS mount failed with EUCLEAN; attempting offline repair"
+    echo "[reefy] Primary XFS corruption confirmed; attempting offline repair"
     if xfs_repair "${XFS_LV}"; then
         echo "[reefy] XFS filesystem repaired without log reset"
     else
         XFS_REPAIR_RC=$?
-        if [ "${XFS_REPAIR_RC}" -ne 2 ]; then
+        if [ "${XFS_REPAIR_RC}" -ne 2 ] || [ "${XFS_REPLAY_FAILED}" != true ]; then
             echo "[reefy] WARNING: XFS repair failed with exit ${XFS_REPAIR_RC}"
             rm -f "${XFS_MOUNT_ERROR}"
             return 1
@@ -308,8 +342,15 @@ mount_primary_xfs() {
         echo "[reefy] XFS filesystem repaired after unreplayable log"
     fi
 
+    # Require an independent clean scan after repair, before services can
+    # consume the filesystem. No deadline may interrupt metadata writes.
+    if ! xfs_repair -n "${XFS_LV}"; then
+        echo "[reefy] ERROR: Primary XFS remains inconsistent after repair"
+        return 1
+    fi
     if mount -o "${XFS_OPTS}" "${XFS_LV}" "${XFS_TARGET}"; then
-        rm -f "${XFS_MOUNT_ERROR}"
+        rm -f "${XFS_MOUNT_ERROR}" "${XFS_CHECK_LOG}"
+        echo "[reefy] Primary XFS repair verified"
         return 0
     fi
     echo "[reefy] WARNING: XFS mount still fails after repair"
@@ -455,8 +496,10 @@ setup_internal_storage() {
         INTERNAL_OPTS="noatime,discard,pquota"
         mount_primary_xfs "${lv_path}" "${REEFY_DATA_MNT}" \
             "${INTERNAL_OPTS}" || {
-            echo "[reefy] WARNING: Internal drive mount failed"
-            return 0
+            mkdir -p /run/reefy
+            echo 'Existing XFS storage failed validation; repair storage before provisioning' > /run/reefy/storage-recovery-failed
+            echo "[reefy] ERROR: Primary XFS unavailable; bootstrap diagnostics only"
+            return 1
         }
     else
         INTERNAL_OPTS="${REEFY_DATA_MOUNT_OPTS}"
@@ -479,6 +522,13 @@ setup_internal_storage() {
 # Main execution
 # Order matters: try internal drive first (fast), fall back to USB p4 (slow).
 # If neither exists (fresh USB), use tmpfs for bootstrap.
+# The supervisor re-enters only the recovery stage, after ESP discovery.
+if [ "${1:-}" = --recover ]; then
+    REEFY_DEV=$(findmnt -rn -o SOURCE "${REEFY_MNT}")
+    setup_internal_storage
+    setup_data_partition
+    exit 0
+fi
 mount_reefy_usb
 
 if ! mountpoint -q "${REEFY_MNT}" 2>/dev/null; then
@@ -488,5 +538,4 @@ if ! mountpoint -q "${REEFY_MNT}" 2>/dev/null; then
 fi
 
 ensure_boot_entries
-setup_internal_storage
-setup_data_partition
+exec env PYTHONPATH=/usr/lib/reefy python3 -m reefy.storage_boot
