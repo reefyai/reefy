@@ -6,6 +6,7 @@ Before=docker.service
 
 [Service]
 Type=oneshot
+TimeoutStartSec=300
 ExecStart=/usr/bin/boot-reefy-storage.sh
 RemainAfterExit=true
 
