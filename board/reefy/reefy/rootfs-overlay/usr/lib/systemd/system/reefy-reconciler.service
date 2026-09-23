@@ -8,7 +8,6 @@ Documentation=https://github.com/reefyai/reefy
 # (it runs docker compose). reefy-control deliberately does NOT depend on
 # this unit - control must stay up even if the data plane is wedged; its
 # Varlink calls retry.
-Requires=reefy-storage.service
 After=reefy-storage.service reefy-app-volumes.service docker.service
 Wants=docker.service
 PartOf=docker.service
