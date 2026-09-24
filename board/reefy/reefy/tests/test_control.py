@@ -92,7 +92,7 @@ class ConnectionOwnershipTests(unittest.TestCase):
         control = _load_control_module()
         instance = object.__new__(control.ControlPlane)
         instance.client = mock.Mock()
-        instance.client.loop_forever.side_effect = KeyboardInterrupt
+        instance._run_network_loop = mock.Mock(side_effect=KeyboardInterrupt)
         instance.ca_cert = 'synthetic-ca'
         instance.client_cert = 'synthetic-cert'
         instance.client_key = 'synthetic-key'
@@ -107,7 +107,8 @@ class ConnectionOwnershipTests(unittest.TestCase):
                 instance.run()
         instance.client.connect.assert_called_once_with(
             'broker.example.invalid', 8883, keepalive=30)
-        instance.client.loop_forever.assert_called_once_with(retry_first_connection=True)
+        instance._run_network_loop.assert_called_once_with(instance.client)
+        instance.client.loop_forever.assert_not_called()
         instance.client.reconnect.assert_not_called()
         thread.assert_not_called()
         process.assert_not_called()
