@@ -587,8 +587,10 @@ class Storage:
                     f'PV {pv} already belongs to VG {pv_memberships[pv]}')
             if pv_memberships[pv]:
                 continue
+            # Reserve VG metadata at both ends of newly created PVs. Existing
+            # members keep their original layout, including single-area PVs.
             result = subprocess.run(
-                ['pvcreate', '-ff', '-y', pv],
+                ['pvcreate', '--pvmetadatacopies', '2', '-ff', '-y', pv],
                 capture_output=True, text=True, timeout=15)
             if result.returncode != 0:
                 raise RuntimeError(
@@ -1882,7 +1884,7 @@ class Storage:
 
         for pv_path in new_pvs:
             result = subprocess.run(
-                ['pvcreate', '-ff', '-y', pv_path],
+                ['pvcreate', '--pvmetadatacopies', '2', '-ff', '-y', pv_path],
                 capture_output=True, text=True, timeout=15)
             if result.returncode != 0:
                 raise RuntimeError(
