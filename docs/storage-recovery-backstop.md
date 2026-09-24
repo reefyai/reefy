@@ -61,3 +61,27 @@ failure, MQTT registration/terminal access, provisioning refusal and a real
 reboot into the persistent guard. Unit tests cover failed persistence, surviving
 descendants, mount cleanup and firmware selection. These tests validate the
 backstop mechanism, not the safety of interrupting every possible repair write.
+
+## Thin metadata reconstruction refusal
+
+Automatic thin repair requires a readable current superblock and mapping
+roots. The internal LVM repair hook fingerprints a complete ordinary
+`thin_dump`, runs upstream `thin_repair` into the separate spare, checks the
+output with `thin_check`, and requires an identical native dump before LVM
+may swap the metadata LV. Dumps are streamed into SHA-256 rather than saved
+on the RAM root. No transaction or geometry override authorizes guessing
+historical roots. This still permits space-map repair when current mappings
+survive. A changed dump, unreadable mapping root, or lost superblock requires
+operator recovery; successful mounting is not a substitute for this check.
+
+When thin repair is refused, boot retains the thick identity LV for control
+when available, marks storage failed, blocks reconciliation and provisioning,
+and leaves MQTT diagnostics reachable. The A/B watchdog also respects the
+runtime storage-failure guard, preventing automatic rollback into an older
+repair implementation. It does not confirm a failed firmware slot. This
+runtime guard does not prevent an operator from manually choosing an older
+slot on a subsequent reboot.
+
+Checksums and matching dumps do not prove application-file correctness or
+protect against a device returning a self-consistent stale image. Offline XFS
+checks and application-level verification remain separate requirements.

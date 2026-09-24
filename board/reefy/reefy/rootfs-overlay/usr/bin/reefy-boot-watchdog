@@ -23,9 +23,9 @@ echo "[boot-watchdog] Watching Boot${CURRENT} (non-default), will reboot in ${TI
 # accounting and resume the existing budget when the storage unit exits.
 WAITED=0
 while [ "$WAITED" -lt "$TIMEOUT" ]; do
-    # Keep timeout diagnostics reachable without confirming a failed slot.
-    if [ -e /run/reefy/storage-recovery-timeout ]; then
-        echo "[boot] Storage recovery timed out; retaining diagnostics without rollback"
+    # Keep failed-storage diagnostics reachable without confirming a failed slot.
+    if [ -e /run/reefy/storage-recovery-failed ]; then
+        echo "[boot] Storage recovery failed; retaining diagnostics without rollback"
         exit 1
     fi
     STORAGE_STATE=$(systemctl show -p ActiveState --value reefy-storage.service)
@@ -38,18 +38,18 @@ done
 
 # Close the state transition window at the end of the budget too.
 while [ "$(systemctl show -p ActiveState --value reefy-storage.service)" = activating ]; do
-    # Keep timeout diagnostics reachable without confirming a failed slot.
-    if [ -e /run/reefy/storage-recovery-timeout ]; then
-        echo "[boot] Storage recovery timed out; retaining diagnostics without rollback"
+    # Keep failed-storage diagnostics reachable without confirming a failed slot.
+    if [ -e /run/reefy/storage-recovery-failed ]; then
+        echo "[boot] Storage recovery failed; retaining diagnostics without rollback"
         exit 1
     fi
     sleep 5 &
     wait $!
 done
 
-# Keep timeout diagnostics reachable without confirming a failed slot.
-if [ -e /run/reefy/storage-recovery-timeout ]; then
-    echo "[boot] Storage recovery timed out; retaining diagnostics without rollback"
+# Keep failed-storage diagnostics reachable without confirming a failed slot.
+if [ -e /run/reefy/storage-recovery-failed ]; then
+    echo "[boot] Storage recovery failed; retaining diagnostics without rollback"
     exit 1
 fi
 
