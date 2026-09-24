@@ -363,10 +363,9 @@ mount_primary_xfs() {
 # metadata LV, and swaps that LV into the pool. LVM keeps the damaged metadata
 # as a visible *_metaN LV, so this does not overwrite the only damaged copy.
 #
-# A completely overwritten superblock cannot provide its data block size.
-# That geometry is also stored in the LVM VG metadata, so pass it explicitly
-# along with the transaction ID and number of data blocks. This is the same
-# failure shape produced when unrelated data replaces metadata block zero.
+# A lost superblock cannot establish which surviving mapping history is
+# current. The hook requires readable current roots and verifies that native
+# repair preserves their full dump before LVM can swap in the spare.
 repair_thin_pool() {
     REPAIR_MARKER="/run/reefy-thin-pool-repaired"
     POOL="${STORAGE_VG}/${THIN_POOL_LV}"
@@ -377,33 +376,24 @@ repair_thin_pool() {
     : > "${REPAIR_MARKER}"
 
     [ -x /usr/sbin/thin_check ] || return 1
-    [ -x /usr/sbin/thin_repair ] || return 1
-    [ "$(lvs --noheadings -o segtype "${POOL}" 2>/dev/null | xargs)" = "thin-pool" ] || return 1
+    [ -x /usr/bin/reefy-thin-repair ] || return 1
+    [ "$(lvs --noheadings -o segtype "${POOL}" | xargs)" = "thin-pool" ] || return 1
     # LVM prints an empty lv_active field when corrupt metadata prevents the
     # thin-pool device from being created. Reject only a pool that is active.
-    [ "$(lvs --noheadings -o lv_active "${POOL}" 2>/dev/null | xargs)" != "active" ] || return 1
+    [ "$(lvs --noheadings -o lv_active "${POOL}" | xargs)" != "active" ] || return 1
 
     TMETA_SECTORS=$(lvs --noheadings --units s --nosuffix -o lv_size \
-        "${TMETA}" 2>/dev/null | xargs)
+        "${TMETA}" | xargs)
     PMSPARE_SECTORS=$(lvs --noheadings --units s --nosuffix -o lv_size \
-        "${PMSPARE}" 2>/dev/null | xargs)
-    CHUNK_SECTORS=$(lvs --noheadings --units s --nosuffix -o chunksize \
-        "${POOL}" 2>/dev/null | xargs)
-    DATA_SECTORS=$(lvs --noheadings --units s --nosuffix -o lv_size \
-        "${TMETA%_tmeta}_tdata" 2>/dev/null | xargs)
-    TRANSACTION_ID=$(lvs --noheadings -o transaction_id \
-        "${POOL}" 2>/dev/null | xargs)
-
-    case "${TMETA_SECTORS}:${PMSPARE_SECTORS}:${CHUNK_SECTORS}:${DATA_SECTORS}:${TRANSACTION_ID}" in
+        "${PMSPARE}" | xargs)
+    case "${TMETA_SECTORS}:${PMSPARE_SECTORS}" in
         *[!0-9:]*|*::*|:*|*:) return 1 ;;
     esac
+    [ "${TMETA_SECTORS}" -gt 0 ] || return 1
     [ "${PMSPARE_SECTORS}" -ge "${TMETA_SECTORS}" ] || return 1
-    [ "${CHUNK_SECTORS}" -gt 0 ] || return 1
-    [ $((DATA_SECTORS % CHUNK_SECTORS)) -eq 0 ] || return 1
-    NR_DATA_BLOCKS=$((DATA_SECTORS / CHUNK_SECTORS))
 
     echo "[reefy] Thin-pool activation failed; attempting guarded metadata repair"
-    REPAIR_CONFIG="global { thin_check_executable=\"/usr/sbin/thin_check\" thin_repair_executable=\"/usr/sbin/thin_repair\" thin_repair_options=[\"--data-block-size\",\"${CHUNK_SECTORS}\",\"--transaction-id\",\"${TRANSACTION_ID}\",\"--nr-data-blocks\",\"${NR_DATA_BLOCKS}\"] }"
+    REPAIR_CONFIG='global { thin_check_executable="/usr/sbin/thin_check" thin_repair_executable="/usr/bin/reefy-thin-repair" thin_repair_options=["--preserve-mappings"] }'
     if lvconvert --config "${REPAIR_CONFIG}" --repair --yes "${POOL}"; then
         echo "[reefy] Thin-pool metadata repaired; damaged metadata retained by LVM"
         return 0
@@ -471,7 +461,10 @@ setup_internal_storage() {
             # adopted device appear factory-fresh to the control plane.
             lvchange -ay "${STORAGE_VG}/reefy_state" || true
             mount_state_lv
-            return 0
+            mkdir -p /run/reefy
+            echo 'Existing thin storage failed validation; repair storage before provisioning' > /run/reefy/storage-recovery-failed
+            echo "[reefy] ERROR: Thin storage unavailable; retaining control-plane diagnostics"
+            return 1
         fi
     fi
     lv_path=""

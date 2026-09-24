@@ -11,7 +11,7 @@ BIN = Path(__file__).parents[1] / 'rootfs-overlay/usr/bin'
 
 
 class StorageWaitTests(unittest.TestCase):
-    def exercise(self, name, timed_out=False):
+    def exercise(self, name, timed_out=False, refused=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             shim = root / 'shim'
@@ -37,6 +37,9 @@ elif name=='reefy-efi':
             (root / 'ticks').write_text('0')
             source = (BIN / name).read_text().replace('/proc/sysrq-trigger', str(root / 'reboot'))
             source = source.replace('/run/reefy/storage-recovery-timeout', str(root / 'timed-out'))
+            source = source.replace('/run/reefy/storage-recovery-failed', str(root / 'failed'))
+            if timed_out or refused:
+                (root / 'failed').touch()
             if timed_out:
                 (root / 'timed-out').touch()
             result = subprocess.run(['sh', '-c', source], text=True, capture_output=True,
@@ -66,6 +69,13 @@ elif name=='reefy-efi':
                 self.assertFalse(confirmed)
                 self.assertFalse(rebooted)
                 self.assertEqual(ticks, 0)
+
+    def test_repair_refusal_does_not_boot_older_repair_code(self):
+        result, ticks, confirmed, rebooted = self.exercise('reefy-boot-watchdog', refused=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(ticks, 0)
+        self.assertFalse(confirmed)
+        self.assertFalse(rebooted)
 
 
 if __name__ == '__main__':

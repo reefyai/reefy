@@ -1,0 +1,3 @@
+#!/bin/sh
+# Internal LVM hook; failed validation prevents the metadata LV swap.
+exec env PYTHONPATH=/usr/lib/reefy python3 -m reefy.thin_repair "$@"
