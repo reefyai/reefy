@@ -18,9 +18,40 @@ fi
 
 echo "[boot-watchdog] Watching Boot${CURRENT} (non-default), will reboot in ${TIMEOUT}s if not confirmed"
 
-# Sleep in background so SIGTERM from boot-confirm is handled promptly
-sleep $TIMEOUT &
-wait $!
+# Storage work can legitimately outlast the boot budget. Never interrupt
+# filesystem metadata writes with a rollback reboot. Match boot-confirm's
+# accounting and resume the existing budget when the storage unit exits.
+WAITED=0
+while [ "$WAITED" -lt "$TIMEOUT" ]; do
+    # Keep timeout diagnostics reachable without confirming a failed slot.
+    if [ -e /run/reefy/storage-recovery-timeout ]; then
+        echo "[boot] Storage recovery timed out; retaining diagnostics without rollback"
+        exit 1
+    fi
+    STORAGE_STATE=$(systemctl show -p ActiveState --value reefy-storage.service)
+    sleep 5 &
+    wait $!
+    if [ "$STORAGE_STATE" != activating ]; then
+        WAITED=$((WAITED + 5))
+    fi
+done
+
+# Close the state transition window at the end of the budget too.
+while [ "$(systemctl show -p ActiveState --value reefy-storage.service)" = activating ]; do
+    # Keep timeout diagnostics reachable without confirming a failed slot.
+    if [ -e /run/reefy/storage-recovery-timeout ]; then
+        echo "[boot] Storage recovery timed out; retaining diagnostics without rollback"
+        exit 1
+    fi
+    sleep 5 &
+    wait $!
+done
+
+# Keep timeout diagnostics reachable without confirming a failed slot.
+if [ -e /run/reefy/storage-recovery-timeout ]; then
+    echo "[boot] Storage recovery timed out; retaining diagnostics without rollback"
+    exit 1
+fi
 
 # If we get here, boot-confirm never stopped us — reboot via sysrq
 echo "[boot-watchdog] Boot confirmation timed out after ${TIMEOUT}s, rebooting"

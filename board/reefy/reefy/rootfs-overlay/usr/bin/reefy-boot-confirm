@@ -16,7 +16,7 @@ fi
 
 echo "[boot-confirm] Booted from non-default slot Boot${CURRENT} (default: Boot${DEFAULT}), confirming..."
 
-# Wait for critical services to be active (up to 300s).
+# Wait for critical services to be active (up to 300s outside storage work).
 # For each service: if it has failed, abort immediately (don't confirm the slot).
 # If not yet active, keep waiting. Only confirm when all are active.
 CRITICAL_SERVICES="reefy-storage reefy-control"
@@ -39,8 +39,18 @@ while [ $WAITED -lt 300 ]; do
         break
     fi
 
+    # Storage checks and repairs have no evidence-based maximum duration.
+    # Do not consume the boot confirmation budget while they are running.
+    # Keep timeout diagnostics reachable without confirming a failed slot.
+    if [ -e /run/reefy/storage-recovery-timeout ]; then
+        echo "[boot] Storage recovery timed out; retaining diagnostics without rollback"
+        exit 1
+    fi
+    STORAGE_STATE=$(systemctl show -p ActiveState --value reefy-storage.service)
     sleep 5
-    WAITED=$((WAITED + 5))
+    if [ "$STORAGE_STATE" != activating ]; then
+        WAITED=$((WAITED + 5))
+    fi
 done
 if [ "$ALL_OK" != true ]; then
     echo "[boot-confirm] Critical services not active after 300s"

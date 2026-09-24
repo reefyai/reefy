@@ -5,7 +5,9 @@ After=local-fs.target
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/reefy-boot-confirm
-TimeoutStartSec=360
+# Hard ceiling for confirming a pending firmware slot.
+# The storage supervisor owns repair interruption and diagnostic reboot.
+TimeoutStartSec=3h
 
 [Install]
 WantedBy=multi-user.target

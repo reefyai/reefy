@@ -57,7 +57,7 @@ mount_state_lv() {
     # (fresh provision wrote bootstrap state there), copy it into the LV
     # first so mounting doesn't hide it.
     TMP=$(mktemp -d)
-    if mount -o noatime,discard "${SLV}" "${TMP}" 2>/dev/null; then
+    if mount -o noatime,discard "${SLV}" "${TMP}"; then
         if [ -z "$(ls -A "${TMP}" 2>/dev/null)" ] && \
            [ -n "$(ls -A "${SDIR}" 2>/dev/null)" ]; then
             cp -a "${SDIR}/." "${TMP}/" 2>/dev/null || true
@@ -65,7 +65,7 @@ mount_state_lv() {
         umount "${TMP}" 2>/dev/null || true
     fi
     rmdir "${TMP}" 2>/dev/null || true
-    if mount -o noatime,discard "${SLV}" "${SDIR}" 2>/dev/null; then
+    if mount -o noatime,discard "${SLV}" "${SDIR}"; then
         echo "[reefy] Mounted reefy_state at ${SDIR}"
     fi
 }
@@ -177,8 +177,8 @@ setup_data_partition() {
                     # an LV mounted at /mnt/reefy-data. Activate the VG
                     # and mount the right LV (new `reefy_default`, or
                     # legacy `data` if this device pre-dates the rework).
-                    vgscan >/dev/null 2>&1
-                    vgchange -ay "${STORAGE_VG}" >/dev/null 2>&1
+                    vgscan
+                    vgchange -ay "${STORAGE_VG}"
                     for lv in "${STORAGE_LV}" "${LEGACY_STORAGE_LV}"; do
                         lv_path="/dev/${STORAGE_VG}/${lv}"
                         [ -e "${lv_path}" ] || continue
@@ -194,6 +194,11 @@ setup_data_partition() {
                                 echo "[reefy] Mounted LVM LV ${lv} (${LV_FS}) at ${REEFY_DATA_MNT}"
                                 mount_state_lv
                                 return 0
+                            else
+                                mkdir -p /run/reefy
+                                echo 'Existing XFS storage failed validation; repair storage before provisioning' > /run/reefy/storage-recovery-failed
+                                echo "[reefy] ERROR: Primary XFS unavailable; bootstrap diagnostics only"
+                                return 1
                             fi
                         else
                             LV_OPTS="${REEFY_DATA_MOUNT_OPTS}"
@@ -238,10 +243,10 @@ LEGACY_STORAGE_LV="data"
 THIN_POOL_LV="reefy_pool"
 LVM_THIN_TOOLS_CONFIG='global { thin_check_executable="/usr/sbin/thin_check" thin_repair_executable="/usr/sbin/thin_repair" }'
 
-# Mount the primary Reefy XFS data LV, repairing only the specific failure
-# where kernel log recovery rejects corrupt metadata with EUCLEAN. A generic
-# mount error must never trigger repair: it could be a bad option, missing
-# driver, transient I/O failure, or operator configuration problem.
+# Check the primary XFS LV before exposing it to services. Successful mount
+# only establishes that journal replay worked, not that all inode metadata
+# is healthy. Replay first, unmount, then run the upstream offline checker.
+# A generic mount/check error must never trigger repair.
 #
 # xfs_repair without -L is always attempted first. Exit 2 means the dirty log
 # cannot be replayed in userspace. The kernel mount already tried and failed
@@ -254,20 +259,49 @@ mount_primary_xfs() {
     XFS_OPTS="$3"
     XFS_REPAIR_MARKER="/run/reefy-xfs-repair-attempted"
     XFS_MOUNT_ERROR="/run/reefy-xfs-mount.$$.err"
+    XFS_CHECK_LOG="/run/reefy-xfs-check.$$.log"
+    XFS_REPLAY_FAILED=false
+    export LC_ALL=C
+
+    # Refuse an LV mounted elsewhere too, not just a busy target directory.
+    XFS_MOUNTED_RC=0
+    findmnt -rn -S "${XFS_LV}" || XFS_MOUNTED_RC=$?
+    [ "${XFS_MOUNTED_RC}" -eq 1 ] || return 1
 
     if mount -o "${XFS_OPTS}" "${XFS_LV}" "${XFS_TARGET}" \
             2>"${XFS_MOUNT_ERROR}"; then
-        rm -f "${XFS_MOUNT_ERROR}"
-        return 0
+        # No consumers can start until this storage oneshot completes.
+        # Never proceed to an offline check unless unmount really succeeded.
+        umount "${XFS_TARGET}" || return 1
+        echo "[reefy] Checking primary XFS metadata before service startup"
+        XFS_CHECK_RC=0
+        LC_ALL=C xfs_repair -n "${XFS_LV}" >"${XFS_CHECK_LOG}" 2>&1 || XFS_CHECK_RC=$?
+        cat "${XFS_CHECK_LOG}"
+        if [ "${XFS_CHECK_RC}" -eq 0 ]; then
+            rm -f "${XFS_MOUNT_ERROR}" "${XFS_CHECK_LOG}"
+            echo "[reefy] Primary XFS metadata check passed"
+            mount -o "${XFS_OPTS}" "${XFS_LV}" "${XFS_TARGET}"
+            return $?
+        fi
+        # Exit 1 also covers operational failures. Require a completed scan
+        # before considering a repair; an I/O/usage failure is not consent
+        # to write metadata. The completion text is from pinned xfsprogs.
+        if [ "${XFS_CHECK_RC}" -ne 1 ] || \
+                ! grep -Fq 'Phase 7 - verify link counts' "${XFS_CHECK_LOG}" || \
+                ! grep -Fq 'No modify flag set, skipping filesystem flush and exiting.' "${XFS_CHECK_LOG}" || \
+                grep -Eqi 'input/output error|I/O error|short read|read error|failed to read|error reading' "${XFS_CHECK_LOG}"; then
+            echo "[reefy] ERROR: XFS check did not complete; refusing automatic repair"
+            return 1
+        fi
+        echo "[reefy] Primary XFS check found corruption after successful mount"
+    else
+        cat "${XFS_MOUNT_ERROR}" >&2
+        grep -Fq "Structure needs cleaning" "${XFS_MOUNT_ERROR}" || return 1
+        XFS_REPLAY_FAILED=true
     fi
-    cat "${XFS_MOUNT_ERROR}" >&2
 
     # Keep the automatic, destructive path deliberately narrow.
     [ "${XFS_LV}" = "/dev/${STORAGE_VG}/${STORAGE_LV}" ] || {
-        rm -f "${XFS_MOUNT_ERROR}"
-        return 1
-    }
-    grep -Fq "Structure needs cleaning" "${XFS_MOUNT_ERROR}" || {
         rm -f "${XFS_MOUNT_ERROR}"
         return 1
     }
@@ -289,12 +323,12 @@ mount_primary_xfs() {
     }
     : > "${XFS_REPAIR_MARKER}"
 
-    echo "[reefy] XFS mount failed with EUCLEAN; attempting offline repair"
+    echo "[reefy] Primary XFS corruption confirmed; attempting offline repair"
     if xfs_repair "${XFS_LV}"; then
         echo "[reefy] XFS filesystem repaired without log reset"
     else
         XFS_REPAIR_RC=$?
-        if [ "${XFS_REPAIR_RC}" -ne 2 ]; then
+        if [ "${XFS_REPAIR_RC}" -ne 2 ] || [ "${XFS_REPLAY_FAILED}" != true ]; then
             echo "[reefy] WARNING: XFS repair failed with exit ${XFS_REPAIR_RC}"
             rm -f "${XFS_MOUNT_ERROR}"
             return 1
@@ -308,8 +342,15 @@ mount_primary_xfs() {
         echo "[reefy] XFS filesystem repaired after unreplayable log"
     fi
 
+    # Require an independent clean scan after repair, before services can
+    # consume the filesystem. No deadline may interrupt metadata writes.
+    if ! xfs_repair -n "${XFS_LV}"; then
+        echo "[reefy] ERROR: Primary XFS remains inconsistent after repair"
+        return 1
+    fi
     if mount -o "${XFS_OPTS}" "${XFS_LV}" "${XFS_TARGET}"; then
-        rm -f "${XFS_MOUNT_ERROR}"
+        rm -f "${XFS_MOUNT_ERROR}" "${XFS_CHECK_LOG}"
+        echo "[reefy] Primary XFS repair verified"
         return 0
     fi
     echo "[reefy] WARNING: XFS mount still fails after repair"
@@ -388,33 +429,47 @@ setup_internal_storage() {
     modprobe dm_crypt 2>/dev/null || true
     modprobe dm_mod 2>/dev/null || true
 
+    INTERNAL_PVS=""
     # Open LUKS on all internal drives with our key
     for dev in $(lsblk -dpno NAME 2>/dev/null); do
         [ "${dev}" = "/dev/${PARENT_NAME}" ] && continue
         cryptsetup isLuks "${dev}" 2>/dev/null || continue
         luks_name="reefy-$(basename ${dev})"
-        [ -e "/dev/mapper/${luks_name}" ] && continue
-        cryptsetup luksOpen "${dev}" "${luks_name}" \
-            --allow-discards --perf-submit_from_crypt_cpus --persistent \
-            --key-file "${KEY_PART}" --keyfile-size "${LUKS_KEY_SIZE}" 2>/dev/null || continue
-        echo "[reefy] Opened LUKS on ${dev}"
+        if [ ! -e "/dev/mapper/${luks_name}" ]; then
+            cryptsetup luksOpen "${dev}" "${luks_name}" \
+                --allow-discards --perf-submit_from_crypt_cpus --persistent \
+                --key-file "${KEY_PART}" --keyfile-size "${LUKS_KEY_SIZE}" || continue
+            echo "[reefy] Opened LUKS on ${dev}"
+        fi
+        INTERNAL_PVS="${INTERNAL_PVS} /dev/mapper/${luks_name}"
     done
 
-    # Scan for LVM and activate VG
-    vgscan >/dev/null 2>&1
-    vgs "${STORAGE_VG}" >/dev/null 2>&1 || return 0
+    # A successfully unlocked internal disk is existing storage. Do not
+    # misclassify an unreadable VG as a fresh device ready for adoption.
+    [ -n "${INTERNAL_PVS}" ] || return 0
+    vgscan || echo "[reefy] WARNING: VG scan failed; inspecting existing storage"
+    if ! vgs "${STORAGE_VG}"; then
+        echo "[reefy] VG unreadable; validating guarded outer-metadata recovery"
+        if ! PYTHONPATH=/usr/lib/reefy python3 -m reefy.vg_recovery ${INTERNAL_PVS}; then
+            mkdir -p /run/reefy
+            echo 'Existing storage recovery failed; repair storage before provisioning' > /run/reefy/storage-recovery-failed
+            echo "[reefy] ERROR: Existing internal storage unavailable; bootstrap diagnostics only"
+            return 1
+        fi
+    fi
+    rm -f /run/reefy/storage-recovery-failed
     # vgchange asks LVM to run upstream thin_check before pool activation.
     if ! vgchange --config "${LVM_THIN_TOOLS_CONFIG}" \
-            -ay "${STORAGE_VG}" >/dev/null 2>&1; then
+            -ay "${STORAGE_VG}"; then
         if repair_thin_pool && \
                 vgchange --config "${LVM_THIN_TOOLS_CONFIG}" \
-                    -ay "${STORAGE_VG}" >/dev/null 2>&1; then
+                    -ay "${STORAGE_VG}"; then
             echo "[reefy] Activated repaired thin pool"
         else
             # Keep the thick identity LV available even when app storage is
             # unrecoverable. This prevents a storage failure from making an
             # adopted device appear factory-fresh to the control plane.
-            lvchange -ay "${STORAGE_VG}/reefy_state" >/dev/null 2>&1 || true
+            lvchange -ay "${STORAGE_VG}/reefy_state" || true
             mount_state_lv
             return 0
         fi
@@ -441,8 +496,10 @@ setup_internal_storage() {
         INTERNAL_OPTS="noatime,discard,pquota"
         mount_primary_xfs "${lv_path}" "${REEFY_DATA_MNT}" \
             "${INTERNAL_OPTS}" || {
-            echo "[reefy] WARNING: Internal drive mount failed"
-            return 0
+            mkdir -p /run/reefy
+            echo 'Existing XFS storage failed validation; repair storage before provisioning' > /run/reefy/storage-recovery-failed
+            echo "[reefy] ERROR: Primary XFS unavailable; bootstrap diagnostics only"
+            return 1
         }
     else
         INTERNAL_OPTS="${REEFY_DATA_MOUNT_OPTS}"
@@ -465,6 +522,13 @@ setup_internal_storage() {
 # Main execution
 # Order matters: try internal drive first (fast), fall back to USB p4 (slow).
 # If neither exists (fresh USB), use tmpfs for bootstrap.
+# The supervisor re-enters only the recovery stage, after ESP discovery.
+if [ "${1:-}" = --recover ]; then
+    REEFY_DEV=$(findmnt -rn -o SOURCE "${REEFY_MNT}")
+    setup_internal_storage
+    setup_data_partition
+    exit 0
+fi
 mount_reefy_usb
 
 if ! mountpoint -q "${REEFY_MNT}" 2>/dev/null; then
@@ -474,5 +538,4 @@ if ! mountpoint -q "${REEFY_MNT}" 2>/dev/null; then
 fi
 
 ensure_boot_entries
-setup_internal_storage
-setup_data_partition
+exec env PYTHONPATH=/usr/lib/reefy python3 -m reefy.storage_boot

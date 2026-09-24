@@ -6,6 +6,8 @@ Before=docker.service
 
 [Service]
 Type=oneshot
+# storage_boot owns the recovery deadline and preserves a reboot guard first.
+TimeoutStartSec=infinity
 ExecStart=/usr/bin/boot-reefy-storage.sh
 RemainAfterExit=true
 

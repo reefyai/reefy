@@ -1739,6 +1739,29 @@ class LuksProvisionTests(unittest.TestCase):
             extend_commands,
             [['vgextend', self.s.STORAGE_VG, *pvs]],
         )
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list
+             if call.args[0][0] == 'pvcreate'],
+            [['pvcreate', '--pvmetadatacopies', '2', '-ff', '-y', pv]
+             for pv in pvs],
+        )
+
+    def test_existing_pv_layout_is_preserved_when_adding_new_pv(self):
+        old, new = '/dev/mapper/reefy-old', '/dev/mapper/reefy-new'
+        with mock.patch.object(self.s, '_require_common_mapper_sector_size',
+                               return_value=512), \
+                mock.patch.object(self.s, '_pv_vg_name',
+                                  side_effect=lambda pv: 'reefy' if pv == old else None), \
+                mock.patch.object(storage.os.path, 'exists', return_value=True), \
+                mock.patch.object(storage.subprocess, 'run',
+                                  return_value=self._result()) as run:
+            self.assertEqual(self.s._ensure_lvm_stack([old, new]), 'existing')
+
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual([cmd for cmd in commands if cmd[0] == 'pvcreate'],
+                         [['pvcreate', '--pvmetadatacopies', '2', '-ff', '-y', new]])
+        self.assertIn(['vgextend', 'reefy', new], commands)
+        self.assertFalse(any(old in cmd for cmd in commands))
 
 
 class InternalStorageFailFastTests(unittest.TestCase):
@@ -1844,7 +1867,7 @@ class ExtendStorageSectorTests(unittest.TestCase):
                     self.s, '_provision_luks_stack',
                     return_value=['/dev/mapper/reefy-sdb']) as provision, \
                 mock.patch.object(storage.subprocess, 'run',
-                                  return_value=self._result()), \
+                                  return_value=self._result()) as run, \
                 mock.patch.object(storage, 'log'):
             self.s._extend_storage(['sdb'])
 
@@ -1854,6 +1877,11 @@ class ExtendStorageSectorTests(unittest.TestCase):
             _log=mock.ANY,
             sector_size=4096,
             write_keyfile=False,
+        )
+        self.assertIn(
+            ['pvcreate', '--pvmetadatacopies', '2', '-ff', '-y',
+             '/dev/mapper/reefy-sdb'],
+            [call.args[0] for call in run.call_args_list],
         )
 
     def test_extension_sector_preflight_failure_stops_before_lvm(self):
