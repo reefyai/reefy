@@ -1679,8 +1679,8 @@ class ControlPlane:
     def _start_control_varlink(self):
         """Spawn the io.reefy.Control Varlink server (device mode only) so
         sidecars can publish through control's persistent MQTT client.
-        Daemon thread; control's main thread owns the paho loop and
-        paho publish() is thread-safe under loop_forever()."""
+        Daemon thread; worker publications are queued for Paho's
+        loop_start() network thread, which exclusively writes the socket."""
         if self.mode != 'device':
             return
         threading.Thread(target=self._serve_control_varlink, daemon=True,
@@ -1892,7 +1892,8 @@ class ControlPlane:
                     if elapsed > 120:
                         log('mqtt', f'Watchdog: disconnected for {int(elapsed)}s, forcing loop exit')
                         try:
-                            self.client.loop_stop()
+                            # Request exit first. loop_stop() waits for queued
+                            # messages and can hang on a disconnected client.
                             self.client.disconnect()
                         except Exception:
                             pass
@@ -1900,6 +1901,27 @@ class ControlPlane:
                         # on_disconnect fires again in the new client cycle.
                         self._last_disconnect_ts = 0
         threading.Thread(target=_watchdog, daemon=True).start()
+
+    @staticmethod
+    def _run_network_loop(client):
+        """Keep all socket writes in Paho's network thread.
+
+        With plain loop_forever(), Paho treats worker-thread publish() calls
+        as non-threaded and may write immediately, interleaving MQTT packets
+        after a partial socket write. loop_start() enables its queue/wakeup
+        path. Join its worker so an exit still reaches our recreation loop.
+        Paho 2.x has no public blocking wait for that worker; keep this sole
+        use of its thread handle here and cover it with the real library.
+        """
+        if client.loop_start() != mqtt.MQTT_ERR_SUCCESS:
+            raise RuntimeError('MQTT network thread could not start')
+        try:
+            worker = client._thread
+            if worker is not None:
+                worker.join()
+        finally:
+            client.disconnect()
+            client.loop_stop()
 
     def run(self):
         """Start MQTT client loop"""
@@ -1948,20 +1970,19 @@ class ControlPlane:
         # persistent MQTT connection - device mTLS key never leaves here.
         self._start_control_varlink()
 
-        # Reconnect loop: if loop_forever() exits (paho bug #894: broken sockpair
+        # Reconnect loop: if the network thread exits (paho bug #894: broken sockpair
         # after network disruption), recreate the client and reconnect.
         while True:
             log('mqtt', f'Connecting to {self.broker}:{self.port} (transport={self.transport})')
             self._last_disconnect_ts = 0
             try:
                 self.client.connect(self.broker, self.port, keepalive=30)
-                self.client.loop_forever(retry_first_connection=True)
+                self._run_network_loop(self.client)
             except Exception as e:
                 log('mqtt', f'Connection error: {e}')
 
-            # loop_forever() exited — this should not happen normally.
-            # Recreate the client to get fresh socket pairs.
-            log('mqtt', f'loop_forever() exited, recreating client in 5s')
+            # The network thread exited; recreate its client and socket pairs.
+            log('mqtt', 'Network loop exited, recreating client in 5s')
             time.sleep(5)
             if not self.setup():
                 print("[mqtt] Client setup failed, exiting")

@@ -54,3 +54,9 @@ jobs:
         run: |
           pip install pytest
           python -m pytest -q board/reefy/reefy/tests/test_artifacts.py board/reefy/reefy/tests/test_startup_readiness.py
+
+      - name: MQTT socket ownership with real Paho
+        # Run after the dependency-free import checks above.
+        run: |
+          pip install paho-mqtt==2.1.0
+          python -m unittest discover -s board/reefy/reefy/tests -p test_mqtt_network_loop.py -v
