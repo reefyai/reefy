@@ -49,7 +49,14 @@ permissions:
   attestations: write
 
 jobs:
+  debug-archive-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tools/kernel-debug -p 'test_*.py'
+
   build:
+    needs: debug-archive-tests
     runs-on: [self-hosted, large]
     timeout-minutes: 360
     outputs:
@@ -125,7 +132,15 @@ jobs:
           expected_kernel=$(sed -n 's/^BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION="v\([0-9.]*\)"$/\1/p' ../configs/reefy_defconfig)
           test -n "$expected_kernel" || { echo "could not read pinned kernel version"; exit 1; }
 
+          fingerprint=$(cd .. && python3 tools/kernel-debug/fingerprint.py)
           needs_clean=false
+          if [ "$(cat "$BR_OUTPUT/.reefy-kernel-inputs" 2>/dev/null || true)" != "$fingerprint" ]; then
+            echo "kernel build inputs changed; rebuilding kernel and dependent modules"
+            needs_clean=true
+          fi
+          # A failed/interrupted build must never mark the cache current.
+          rm -f "$BR_OUTPUT/.reefy-kernel-inputs"
+          printf '%s\n' "$fingerprint" > "$BR_OUTPUT/.reefy-kernel-inputs.pending"
           module_root="$BR_OUTPUT/target/lib/modules"
           module_dir="$module_root/$expected_kernel"
 
@@ -365,6 +380,21 @@ jobs:
           echo "reefy_build_id=$reefy_build_id" >> "$GITHUB_OUTPUT"
           echo "kernel_abi_sha256=$kernel_abi_sha256" >> "$GITHUB_OUTPUT"
           echo "image_version=$image_version" >> "$GITHUB_OUTPUT"
+
+      - name: Archive and verify exact kernel debug files
+        run: python3 tools/kernel-debug/archive.py --output "$BR_OUTPUT"
+
+      - name: Upload kernel debug archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: reefy-kernel-debug
+          path: ${{ env.BR_OUTPUT }}/images/reefy-kernel-debug.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+
+      - name: Mark verified kernel cache current
+        run: mv "$BR_OUTPUT/.reefy-kernel-inputs.pending" "$BR_OUTPUT/.reefy-kernel-inputs"
 
       - name: Upload NVIDIA provider inputs
         uses: actions/upload-artifact@v4
