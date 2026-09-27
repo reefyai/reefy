@@ -1,7 +1,7 @@
 # Firmware build log fallback
 
 The firmware workflow saves output from kernel/image compilation, standalone
-AMD module builds and debug archive verification in a separate
+AMD module builds, provider staging (including the synthetic module), and debug archive verification in a separate
 `reefy-build-logs` artifact (30-day retention). The final upload uses `always()`
 so ordinary compilation failures do not skip it. The wrapper runs scripts with
 `-e` and `pipefail`; tee does not hide a failed build. Logs are scoped to the
