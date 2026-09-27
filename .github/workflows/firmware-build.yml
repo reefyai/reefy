@@ -192,36 +192,11 @@ jobs:
           fi
 
       - name: Build (post_image.sh loops flavors)
-        shell: bash ${{ github.workspace }}/tools/ci/logged-build.sh {0}
         working-directory: buildroot
-        run: make O="$BR_OUTPUT" -j$(nproc)
+        run: bash "$GITHUB_WORKSPACE/tools/ci/logged-build.sh" "$GITHUB_WORKSPACE/tools/ci/build-firmware.sh"
 
       - name: Build exact AMD provider modules
-        shell: bash ${{ github.workspace }}/tools/ci/logged-build.sh {0}
-        run: |
-          # Standalone provider builds need the same host tools as Buildroot.
-          export PATH="$BR_OUTPUT/host/bin:$BR_OUTPUT/host/sbin:$PATH"
-          test -x "$BR_OUTPUT/host/bin/pahole"
-          test "$(command -v pahole)" = "$BR_OUTPUT/host/bin/pahole"
-          pahole --version
-          expected_kernel=$(sed -n 's/^BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION="v\([0-9.]*\)"$/\1/p' configs/reefy_defconfig)
-          test -n "$expected_kernel"
-          kernel_build=''
-          for candidate in "$BR_OUTPUT"/build/linux-*; do
-            test "$(cat "$candidate/include/config/kernel.release" 2>/dev/null || true)" = "$expected_kernel" || continue
-            test -z "$kernel_build" || { echo "multiple exact kernel build trees"; exit 1; }
-            kernel_build=$candidate
-          done
-          test -n "$kernel_build"
-          driver_url=$(python3 -c 'import json; print(json.load(open("amd-provider/versions.json"))["amd_gpu_driver"]["package_url"])')
-          mkdir -p "$BR_OUTPUT/reefy-artifacts/amd"
-          curl -fL --retry 3 -o "$BR_OUTPUT/reefy-artifacts/amd/amdgpu-dkms.deb" "$driver_url"
-          python3 amd-provider/scripts/build_modules.py \
-            --driver-package "$BR_OUTPUT/reefy-artifacts/amd/amdgpu-dkms.deb" \
-            --kernel-dir "$kernel_build" \
-            --kernel-release "$expected_kernel" \
-            --toolchain-prefix "$BR_OUTPUT/host/bin/x86_64-buildroot-linux-gnu-" \
-            --output "$BR_OUTPUT/reefy-artifacts/amd/modules-root"
+        run: bash tools/ci/logged-build.sh tools/ci/build-amd.sh
 
       - name: Verify pinned kernel version
         run: |
@@ -390,8 +365,7 @@ jobs:
           echo "image_version=$image_version" >> "$GITHUB_OUTPUT"
 
       - name: Archive and verify exact kernel debug files
-        shell: bash ${{ github.workspace }}/tools/ci/logged-build.sh {0}
-        run: python3 tools/kernel-debug/archive.py --output "$BR_OUTPUT"
+        run: bash tools/ci/logged-build.sh tools/ci/archive-debug.sh
 
       - name: Upload kernel debug archive
         uses: actions/upload-artifact@v4
