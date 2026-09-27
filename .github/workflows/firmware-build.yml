@@ -54,6 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 -m unittest discover -s tools/kernel-debug -p 'test_*.py'
+      - run: python3 -m unittest discover -s tools/ci -p 'test_*.py'
 
   build:
     needs: debug-archive-tests
@@ -191,11 +192,18 @@ jobs:
           fi
 
       - name: Build (post_image.sh loops flavors)
+        shell: bash ${{ github.workspace }}/tools/ci/logged-build.sh {0}
         working-directory: buildroot
         run: make O="$BR_OUTPUT" -j$(nproc)
 
       - name: Build exact AMD provider modules
+        shell: bash ${{ github.workspace }}/tools/ci/logged-build.sh {0}
         run: |
+          # Standalone provider builds need the same host tools as Buildroot.
+          export PATH="$BR_OUTPUT/host/bin:$BR_OUTPUT/host/sbin:$PATH"
+          test -x "$BR_OUTPUT/host/bin/pahole"
+          test "$(command -v pahole)" = "$BR_OUTPUT/host/bin/pahole"
+          pahole --version
           expected_kernel=$(sed -n 's/^BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION="v\([0-9.]*\)"$/\1/p' configs/reefy_defconfig)
           test -n "$expected_kernel"
           kernel_build=''
@@ -382,6 +390,7 @@ jobs:
           echo "image_version=$image_version" >> "$GITHUB_OUTPUT"
 
       - name: Archive and verify exact kernel debug files
+        shell: bash ${{ github.workspace }}/tools/ci/logged-build.sh {0}
         run: python3 tools/kernel-debug/archive.py --output "$BR_OUTPUT"
 
       - name: Upload kernel debug archive
@@ -485,6 +494,16 @@ jobs:
             ${{ env.BR_OUTPUT }}/images/reefy-prod.raw
             ${{ env.BR_OUTPUT }}/images/reefy-dev.efi
             ${{ env.BR_OUTPUT }}/images/reefy-dev.raw
+
+      - name: Preserve build logs even on failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: reefy-build-logs
+          path: ${{ runner.temp }}/reefy-build-logs/${{ github.run_id }}-${{ github.run_attempt }}/*.log
+          if-no-files-found: warn
+          retention-days: 30
+
 
   publish-nvidia-provider:
     needs: build
