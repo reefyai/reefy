@@ -196,6 +196,9 @@ jobs:
 
       - name: Build exact AMD provider modules
         run: |
+          # External module builds need Buildroot's pahole for kernel BTF.
+          export PATH="$BR_OUTPUT/host/bin:$BR_OUTPUT/host/sbin:$PATH"
+          test -x "$BR_OUTPUT/host/bin/pahole"
           expected_kernel=$(sed -n 's/^BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION="v\([0-9.]*\)"$/\1/p' configs/reefy_defconfig)
           test -n "$expected_kernel"
           kernel_build=''
