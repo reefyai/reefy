@@ -28,7 +28,29 @@ RebootWatchdogSec=2min
 When the hardware exposes `/dev/watchdog0`, systemd opens it and pets it at
 half the runtime timeout. A kernel deadlock, PID 1 stall, or other failure that
 stops those pings lets the device reset the machine. `RebootWatchdogSec` also
-bounds a shutdown that never completes.
+protects the final shutdown phase after regular services have stopped. It does
+not impose a deadline on the earlier service-stopping phase.
+
+Reefy also sets a service-shutdown deadline in
+`/etc/systemd/system/shutdown.target.d/timeout.conf`:
+
+```ini
+[Unit]
+JobTimeoutSec=120s
+JobTimeoutAction=reboot-force
+```
+
+This timer starts when the shutdown target job is queued, including its wait
+for services to stop. If that wait exceeds 120 seconds, systemd forcibly
+terminates processes and proceeds to final shutdown, where the hardware reboot
+watchdog is the fallback. This interrupts application writes if graceful
+shutdown fails. A timed-out poweroff intentionally becomes a reboot so the
+machine can return to service. Docker separately has `TimeoutStopSec=30s`.
+
+The runtime and reboot hardware timers require a supported, armed watchdog;
+they do not guarantee coverage during firmware or early kernel boot. The
+shutdown job timer needs a responsive PID 1, so it complements the hardware
+watchdog rather than replacing it.
 
 The kernel has its own production panic timeout, so a normal kernel panic can
 reboot before the hardware watchdog. The hardware timer remains the fallback
