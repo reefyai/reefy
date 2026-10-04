@@ -510,6 +510,14 @@ class ControlPlane:
             and warning.get('instance_uuid')
             and warning.get('volume')
         ]
+        policies = [f"{w.get('policy', 'host.policies')}: {w.get('error', '')}"
+                    for w in warnings
+                    if w.get('code') == 'policy.apply_failed']
+        if policies:
+            return ('Device ready with warnings: policy apply failed for '
+                    + ', '.join(policies)
+                    + ('; storage caps not enforced for ' + ', '.join(affected)
+                       if affected else ''))
         if affected:
             noun = 'cap' if len(affected) == 1 else 'caps'
             return (

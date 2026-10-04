@@ -2420,6 +2420,20 @@ class ApplyPathTests(unittest.TestCase):
                      'dirs': m_dirs, 'host': m_host,
                      'reclaim': m_reclaim}
 
+    def test_policy_failure_preserves_storage_warnings_and_runs_apps(self):
+        policy_warning = {'code': 'policy.apply_failed',
+                          'policy': 'host.policies.hardware.nvme.apst',
+                          'error': 'nvme0: readback did not match'}
+        storage_warning = {'code': 'storage.cap_not_enforced',
+                           'instance_uuid': 'synthetic-app', 'volume': 'media'}
+        with mock.patch.object(dataplane, 'apply_policies',
+                               return_value=[policy_warning]):
+            res, calls = self._apply(_make_dp(), warnings=[storage_warning])
+        self.assertEqual(res['status'], 'succeeded_with_warnings')
+        self.assertEqual(res['warnings'], [policy_warning, storage_warning])
+        calls['compose'].assert_called_once()
+        calls['_apply_network'].assert_called_once()
+
     def test_apply_state_succeeds_end_to_end(self):
         res, _ = self._apply(_make_dp())
         self.assertEqual(res['status'], 'succeeded')
