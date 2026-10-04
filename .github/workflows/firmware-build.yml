@@ -194,12 +194,6 @@ jobs:
         working-directory: buildroot
         run: make O="$BR_OUTPUT" -j$(nproc)
 
-      - name: Expose Buildroot host tools
-        run: |
-          # External module builds need Buildroot's pahole for kernel BTF.
-          test -x "$BR_OUTPUT/host/bin/pahole"
-          printf '%s\n' "$BR_OUTPUT/host/bin" "$BR_OUTPUT/host/sbin" >> "$GITHUB_PATH"
-
       - name: Build exact AMD provider modules
         run: |
           # External-module BTF uses the same host tools as the kernel build.
