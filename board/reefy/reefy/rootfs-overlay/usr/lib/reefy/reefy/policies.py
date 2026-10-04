@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 import re
 
-from reefy.apply_results import sanitize_apply_error
+from reefy.apply_results import sanitize_apply_error, apply_warning
 
 
 def apply_apst(value, controllers=Path('/sys/class/nvme'),
@@ -60,9 +60,10 @@ def apply_policies(policies, handlers=None):
     invalid = set()
 
     def warn(path, error):
-        warnings.append({'code': 'policy.apply_failed',
-                         'policy': 'host.policies' + ('.' + '.'.join(path) if path else ''),
-                         'error': sanitize_apply_error(str(error))})
+        warnings.append(apply_warning(
+            'policy.apply_failed', str(error), 'policy',
+            'host.policies' + ('.' + '.'.join(path) if path else '')))
+
 
     def walk(node, path=()):
         if path in handlers:

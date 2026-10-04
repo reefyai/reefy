@@ -502,28 +502,11 @@ class ControlPlane:
 
     @staticmethod
     def _ready_stage_message(warnings=None):
-        warnings = warnings or []
-        affected = [
-            f'{warning.get("instance_uuid")}/{warning.get("volume")}'
-            for warning in warnings
-            if warning.get('code') == 'storage.cap_not_enforced'
-            and warning.get('instance_uuid')
-            and warning.get('volume')
-        ]
-        policies = [f"{w.get('policy', 'host.policies')}: {w.get('error', '')}"
-                    for w in warnings
-                    if w.get('code') == 'policy.apply_failed']
-        if policies:
-            return ('Device ready with warnings: policy apply failed for '
-                    + ', '.join(policies)
-                    + ('; storage caps not enforced for ' + ', '.join(affected)
-                       if affected else ''))
-        if affected:
-            noun = 'cap' if len(affected) == 1 else 'caps'
-            return (
-                f'Device ready with warnings: storage {noun} not enforced '
-                f'for {", ".join(affected)}')
-        return 'Device ready'
+        if not warnings:
+            return 'Device ready'
+        return 'Device ready with warnings: ' + '; '.join(
+            f"{w['subject']['kind']} {w['subject']['id']}: {w['message']}"
+            for w in warnings)
 
     def _handle_device_connect(self, client):
         """Device mode (subscribe already done in on_connect): ask the data

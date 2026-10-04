@@ -56,11 +56,7 @@ class ApplyResultStoreTests(unittest.TestCase):
         self.assertNotIn('/synthetic/path', rendered)
         self.assertNotIn('/mnt/synthetic/private/file', rendered)
         self.assertIn('[PATH]', record['error'])
-        self.assertEqual(record['warnings'], [{
-            'code': 'storage.cap_not_enforced',
-            'instance_uuid': 'synthetic-instance',
-            'volume': 'media',
-        }])
+        self.assertEqual(record['warnings'], [{'code': 'storage.cap_not_enforced', 'message': 'Storage cap could not be enforced', 'subject': {'kind': 'volume', 'id': 'synthetic-instance/media'}}])
 
     def test_restart_marks_queued_and_running_records_failed(self):
         queued = self._request_id()
