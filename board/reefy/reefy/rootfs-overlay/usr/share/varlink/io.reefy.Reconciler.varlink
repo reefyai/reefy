@@ -4,10 +4,15 @@
 # process so a crash/OOM/hang in that work cannot take down control.
 interface io.reefy.Reconciler
 
+type WarningSubject (
+    kind: string,
+    id: string
+)
+
 type ApplyWarning (
     code: string,
-    instance_uuid: string,
-    volume: string
+    message: string,
+    subject: WarningSubject
 )
 
 # Persist a queued request before returning. The running request always

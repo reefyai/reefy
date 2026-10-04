@@ -5,6 +5,8 @@ data-plane apply, boot-mount oneshot), so it is dependency-free of paho:
 this module must import cleanly without paho-mqtt installed.
 """
 
+from reefy.apply_results import apply_warning
+
 import base64
 import contextlib
 import fcntl
@@ -1031,11 +1033,9 @@ class Storage:
             return None
         prefix = f'{shared.REEFY_DATA_MNT}/apps/'
         instance_uuid, volume = path[len(prefix):].split('/', 1)
-        return {
-            'code': 'storage.cap_not_enforced',
-            'instance_uuid': instance_uuid,
-            'volume': volume,
-        }
+        return apply_warning('storage.cap_not_enforced',
+                             'Storage cap could not be enforced',
+                             'volume', f'{instance_uuid}/{volume}')
 
     def _volume_tags(self, lv_name):
         """Return an LV's tags, or None when LVM cannot be inspected."""
@@ -1244,7 +1244,7 @@ class Storage:
         """Return a path-free, actionable error for an unsafe app mount."""
         identity = cls._cap_warning_for_path(path)
         label = (
-            f'{identity["instance_uuid"]}/{identity["volume"]}'
+            identity["subject"]["id"]
             if identity else 'an app volume')
         return ExistingVolumeUnavailableError(
             f'Storage mapping conflict for {label}: the Reefy volume assigned '
@@ -2136,7 +2136,7 @@ class Storage:
             if capped and not prepared:
                 warning = self._cap_warning_for_path(path)
                 if warning:
-                    cap_warnings[(warning['instance_uuid'], warning['volume'])] = (
+                    cap_warnings[warning['subject']['id']] = (
                         warning)
             if not os.path.exists(path):
                 os.makedirs(path, mode=0o755, exist_ok=True)

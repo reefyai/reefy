@@ -31,6 +31,45 @@ def sanitize_apply_error(error):
     return PATH_RE.sub('[PATH]', redacted)[:500]
 
 
+def apply_warning(code, message, kind, identifier):
+    """One bounded warning envelope for every reconciliation subsystem."""
+    return {
+        'code': str(code)[:100],
+        'message': sanitize_apply_error(str(message)),
+        'subject': {'kind': str(kind)[:40],
+                    'id': sanitize_apply_error(str(identifier))[:200]},
+    }
+
+
+def normalize_warning(warning):
+    """Read current warnings and migrate bounded records from older firmware."""
+    if not isinstance(warning, dict) or not warning.get('code'):
+        return None
+    code = str(warning['code'])
+    subject = warning.get('subject')
+    if isinstance(subject, dict) and subject.get('kind') and subject.get('id'):
+        return apply_warning(code, warning.get('message') or code,
+                             subject['kind'], subject['id'])
+    # Compatibility for persisted apply results, not an additional wire shape.
+    if code == 'policy.apply_failed' and warning.get('policy'):
+        return apply_warning(code, warning.get('error') or 'Policy apply failed',
+                             'policy', warning['policy'])
+    instance = warning.get('instance_uuid')
+    volume = warning.get('volume')
+    if code == 'storage.cap_not_enforced' and instance and volume:
+        return apply_warning(code, 'Storage cap could not be enforced',
+                             'volume', f'{instance}/{volume}')
+    if code == 'optional_service_failed' and instance and volume:
+        return apply_warning(code, 'Optional service failed',
+                             'service', f'{instance}/{volume}')
+    if instance:
+        return apply_warning(code, 'App project could not be applied', 'app', instance)
+    if code == 'system_project_failed':
+        return apply_warning(code, 'System project could not be applied',
+                             'project', 'reefy-system')
+    return None
+
+
 class ApplyResultStore:
     """Atomic apply-result storage with bounded terminal history."""
 
@@ -44,20 +83,8 @@ class ApplyResultStore:
 
     @staticmethod
     def _sanitize_warnings(warnings):
-        sanitized = []
-        for warning in warnings or []:
-            if not isinstance(warning, dict):
-                continue
-            code = str(warning.get('code') or '')[:100]
-            instance_uuid = str(warning.get('instance_uuid') or '')[:100]
-            volume = str(warning.get('volume') or '')[:100]
-            if code and instance_uuid and volume:
-                sanitized.append({
-                    'code': code,
-                    'instance_uuid': instance_uuid,
-                    'volume': volume,
-                })
-        return sanitized
+        return [result for warning in warnings or []
+                if (result := normalize_warning(warning)) is not None]
 
     @classmethod
     def _sanitize_record(cls, record):

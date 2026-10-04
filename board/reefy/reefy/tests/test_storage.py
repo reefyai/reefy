@@ -1423,11 +1423,7 @@ class OwnedVolumeMetadataTests(unittest.TestCase):
     def test_cap_warning_identifies_instance_and_volume_without_path(self):
         warning = self.s._cap_warning_for_path(
             '/mnt/reefy-data/apps/synthetic-instance/media')
-        self.assertEqual(warning, {
-            'code': 'storage.cap_not_enforced',
-            'instance_uuid': 'synthetic-instance',
-            'volume': 'media',
-        })
+        self.assertEqual(warning, {'code': 'storage.cap_not_enforced', 'message': 'Storage cap could not be enforced', 'subject': {'kind': 'volume', 'id': 'synthetic-instance/media'}})
         self.assertNotIn('path', warning)
 
     def test_remember_volume_attaches_managed_and_owner_tags(self):

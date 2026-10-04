@@ -154,3 +154,100 @@ reconnect. A changed state or a successful apply clears the guard.
 | `board/reefy/reefy/rootfs-overlay/usr/lib/reefy/reefy/dataplane.py` | Persist and apply configuration, Compose, backups, files, and cleanup. |
 | `board/reefy/reefy/rootfs-overlay/usr/lib/reefy/reefy/storage.py` | Encrypted storage and per-volume lifecycle. |
 | `board/reefy/reefy/rootfs-overlay/usr/share/varlink/io.reefy.Reconciler.varlink` | Control-to-data-plane method contract. |
+
+## Host policies
+
+Desired-state v2 accepts firmware-owned host policies:
+
+```json
+{
+  "host": {
+    "policies": {
+      "hardware": {
+        "nvme": {"apst": "disabled"}
+      }
+    }
+  }
+}
+```
+
+This is a host fragment, not a complete v2 document. The legacy flat state
+uses the same `policies` object at its root. Policy names select built-in
+handlers, not modules or scripts supplied by the server. Arbitrary paths,
+commands and dynamically downloaded handlers are not supported. New handlers
+must define their own validation, observation, apply and removal semantics.
+
+The initial `hardware.nvme.apst` handler applies to all NVMe controllers:
+
+- `disabled`: set each controller's PM QoS latency tolerance to zero.
+- `default`: restore each controller's latency tolerance from the running
+  kernel's `nvme_core.default_ps_max_latency_us` parameter. This honors the
+  kernel's configuration and APST quirks; it does not force APST on.
+- Omitted: leave unmanaged controllers alone. Restore the kernel default on
+  controllers previously managed by the disabled policy during this boot.
+- Other values, including null: report a policy warning without changing
+  that policy's settings. A malformed parent object also leaves its policies
+  unchanged. Unknown keys are reported and never executed.
+
+The handler writes `/sys/class/nvme/nvme*/power/pm_qos_latency_tolerance_us`
+and verifies readback, avoiding writes when already converged. Controllers
+without this interface produce a warning; no NVMe controllers is a no-op.
+A controller failure does not block attempts on the others. Restoration uses
+RAM ownership markers under `/run/reefy-policies`, written before disabling
+APST and retained after restoration failures. Reconciler restarts retain
+these markers; reboot clears both markers and runtime QoS overrides. Removing
+the policy restores the kernel default, not an earlier manual override.
+
+Policies run during normal desired-state application, including cached offline
+boot reconciliation, independently of storage provisioning. This does not
+provide protection before reconciliation, or immediate hotplug notification.
+New controllers and failed attempts are handled on the next reconciliation.
+It does not alter kernel command-line settings, HMB, ASPM or filesystem setup.
+There is no automatic expiry or rollback merely because an experiment is clean.
+
+Policy errors do not fail the rest of desired-state application. The existing
+apply result returns `succeeded_with_warnings` if the other work succeeds, with
+entries such as:
+
+```json
+{
+  "code": "policy.apply_failed",
+  "message": "nvme0: latency QoS readback did not match",
+  "subject": {
+    "kind": "policy",
+    "id": "host.policies.hardware.nvme.apst"
+  }
+}
+```
+
+Errors are sanitized and bounded in persisted apply results. Storage and app
+warnings remain alongside policy warnings. The ready-stage message includes
+the affected policy and error. A successful desired-state fingerprint means
+the configuration was accepted, not that every policy was enforced; consumers
+must inspect warnings. A later successful reconcile clears prior warnings.
+
+Older firmware may ignore this new field. Roll out supporting firmware before
+publishing it, and do not treat acceptance by older devices as enforcement.
+This firmware change alone does not request a fleet-wide override: the desired
+state producer must explicitly send `disabled` to select that policy. Validate
+actual APST feature state in targeted device acceptance tests after deployment;
+sysfs readback alone is not a controller feature interrogation. See
+[the APST incident and investigation](https://github.com/reefyai/reefy/issues/39).
+
+
+### Generic reconciliation warnings
+
+All apply warnings use the same `{code, message, subject: {kind, id}}` envelope
+in persisted results and Varlink GetApply/WaitApply responses. `code` is a
+machine-readable cause; `message` is a sanitized human explanation. Subjects
+identify policies (`host.policies.…`), apps (instance ID), volumes (instance
+ID/volume name), services (instance ID/service name), or projects (Compose
+project name). Identifiers are logical names, not filesystem paths. The control
+plane renders every warning, without special-casing APST or storage caps.
+
+This replaces the old app-volume-only wire shape. The control and data planes
+are upgraded together in the firmware image; external Varlink consumers must
+migrate to `subject` and `message` with that firmware. Existing persisted result
+records are normalized on load, including the interim policy warning shape.
+Older firmware is not guaranteed to display warnings written by newer firmware
+after rollback. Warnings remain nonfatal unless another apply operation fails.

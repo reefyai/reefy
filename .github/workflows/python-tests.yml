@@ -12,12 +12,14 @@ on:
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-reconciler'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-mount-volumes'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-backup'
+      - 'board/reefy/reefy/rootfs-overlay/usr/share/varlink/**'
       - 'board/reefy/reefy/tests/**'
       - '.github/workflows/python-tests.yml'
   pull_request:
     paths:
       - 'board/reefy/reefy/rootfs-overlay/usr/lib/reefy/**'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-backup'
+      - 'board/reefy/reefy/rootfs-overlay/usr/share/varlink/**'
       - 'board/reefy/reefy/tests/**'
 
 jobs:
@@ -48,7 +50,9 @@ jobs:
           python -c "import sys; sys.path.insert(0,'$ov'); import reefy.shared, reefy.storage, reefy.dataplane; print('paho-free import OK')"
 
       - name: unit tests
-        run: python -m unittest discover -s board/reefy/reefy/tests -v
+        run: |
+          pip install varlink==31.0.0
+          python -m unittest discover -s board/reefy/reefy/tests -v
 
       - name: Artifact and startup concurrency regressions
         run: |

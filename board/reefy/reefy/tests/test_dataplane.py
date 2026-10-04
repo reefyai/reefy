@@ -192,11 +192,7 @@ class AppsV2Tests(unittest.TestCase):
             warnings = self.dp._apply_v2_projects(self._state())
 
         self.assertIn('reefy-app-b', calls)
-        self.assertEqual(warnings, [{
-            'code': 'app_project_failed',
-            'instance_uuid': 'app-a',
-            'volume': '',
-        }])
+        self.assertEqual(warnings, [{'code': 'app_project_failed', 'message': 'App project could not be applied', 'subject': {'kind': 'app', 'id': 'app-a'}}])
 
     def test_artifact_failure_schedules_one_shot_backoff_retry(self):
         state = self._state()
@@ -355,11 +351,7 @@ class AppsV2Tests(unittest.TestCase):
                 mock.patch.object(self.dp, '_commit_v2_migration') as commit:
             warnings = self.dp._apply_v2_projects(self._state())
 
-        self.assertEqual(warnings, [{
-            'code': 'system_project_failed',
-            'instance_uuid': '',
-            'volume': '',
-        }])
+        self.assertEqual(warnings, [{'code': 'system_project_failed', 'message': 'System project could not be applied', 'subject': {'kind': 'project', 'id': 'reefy-system'}}])
         apply_app.assert_not_called()
         commit.assert_not_called()
         self.assertIn(
@@ -405,11 +397,7 @@ class AppsV2Tests(unittest.TestCase):
                 mock.patch.object(self.dp, '_commit_v2_migration') as commit:
             warnings = self.dp._apply_v2_projects(state)
 
-        self.assertEqual(warnings, [{
-            'code': 'app_project_failed',
-            'instance_uuid': 'app-b',
-            'volume': '',
-        }])
+        self.assertEqual(warnings, [{'code': 'app_project_failed', 'message': 'App project could not be applied', 'subject': {'kind': 'app', 'id': 'app-b'}}])
         commit.assert_not_called()
         for project in ('reefy-app-a', 'reefy-app-b'):
             self.assertTrue(any(
@@ -468,11 +456,7 @@ class AppsV2Tests(unittest.TestCase):
                     health_calls.append((args, kwargs))):
             warnings = self.dp._apply_v2_projects(state)
 
-        self.assertIn({
-            'code': 'system_project_failed',
-            'instance_uuid': '',
-            'volume': '',
-        }, warnings)
+        self.assertIn({'code': 'system_project_failed', 'message': 'System project could not be applied', 'subject': {'kind': 'project', 'id': 'reefy-system'}}, warnings)
         running = {
             args[0]: kwargs.get('image')
             for args, kwargs in health_calls
@@ -530,7 +514,7 @@ class AppsV2Tests(unittest.TestCase):
             if args[:2] == ('app-a', 'running'))
         self.assertEqual(
             app_a_running['image'], legacy['services']['app-a']['image'])
-        self.assertEqual(warnings[0]['instance_uuid'], 'app-b')
+        self.assertEqual(warnings[0]['subject']['id'], 'app-b')
 
     def test_migration_retry_intent_reaches_only_target_preflight(self):
         self._seed_legacy_state()
@@ -2420,6 +2404,17 @@ class ApplyPathTests(unittest.TestCase):
                      'dirs': m_dirs, 'host': m_host,
                      'reclaim': m_reclaim}
 
+    def test_policy_failure_preserves_storage_warnings_and_runs_apps(self):
+        policy_warning = {'code': 'policy.apply_failed', 'message': 'nvme0: readback did not match', 'subject': {'kind': 'policy', 'id': 'host.policies.hardware.nvme.apst'}}
+        storage_warning = {'code': 'storage.cap_not_enforced', 'message': 'Storage cap could not be enforced', 'subject': {'kind': 'volume', 'id': 'synthetic-app/media'}}
+        with mock.patch.object(dataplane, 'apply_policies',
+                               return_value=[policy_warning]):
+            res, calls = self._apply(_make_dp(), warnings=[storage_warning])
+        self.assertEqual(res['status'], 'succeeded_with_warnings')
+        self.assertEqual(res['warnings'], [policy_warning, storage_warning])
+        calls['compose'].assert_called_once()
+        calls['_apply_network'].assert_called_once()
+
     def test_apply_state_succeeds_end_to_end(self):
         res, _ = self._apply(_make_dp())
         self.assertEqual(res['status'], 'succeeded')
@@ -2436,11 +2431,7 @@ class ApplyPathTests(unittest.TestCase):
 
     def test_cap_warnings_are_returned_with_affected_volumes(self):
         warnings = [
-            {
-                'code': 'storage.cap_not_enforced',
-                'instance_uuid': 'synthetic-app',
-                'volume': 'media',
-            },
+            {'code': 'storage.cap_not_enforced', 'message': 'Storage cap could not be enforced', 'subject': {'kind': 'volume', 'id': 'synthetic-app/media'}},
         ]
         res, mocks = self._apply(_make_dp(), warnings=warnings)
         self.assertEqual(res['status'], 'succeeded_with_warnings')
