@@ -33,7 +33,7 @@ from io import BytesIO
 from reefy import shared
 from reefy import app_restart
 from reefy.policies import apply_policies
-from reefy.apply_results import ApplyResultStore, TERMINAL_STATUSES
+from reefy.apply_results import ApplyResultStore, TERMINAL_STATUSES, apply_warning
 from reefy.shared import _part_dev, log
 from reefy.storage import Storage
 
@@ -1249,11 +1249,9 @@ class DataPlane:
             prepared_system = self._prepare_system_project_compose(
                 system_name, system_compose, migration=True)
             if not prepared_system.get('ok'):
-                warnings.append({
-                    'code': 'system_project_failed',
-                    'instance_uuid': '',
-                    'volume': '',
-                })
+                warnings.append(apply_warning(
+                    'system_project_failed', 'System project could not be applied',
+                    'project', system_name))
                 self._reset_artifact_retry()
                 return warnings
 
@@ -1296,11 +1294,10 @@ class DataPlane:
                             continue
                         migration_failed = True
                         failed_app_ids.add(app.get('instance_uuid') or '')
-                        warnings.append({
-                            'code': code or 'app_project_failed',
-                            'instance_uuid': app.get('instance_uuid') or '',
-                            'volume': '',
-                        })
+                        warnings.append(apply_warning(
+                            code or 'app_project_failed',
+                            'App project could not be applied',
+                            'app', app.get('instance_uuid') or app['project_name']))
             if migration_failed:
                 self._publish_migration_legacy_running(
                     state, legacy_compose, prepared_apps)
@@ -1319,11 +1316,9 @@ class DataPlane:
 
             if not self._start_prepared_system_project(
                     prepared_system, before_start=system_handoff):
-                warnings.append({
-                    'code': 'system_project_failed',
-                    'instance_uuid': '',
-                    'volume': '',
-                })
+                warnings.append(apply_warning(
+                    'system_project_failed', 'System project could not be applied',
+                    'project', system_name))
                 if self._rollback_v2_migration(state, system_name):
                     self._publish_migration_legacy_running(
                         state, legacy_compose, prepared_apps)
@@ -1331,11 +1326,9 @@ class DataPlane:
                 return warnings
         elif not self._apply_project_compose(
                 system_name, system_compose, instance_uuid=None):
-            warnings.append({
-                'code': 'system_project_failed',
-                'instance_uuid': '',
-                'volume': '',
-            })
+            warnings.append(apply_warning(
+                    'system_project_failed', 'System project could not be applied',
+                    'project', system_name))
 
         desired_projects = {
             app.get('project_name') for app in (state.get('apps') or [])
@@ -1377,16 +1370,14 @@ class DataPlane:
                         migration_failed = True
                         failed_app_ids.add(
                             app.get('instance_uuid') or '')
-                        warnings.append({
-                            'code': code or 'app_project_failed',
-                            'instance_uuid': app.get('instance_uuid') or '',
-                            'volume': '',
-                        })
-                    warnings.extend({
-                        'code': 'optional_service_failed',
-                        'instance_uuid': app.get('instance_uuid') or '',
-                        'volume': service_name,
-                    } for service_name in optional_failures)
+                        warnings.append(apply_warning(
+                            code or 'app_project_failed',
+                            'App project could not be applied',
+                            'app', app.get('instance_uuid') or app['project_name']))
+                    warnings.extend(apply_warning(
+                        'optional_service_failed', 'Optional service failed',
+                        'service', f"{app.get('instance_uuid') or app['project_name']}/{service_name}")
+                        for service_name in optional_failures)
 
         if migration:
             if migration_failed:
@@ -1396,11 +1387,9 @@ class DataPlane:
                         set(prepared_apps) - failed_app_ids)
             else:
                 if not self._commit_v2_migration():
-                    warnings.append({
-                        'code': 'system_project_failed',
-                        'instance_uuid': '',
-                        'volume': '',
-                    })
+                    warnings.append(apply_warning(
+                    'system_project_failed', 'System project could not be applied',
+                    'project', system_name))
                     if self._rollback_v2_migration(state, system_name):
                         self._publish_migration_legacy_running(
                             state, legacy_compose, prepared_apps)

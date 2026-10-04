@@ -19,7 +19,7 @@ class PolicyTests(unittest.TestCase):
                                   {('bad',): bad, ('good',): good})
         good.assert_called_once_with(True)
         self.assertEqual(len(warnings), 2)
-        self.assertEqual(warnings[-1]['policy'], 'host.policies.bad')
+        self.assertEqual(warnings[-1]['subject']['id'], 'host.policies.bad')
         self.assertNotIn('secret', str(warnings))
 
     def test_malformed_branch_does_not_trigger_removal(self):
@@ -34,10 +34,9 @@ class PolicyTests(unittest.TestCase):
         handler.assert_called_once_with(None)
 
     def test_policy_warning_survives_status_sanitizer(self):
-        warning = {'code': 'policy.apply_failed', 'policy': 'host.policies.hardware.nvme.apst',
-                   'error': 'cannot write /sys/example', 'extra': 'discard'}
+        warning = {'code': 'policy.apply_failed', 'message': 'cannot write /sys/example', 'subject': {'kind': 'policy', 'id': 'host.policies.hardware.nvme.apst'}, 'extra': 'discard'}
         warnings = ApplyResultStore._sanitize_warnings([warning])
-        self.assertEqual(warnings[0]['error'], 'cannot write [PATH]')
+        self.assertEqual(warnings[0]['message'], 'cannot write [PATH]')
         self.assertNotIn('extra', warnings[0])
         self.assertIn('host.policies.hardware.nvme.apst', _load_control_module().ControlPlane._ready_stage_message(warnings))
 

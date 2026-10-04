@@ -399,16 +399,8 @@ class DesiredStateErrorPropagationTests(unittest.TestCase):
     def test_successful_apply_publishes_ready_with_storage_warning(self):
         plane = self._plane()
         warnings = [
-            {
-                'code': 'storage.cap_not_enforced',
-                'instance_uuid': 'synthetic-one',
-                'volume': 'media',
-            },
-            {
-                'code': 'storage.cap_not_enforced',
-                'instance_uuid': 'synthetic-two',
-                'volume': 'cache',
-            },
+            {'code': 'storage.cap_not_enforced', 'message': 'Storage cap could not be enforced', 'subject': {'kind': 'volume', 'id': 'synthetic-one/media'}},
+            {'code': 'storage.cap_not_enforced', 'message': 'Storage cap could not be enforced', 'subject': {'kind': 'volume', 'id': 'synthetic-two/cache'}},
         ]
 
         def varlink(method, **kwargs):
@@ -437,17 +429,14 @@ class DesiredStateErrorPropagationTests(unittest.TestCase):
             mock.call('applying', 'Applying desired state'),
             mock.call(
                 'ready',
-                'Device ready with warnings: storage caps not enforced for '
-                'synthetic-one/media, synthetic-two/cache'),
+                'Device ready with warnings: volume synthetic-one/media: '
+                'Storage cap could not be enforced; volume synthetic-two/cache: '
+                'Storage cap could not be enforced'),
         ])
 
     def test_reconcile_publishes_ready_with_storage_warning(self):
         plane = self._plane()
-        warning = {
-            'code': 'storage.cap_not_enforced',
-            'instance_uuid': 'synthetic-app',
-            'volume': 'media',
-        }
+        warning = {'code': 'storage.cap_not_enforced', 'message': 'Storage cap could not be enforced', 'subject': {'kind': 'volume', 'id': 'synthetic-app/media'}}
 
         def varlink(method, **kwargs):
             if method == 'SubmitReconcile':
@@ -473,8 +462,8 @@ class DesiredStateErrorPropagationTests(unittest.TestCase):
 
         stage.assert_called_once_with(
             'ready',
-            'Device ready with warnings: storage cap not enforced for '
-            'synthetic-app/media')
+            'Device ready with warnings: volume synthetic-app/media: '
+            'Storage cap could not be enforced')
 
     def test_empty_warnings_keep_plain_ready_message(self):
         plane = self._plane()
