@@ -27,14 +27,8 @@ Runtime BTF intentionally adds some image size. Existing external provider
 packaging controls their own stripping policy. This change does not turn on
 KASAN, lockdep or other high-overhead debugging instrumentation.
 
-Archive module verification and bundle hashing use up to 16 workers. Compression
-uses pigz with the same gzip archive format. Timings for indexing, verification,
-hashing, and compression are printed in CI; failures still block publication.
-
 The cache key conservatively covers tracked board/config/package/tool inputs
-and the pinned Buildroot revision, excluding runtime rootfs-overlay files and
-board tests. Build hooks, unknown board paths, and external build definitions
-remain covered. Changes force kernel and dependent package
+and the pinned Buildroot revision. Changes force kernel and dependent package
 rebuilds. The key is committed to the cache only after successful archive
 verification/upload. A toolchain ABI change can still require a completely
 clean Buildroot output, as with ordinary Buildroot upgrades; kernel dirclean

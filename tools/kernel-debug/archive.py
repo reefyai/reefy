@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """Archive and verify exact kernel debug outputs, never the signing keys."""
 import argparse
-from concurrent.futures import ThreadPoolExecutor
-import os
-import time
 import hashlib
 import json
 from pathlib import Path
@@ -39,29 +36,6 @@ def require_debug(path, readelf, btf=True):
     if not dwarf or (btf and not has_btf):
         raise RuntimeError(f'missing required DWARF/BTF: {path}')
     return identity
-
-
-def worker_count():
-    # Bound disk/process pressure even on large build hosts.
-    return min(16, os.cpu_count() or 1)
-
-
-def parallel_map(function, items):
-    with ThreadPoolExecutor(max_workers=worker_count()) as pool:
-        return list(pool.map(function, items))
-
-
-def timed(label, function):
-    started = time.monotonic()
-    result = function()
-    print(f'[debug-archive] {label}: {time.monotonic() - started:.1f}s', flush=True)
-    return result
-
-
-def compress_bundle(stage, destination):
-    # Keep the existing gzip archive contract and propagate tar/pigz failures.
-    subprocess.run(['tar', '-I', f'pigz -p {worker_count()}', '-cf',
-                    str(destination), '-C', str(stage), '.'], check=True)
 
 
 def main():
@@ -127,13 +101,10 @@ def main():
         # Buildroot's installed copies may be stripped. Index originals by ID,
         # not basename, to avoid mixing in-tree and external provider modules.
         originals = {}
-        def inspect_original(module):
-            return module, elf_info(module, readelf)
-
-        original_paths = sorted(p for p in (output / 'build').rglob('*.ko')
-                                if not p.is_symlink())
-        for module, (identity, dwarf, btf) in timed(
-                'index originals', lambda: parallel_map(inspect_original, original_paths)):
+        for module in (output / 'build').rglob('*.ko'):
+            if module.is_symlink():
+                continue
+            identity, dwarf, btf = elf_info(module, readelf)
             if dwarf:
                 originals[identity] = module
         roots = [('base', output / 'target')]
@@ -145,21 +116,15 @@ def main():
                 identity, dwarf, _ = elf_info(module, readelf)
                 if dwarf:
                     originals.setdefault(identity, module)
-        tasks = []
+        modules = []
         for label, root in roots:
-            shipped_paths = sorted(p for p in (root / 'lib/modules' / release).rglob('*.ko*')
-                                   if p.is_file())
-            if not shipped_paths:
-                raise RuntimeError(f'no shipped modules in {label}')
-            tasks.extend((label, root, shipped) for shipped in shipped_paths)
-
-        def verify_module(task):
-            label, root, shipped = task
-            # Each worker owns its decompression path; no shared scratch files.
-            with tempfile.TemporaryDirectory(dir=temporary) as scratch:
+            count = 0
+            for shipped in (root / 'lib/modules' / release).rglob('*.ko*'):
+                if not shipped.is_file():
+                    continue
                 module = shipped
                 if shipped.suffix in ('.xz', '.gz', '.zst'):
-                    module = Path(scratch) / 'module.ko'
+                    module = Path(temporary) / 'module.ko'
                     command = {'.xz': 'xz', '.gz': 'gzip', '.zst': 'zstd'}[shipped.suffix]
                     with module.open('wb') as stream:
                         subprocess.run([command, '-dc', str(shipped)], stdout=stream, check=True)
@@ -167,6 +132,7 @@ def main():
                 original = originals.get(identity)
                 if original is None:
                     raise RuntimeError(f'no unstripped original for {label}/{shipped.relative_to(root)}')
+                # Require runtime BTF for base/Intel modules used by live tracing.
                 require_debug(original, readelf, btf=label in ('base', 'intel'))
                 if label in ('base', 'intel') and not shipped_btf:
                     raise RuntimeError(f'shipped module lost BTF: {shipped}')
@@ -174,10 +140,11 @@ def main():
                 if shipped.suffix != '.ko':
                     name = name.rsplit('.', 1)[0]
                 copy(original, name)
-                return dict(path=name, build_id=identity, shipped_sha256=digest(shipped),
-                            runtime_btf=shipped_btf)
-
-        modules = timed('verify shipped modules', lambda: parallel_map(verify_module, tasks))
+                modules.append(dict(path=name, build_id=identity, shipped_sha256=digest(shipped),
+                                    runtime_btf=shipped_btf))
+                count += 1
+            if not count:
+                raise RuntimeError(f'no shipped modules in {label}')
         # Kernel source URL/ref and compiler flags are in these resolved files.
         # Preserve command records without archiving the kernel signing key.
         for source in kernel.rglob('*.cmd'):
@@ -193,11 +160,9 @@ def main():
         (stage / 'metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
         # Exact tracked build recipes/configs, without working-tree secrets.
         subprocess.run(['git', 'archive', '--format=tar', '-o', str(stage / 'reefy-source.tar'), 'HEAD'], check=True)
-        paths = sorted(p for p in stage.rglob('*') if p.is_file())
-        hashes = timed('hash bundle', lambda: parallel_map(digest, paths))
-        manifest = {str(p.relative_to(stage)): value for p, value in zip(paths, hashes)}
+        manifest = {str(p.relative_to(stage)): digest(p) for p in sorted(stage.rglob('*')) if p.is_file()}
         (stage / 'SHA256SUMS').write_text(''.join(f'{value}  {name}\n' for name, value in manifest.items()))
-        timed('compress bundle', lambda: compress_bundle(stage, destination))
+        subprocess.run(['tar', '-czf', str(destination), '-C', str(stage), '.'], check=True)
     print(destination)
 
 
