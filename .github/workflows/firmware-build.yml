@@ -312,6 +312,9 @@ jobs:
       - name: Stage exact provider inputs
         id: provider_metadata
         run: |
+          # The fixture module also generates BTF with Buildroot host tools.
+          export PATH="$BR_OUTPUT/host/bin:$PATH"
+          test -x "$BR_OUTPUT/host/bin/pahole"
           os_release="$BR_OUTPUT/target/usr/lib/os-release"
           kernel_release=$(find "$BR_OUTPUT/target/lib/modules" \
             -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
