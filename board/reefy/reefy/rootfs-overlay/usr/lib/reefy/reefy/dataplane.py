@@ -32,6 +32,7 @@ from io import BytesIO
 
 from reefy import shared
 from reefy import app_restart
+from reefy.policies import apply_policies
 from reefy.apply_results import ApplyResultStore, TERMINAL_STATUSES
 from reefy.shared import _part_dev, log
 from reefy.storage import Storage
@@ -1011,6 +1012,8 @@ class DataPlane:
         state = runtime_state
         old_state = runtime_old_state
 
+        self._last_apply_warnings.extend(apply_policies(state.get('policies', {})))
+
         # Fair-share volume caps (path -> % of pool) consumed by Storage's
         # _ensure_volume_lv when it creates per-volume LVs. Push onto the
         # Storage instance (it owns the dict the volume ops read).
@@ -1066,7 +1069,7 @@ class DataPlane:
             warnings = self._storage._prepare_app_dirs(
                 app_volumes, backup_paths=backup_paths)
             if isinstance(warnings, list):
-                self._last_apply_warnings = warnings
+                self._last_apply_warnings.extend(warnings)
 
         # Apply backup config (SSH keys, config, systemd timer)
         if backup:

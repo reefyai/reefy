@@ -49,6 +49,13 @@ class ApplyResultStore:
             if not isinstance(warning, dict):
                 continue
             code = str(warning.get('code') or '')[:100]
+            if code == 'policy.apply_failed':
+                sanitized.append({
+                    'code': code,
+                    'policy': sanitize_apply_error(str(warning.get('policy') or ''))[:150],
+                    'error': sanitize_apply_error(str(warning.get('error') or '')),
+                })
+                continue
             instance_uuid = str(warning.get('instance_uuid') or '')[:100]
             volume = str(warning.get('volume') or '')[:100]
             if code and instance_uuid and volume:
