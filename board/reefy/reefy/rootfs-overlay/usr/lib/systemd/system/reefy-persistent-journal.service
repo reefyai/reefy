@@ -1,0 +1,19 @@
+[Unit]
+Description=Retain boot journals on Reefy persistent data
+After=reefy-storage.service systemd-journal-flush.service
+Wants=reefy-storage.service
+# Run independently of Docker/control startup. Reverse ordering detaches the
+# journal before the storage service is stopped during shutdown.
+Before=umount.target
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/usr/lib/reefy
+ExecStart=/usr/bin/python3 -m reefy.persistent_journal
+ExecStop=/usr/bin/python3 -m reefy.persistent_journal stop
+RemainAfterExit=yes
+TimeoutStartSec=95
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target
