@@ -1,12 +1,14 @@
 """Host policies use synthetic sysfs fixtures, never the host's real devices."""
 import functools
+import json
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
 import _bootstrap  # noqa: F401
-from reefy.policies import apply_apst, apply_policies
+from reefy.policies import apply_apst, apply_policies, _supports_apst
 from reefy.apply_results import ApplyResultStore
 from test_control import _load_control_module
 
@@ -119,4 +121,64 @@ class ApstTests(unittest.TestCase):
         self.default.write_text('25000')
         self.apply(None)
         self.assertEqual(self.qos.read_text().strip(), '25000')
+        self.assertEqual(list(self.managed.iterdir()), [])
+
+
+class UnsupportedApstTests(ApstTests):
+    def absent_interface(self):
+        self.qos.unlink()
+        controller = self.qos.parent.parent
+        (controller / 'state').write_text('live')
+        return controller
+
+    def test_confirmed_unsupported_controller_is_success_and_others_apply(self):
+        self.absent_interface()
+        second = self.add_controller('nvme1')
+        with patch('reefy.policies.subprocess.run', return_value=Mock(
+                returncode=0, stdout='{"apsta": 0}')) as identify:
+            self.apply('disabled')
+        self.assertEqual(second.read_text().strip(), '0')
+        identify.assert_called_once_with(
+            ['nvme', 'id-ctrl', '/dev/nvme0', '-o', 'json'],
+            capture_output=True, text=True, timeout=5, check=False)
+        self.assertEqual(len(list(self.managed.iterdir())), 1)
+
+    def test_supported_controller_without_interface_still_warns(self):
+        self.absent_interface()
+        with patch('reefy.policies.subprocess.run', return_value=Mock(
+                returncode=0, stdout='{"apsta": 1}')):
+            with self.assertRaisesRegex(RuntimeError, 'no APST latency QoS interface'):
+                self.apply('disabled')
+
+    def test_capability_failure_is_not_silent_success(self):
+        controller = self.absent_interface()
+        for result in (Mock(returncode=1, stdout=''),
+                       Mock(returncode=0, stdout='invalid'),
+                       Mock(returncode=0, stdout='{}'),
+                       Mock(returncode=0, stdout='{"apsta": "0"}')):
+            with patch('reefy.policies.subprocess.run', return_value=result):
+                with self.assertRaisesRegex(RuntimeError, 'cannot determine'):
+                    self.apply('disabled')
+        for error in (FileNotFoundError(), subprocess.TimeoutExpired('nvme', 5)):
+            with patch('reefy.policies.subprocess.run', side_effect=error):
+                with self.assertRaisesRegex(RuntimeError, 'cannot determine'):
+                    self.apply('disabled')
+        (controller / 'state').write_text('resetting')
+        with patch('reefy.policies.subprocess.run') as identify:
+            with self.assertRaisesRegex(RuntimeError, 'not live'):
+                self.apply('disabled')
+            identify.assert_not_called()
+
+    def test_existing_interface_uses_no_admin_reads(self):
+        with patch('reefy.policies.subprocess.run') as identify:
+            self.apply('disabled')
+            self.apply(None)
+            identify.assert_not_called()
+
+    def test_unsupported_after_managed_apply_clears_marker(self):
+        self.apply('disabled')
+        self.absent_interface()
+        with patch('reefy.policies.subprocess.run', return_value=Mock(
+                returncode=0, stdout='{"apsta": 0}')):
+            self.apply(None)
         self.assertEqual(list(self.managed.iterdir()), [])

@@ -235,6 +235,14 @@ sysfs readback alone is not a controller feature interrogation. See
 [the APST incident and investigation](https://github.com/reefyai/reefy/issues/39).
 
 
+Controllers confirmed by NVMe Identify not to support APST are skipped successfully.
+If the QoS interface is absent, the handler checks that the controller is live
+and performs one bounded Identify read to distinguish unsupported hardware from
+a missing interface on supported hardware. Capability discovery failures still
+report warnings. Controllers with a QoS interface need no Identify polling.
+This changes unsupported-controller applies from success with warnings to success;
+policy fields and warning schemas are unchanged.
+
 ### Generic reconciliation warnings
 
 All apply warnings use the same `{code, message, subject: {kind, id}}` envelope
