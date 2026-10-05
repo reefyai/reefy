@@ -52,7 +52,7 @@ def apply_apst(value, controllers=Path('/sys/class/nvme'),
                     # Unsupported hardware has no transition for us to disable.
                     marker.unlink(missing_ok=True)
                     continue
-                raise ValueError('controller has no APST latency QoS interface')
+                raise ValueError('controller supports APST but has no latency QoS interface')
             target = '0' if value == 'disabled' else default_latency.read_text().strip()
             if not target.isdecimal():
                 raise ValueError('invalid kernel default latency')
