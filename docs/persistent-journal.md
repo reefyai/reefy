@@ -30,15 +30,17 @@ files can temporarily exceed its rotation budget.
 Inspect retained history locally:
 
 ```sh
-sudo journalctl --list-boots
-sudo journalctl -b -1
-sudo journalctl -b -2 -u reefy-control
-sudo journalctl --disk-usage
+sudo journalctl --directory=/mnt/reefy-data/journal --list-boots
+sudo journalctl --directory=/mnt/reefy-data/journal -b -1
+sudo journalctl --directory=/mnt/reefy-data/journal -b -2 -u reefy-control
+sudo journalctl --directory=/mnt/reefy-data/journal --disk-usage
 ```
 
-Use `journalctl --directory=/mnt/reefy-data/journal --list-boots` to inspect
-the backing directory explicitly, including journals from earlier machine
-identities after image or identity changes. This feature does not change
+Use the backing directory explicitly for cross-boot history. On an ephemeral
+root, systemd can generate a different machine ID each boot. Plain
+`journalctl -b -1` then searches only the current machine identity and can
+report no previous boot even when older journals are retained. The directory
+reader includes those earlier identities. This feature does not change
 machine identity or the fleet log-publishing transport.
 
 Persistent logging is not a crash-proof storage recorder. A boot that fails
