@@ -34,6 +34,13 @@ class ExistingVolumeUnavailableError(RuntimeError):
     """An owned data LV exists but cannot safely back its app path."""
 
 
+def _repair_boot_gpt(disk):
+    """Relocate an expanded boot disk's GPT without interactive prompts."""
+    subprocess.run(
+        ['parted', '--script', '--fix', disk, 'print'],
+        stdin=subprocess.DEVNULL, capture_output=True, timeout=15, check=True)
+
+
 class Storage:
     # Re-bound from reefy.shared (single source) so method bodies keep
     # using self.<CONST> unchanged.
@@ -366,9 +373,7 @@ class Storage:
         if not os.path.exists(key_part):
             if _log:
                 _log('Creating key partition...')
-            subprocess.run(
-                ['sh', '-c', f'printf "Fix\\nFix\\n" | parted ---pretend-input-tty {disk} print'],
-                capture_output=True, timeout=15)
+            _repair_boot_gpt(disk)
             subprocess.run(
                 ['parted', '-s', disk, 'mkpart', 'primary', '2049MiB', '2050MiB'],
                 capture_output=True, timeout=15)
@@ -810,6 +815,16 @@ class Storage:
         os.makedirs('/mnt/reefy-data/state/lan', exist_ok=True)
         os.makedirs('/mnt/reefy-data/apps', exist_ok=True)
         os.makedirs('/mnt/reefy-data/docker', exist_ok=True)
+        # Adoption mounts data in place after the boot journal unit has run.
+        # Retry attachment asynchronously; logging must not block provisioning.
+        try:
+            subprocess.run(
+                ['systemctl', '--no-block', 'restart',
+                 'reefy-persistent-journal.service'],
+                capture_output=True, timeout=5, check=True)
+        except (OSError, subprocess.SubprocessError):
+            if _log:
+                _log('Persistent journal attachment request failed; storage continues')
         if _log and label:
             _log(f'Persistent storage ready ({label})')
         return True

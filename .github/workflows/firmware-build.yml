@@ -50,10 +50,12 @@ permissions:
 
 jobs:
   debug-archive-tests:
-    runs-on: ubuntu-24.04
+    # Keep the prerequisite on the same available runner pool as the build.
+    # Hosted-runner allocation failures must not prevent firmware compilation.
+    runs-on: [self-hosted, large]
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y pigz
+      - run: apt-get update && apt-get install -y pigz
       - run: python3 -m unittest discover -s tools/kernel-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/ci -p 'test_*.py'
 
