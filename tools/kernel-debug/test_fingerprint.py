@@ -23,7 +23,8 @@ class CacheInputs(unittest.TestCase):
                          'board/reefy/reefy/new-patches/fix.patch',
                          'board/reefy/reefy/pre_build.sh',
                          'configs/reefy_defconfig', 'package/driver/driver.mk',
-                         'external.mk', '.github/workflows/firmware-build.yml']
+                         'external.mk', '.github/workflows/firmware-build.yml',
+                         'tools/ci/build-amd.sh']
                 for name in files:
                     path = Path(name)
                     path.parent.mkdir(parents=True, exist_ok=True)

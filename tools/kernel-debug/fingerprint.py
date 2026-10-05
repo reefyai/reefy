@@ -20,7 +20,7 @@ def fingerprint():
     # Runtime overlay code and tests do not compile the kernel or modules.
     paths = subprocess.check_output([
         'git', 'ls-files', '-z', 'configs', 'package', 'board',
-        'tools/kernel-debug', '.github/workflows/firmware-build.yml',
+        'tools/kernel-debug', 'tools/ci', '.github/workflows/firmware-build.yml',
         'external.mk', 'external.desc', 'Config.in',
     ]).split(b'\0')
     for raw in sorted(filter(None, paths)):
