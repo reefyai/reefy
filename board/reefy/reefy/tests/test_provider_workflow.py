@@ -133,8 +133,10 @@ class ProviderWorkflowTests(unittest.TestCase):
         self.assertIn(
             '${{ env.BR_OUTPUT }}/reefy-artifacts/intel/firmware-root',
             workflow)
-        self.assertIn('for module in i915 xe intel_vpu; do', workflow)
-        self.assertIn('missing Intel provider input ${module}', workflow)
+        self.assertIn('run: bash tools/ci/logged-build.sh tools/ci/stage-providers.sh', workflow)
+        staging = (ROOT / 'tools/ci/stage-providers.sh').read_text()
+        self.assertIn('for module in i915 xe intel_vpu; do', staging)
+        self.assertIn('missing Intel provider input ${module}', staging)
 
     def test_intel_payload_is_rejected_from_base_image(self):
         workflow = WORKFLOW.read_text()
