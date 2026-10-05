@@ -1,10 +1,30 @@
 """Built-in host policies. Desired state selects behavior, never executable code."""
 
 import hashlib
+import json
 from pathlib import Path
 import re
+import subprocess
 
 from reefy.apply_results import sanitize_apply_error, apply_warning
+
+
+def _supports_apst(controller):
+    """Identify only when the kernel's APST QoS interface is absent."""
+    if (controller / 'state').read_text().strip() != 'live':
+        raise RuntimeError('controller is not live; APST capability is unavailable')
+    try:
+        result = subprocess.run(
+            ['nvme', 'id-ctrl', '/dev/' + controller.name, '-o', 'json'],
+            capture_output=True, text=True, timeout=5, check=False)
+        if result.returncode != 0:
+            raise ValueError('identify failed')
+        apsta = json.loads(result.stdout)['apsta']
+        if type(apsta) is not int or not 0 <= apsta <= 255:
+            raise ValueError('invalid capability')
+    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError):
+        raise RuntimeError('cannot determine controller APST support') from None
+    return bool(apsta & 1)
 
 
 def apply_apst(value, controllers=Path('/sys/class/nvme'),
@@ -28,6 +48,10 @@ def apply_apst(value, controllers=Path('/sys/class/nvme'),
         qos = controller / 'power/pm_qos_latency_tolerance_us'
         try:
             if not qos.exists():
+                if not _supports_apst(controller):
+                    # Unsupported hardware has no transition for us to disable.
+                    marker.unlink(missing_ok=True)
+                    continue
                 raise ValueError('controller has no APST latency QoS interface')
             target = '0' if value == 'disabled' else default_latency.read_text().strip()
             if not target.isdecimal():
