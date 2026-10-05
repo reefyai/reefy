@@ -40,8 +40,14 @@ Use the backing directory explicitly for cross-boot history. On an ephemeral
 root, systemd can generate a different machine ID each boot. Plain
 `journalctl -b -1` then searches only the current machine identity and can
 report no previous boot even when older journals are retained. The directory
-reader includes those earlier identities. This feature does not change
-machine identity or the fleet log-publishing transport.
+reader includes those earlier identities. Keeping the existing ephemeral
+machine identity is intentional: journal retention does not require a stable
+machine ID, early persistent-storage mounting, or a hardware-derived ID.
+Each boot has its own boot ID independently of its machine ID; the directory
+reader uses boot IDs to navigate the retained history. Do not rename journal
+directories or rewrite old records to combine machine identities.
+This feature does not change machine identity or the fleet log-publishing
+transport.
 
 Persistent logging is not a crash-proof storage recorder. A boot that fails
 before data mounts, a broken storage device or unsynced final entries after
@@ -50,5 +56,8 @@ retain the existing access restrictions; this feature does not export them.
 
 Validation should exercise early RAM entries, successful disk flush,
 continued persistent writes, clean detachment, RAM fallback, and retention
-across two actual reboots of a newly built image. Keep marker messages
-synthetic and avoid exporting raw device journals.
+across two actual reboots of a newly built image. The regular QEMU scenario
+uses the explicit directory reader for `-b -1` and `-b -2`, checks the
+markers' boot IDs and early kernel entries, and requires normal device
+readiness after reboot. It does not force a stable machine ID. Keep marker
+messages synthetic and avoid exporting raw device journals.
