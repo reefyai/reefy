@@ -50,10 +50,12 @@ permissions:
 
 jobs:
   debug-archive-tests:
-    runs-on: ubuntu-24.04
+    # Keep the prerequisite on the same available runner pool as the build.
+    # Hosted-runner allocation failures must not prevent firmware compilation.
+    runs-on: [self-hosted, large]
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y pigz
+      - run: apt-get update && apt-get install -y pigz
       - run: python3 -m unittest discover -s tools/kernel-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/ci -p 'test_*.py'
 
@@ -94,7 +96,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: reefyai/reefy-amd
-          ref: ccaf743c5dd77af5aaab91ee8300d1d5402ee1f9
+          ref: 5d91d46cb20ef16d81d4576e74da8130250d9692
           path: amd-provider
 
       - name: Validate E2E build identity salt
@@ -425,7 +427,7 @@ jobs:
 
   publish-amd-provider:
     needs: build
-    uses: reefyai/reefy-amd/.github/workflows/publish.yml@ccaf743c5dd77af5aaab91ee8300d1d5402ee1f9
+    uses: reefyai/reefy-amd/.github/workflows/publish.yml@5d91d46cb20ef16d81d4576e74da8130250d9692
     with:
       input_artifact: reefy-amd-inputs
     secrets: inherit

@@ -1,0 +1,21 @@
+From: Reefy maintainers <maintainers@reefy.ai>
+Subject: [PATCH] kbuild: enable reproducible BTF generation
+
+Parallel pahole encoding otherwise assigns BTF types in nondeterministic
+order. Retain parallel loading and request deterministic encoding so
+provider module payload digests remain stable across identical builds.
+
+The reproducible_build feature is supported starting with pahole 1.27.
+See https://kernel.googlesource.com/pub/scm/devel/pahole/pahole/+/refs/tags/v1.27/man-pages/pahole.1
+
+--- a/scripts/Makefile.btf
++++ b/scripts/Makefile.btf
+@@ -23,6 +23,8 @@
+ # Switch to using --btf_features for v1.26 and later.
+ pahole-flags-$(call test-ge, $(pahole-ver), 126)  = -j$(JOBS) --btf_features=encode_force,var,float,enum64,decl_tag,type_tag,optimized_func,consistent_func,decl_tag_kfuncs
+ 
++pahole-flags-$(call test-ge, $(pahole-ver), 127) += --btf_features=+reproducible_build
++
+ pahole-flags-$(call test-ge, $(pahole-ver), 130) += --btf_features=attributes
+ 
+ ifneq ($(KBUILD_EXTMOD),)
