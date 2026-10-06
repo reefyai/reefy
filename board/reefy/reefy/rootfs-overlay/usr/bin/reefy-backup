@@ -755,7 +755,7 @@ def backup_instance(inst, keep_last):
 
 
 @contextmanager
-def backup_lock():
+def backup_lock(wait=True):
     # Serialize concurrent runs. The reconciler spawns one reefy-backup
     # per backup_now MQTT command, so 'backup all' fans out N parallel
     # invocations that share one BorgBase repo + local cache - they
@@ -766,12 +766,15 @@ def backup_lock():
         try:
             fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
+            if not wait:
+                yield False
+                return
             print("[backup] Another backup in progress; waiting for lock")
             fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
             print("[backup] Lock acquired, proceeding")
         _backup_lock_fd = lock_fd.fileno()
         try:
-            yield
+            yield True
         finally:
             _backup_lock_fd = None
 
@@ -850,8 +853,15 @@ def run_supervised(args):
 def entrypoint():
     phase = os.environ.get('REEFY_BACKUP_PHASE')
     if phase == 'cleanup':
-        with backup_lock():
-            recover_pending_snapshot()
+        # A queued runner may take the lock before this unit's stop hook.
+        # That runner recovers pending snapshot creation before any new work.
+        # Never wait behind it or touch its recovery marker: the old hook's
+        # stop deadline could otherwise fail an already successful backup.
+        with backup_lock(wait=False) as acquired:
+            if acquired:
+                recover_pending_snapshot()
+            else:
+                print('[backup] Cleanup handed off to the active backup')
     elif phase == 'run':
         main()
     else:

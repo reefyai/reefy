@@ -11,6 +11,9 @@ from pathlib import Path
 import os
 import types
 import unittest
+import fcntl
+import subprocess
+import sys
 from importlib.machinery import SourceFileLoader
 from unittest import mock
 
@@ -264,6 +267,60 @@ class CrashCleanupTests(SnapshotFixture):
         self.assertIn('--property=ExecStopPost=/usr/bin/env '
                       'REEFY_BACKUP_PHASE=cleanup /usr/bin/reefy-backup', cmd)
         self.assertEqual(cmd[-2:], ['/usr/bin/reefy-backup', 'synthetic-instance'])
+
+
+class CleanupHandoffTests(unittest.TestCase):
+    def test_cleanup_does_not_wait_or_touch_next_runners_marker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lock = Path(directory) / 'backup.lock'
+            pending = Path(directory) / 'pending.json'
+            pending.write_text('{"owner":"synthetic-next-runner"}')
+            script = '''
+import importlib.machinery, importlib.util, os, sys
+loader = importlib.machinery.SourceFileLoader('backup', sys.argv[1])
+spec = importlib.util.spec_from_loader(loader.name, loader)
+backup = importlib.util.module_from_spec(spec)
+loader.exec_module(backup)
+backup.LOCK_FILE = sys.argv[2]
+backup.PENDING_SNAPSHOT_FILE = sys.argv[3]
+os.environ['REEFY_BACKUP_PHASE'] = 'cleanup'
+backup.entrypoint()
+'''
+            with lock.open('a') as handle:
+                fcntl.flock(handle, fcntl.LOCK_EX)
+                result = subprocess.run(
+                    [sys.executable, '-c', script, _PATH, str(lock), str(pending)],
+                    capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('handed off', result.stdout)
+            self.assertEqual(json.loads(pending.read_text()),
+                             {'owner': 'synthetic-next-runner'})
+
+    def test_uncontended_cleanup_still_recovers_under_lock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lock = str(Path(directory) / 'backup.lock')
+
+            def recover():
+                with open(lock, 'a') as contender:
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(contender, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+            with mock.patch.object(reefy_backup, 'LOCK_FILE', lock), \
+                    mock.patch.dict(os.environ, {'REEFY_BACKUP_PHASE': 'cleanup'}), \
+                    mock.patch.object(reefy_backup, 'recover_pending_snapshot',
+                                      side_effect=recover) as recovery:
+                reefy_backup.entrypoint()
+            recovery.assert_called_once_with()
+
+    def test_recovery_error_is_not_suppressed(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(reefy_backup, 'LOCK_FILE',
+                                  str(Path(directory) / 'backup.lock')), \
+                mock.patch.dict(os.environ, {'REEFY_BACKUP_PHASE': 'cleanup'}), \
+                mock.patch.object(reefy_backup, 'recover_pending_snapshot',
+                                  side_effect=RuntimeError('synthetic recovery error')):
+            with self.assertRaisesRegex(RuntimeError, 'synthetic recovery error'):
+                reefy_backup.entrypoint()
 
 
 class BorgReadinessTests(unittest.TestCase):
