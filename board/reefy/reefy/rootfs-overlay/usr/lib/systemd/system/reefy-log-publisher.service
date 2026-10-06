@@ -1,7 +1,9 @@
 [Unit]
 Description=Reefy Log Publisher (journald → MQTT)
-After=reefy-control.service
-Wants=reefy-control.service
+# Reopen the journal after its RAM-to-persistent mount transition.
+After=reefy-control.service reefy-persistent-journal.service
+Wants=reefy-control.service reefy-persistent-journal.service
+PartOf=reefy-persistent-journal.service
 
 [Service]
 Type=simple
