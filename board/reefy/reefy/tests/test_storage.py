@@ -1988,3 +1988,74 @@ class JournalMountLifecycleTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class BootGPTProbeRetryTests(unittest.TestCase):
+    def test_one_timeout_retries_only_the_same_probe(self):
+        command = ['parted', '--script', '--fix', '/dev/synthetic', 'print']
+        with mock.patch.object(storage.subprocess, 'run', side_effect=[
+                subprocess.TimeoutExpired(command, 15),
+                types.SimpleNamespace(returncode=0),
+        ]) as run, mock.patch.object(storage.time, 'sleep'), \
+                mock.patch.object(storage, 'log'):
+            storage._repair_boot_gpt('/dev/synthetic')
+        self.assertEqual(run.call_count, 2)
+        for call in run.call_args_list:
+            self.assertEqual(call.args[0], command)
+            self.assertEqual(call.kwargs['timeout'], 15)
+            self.assertTrue(call.kwargs['check'])
+            self.assertEqual(call.kwargs['stdin'], subprocess.DEVNULL)
+
+    def test_second_timeout_is_reported(self):
+        error = subprocess.TimeoutExpired(['parted'], 15)
+        with mock.patch.object(storage.subprocess, 'run', side_effect=error) as run, \
+                mock.patch.object(storage.time, 'sleep'), \
+                mock.patch.object(storage, 'log'):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                storage._repair_boot_gpt('/dev/synthetic')
+        self.assertEqual(run.call_count, 2)
+
+    def test_explicit_probe_failure_is_not_retried(self):
+        with mock.patch.object(storage.subprocess, 'run',
+                               side_effect=subprocess.CalledProcessError(1, ['parted'])) as run, \
+                mock.patch.object(storage.time, 'sleep') as sleep:
+            with self.assertRaises(subprocess.CalledProcessError):
+                storage._repair_boot_gpt('/dev/synthetic')
+        run.assert_called_once()
+        sleep.assert_not_called()
+
+    @unittest.skipUnless(shutil.which('parted'), 'requires GNU Parted')
+    def test_retry_after_completed_relocation_preserves_payload(self):
+        with tempfile.TemporaryDirectory(prefix='synthetic-gpt-retry-') as directory:
+            disk = Path(directory) / 'disk.img'
+            with disk.open('wb') as file:
+                file.truncate(16 * 1024 * 1024)
+            subprocess.run(['parted', '--script', str(disk), 'mklabel', 'gpt',
+                            'mkpart', 'primary', '1MiB', '8MiB'],
+                           check=True, capture_output=True, timeout=15)
+            payload = b'synthetic retained bytes' * 128
+            with disk.open('r+b') as file:
+                file.seek(2 * 1024 * 1024)
+                file.write(payload)
+                file.truncate(32 * 1024 * 1024)
+            original_run = subprocess.run
+            attempts = []
+
+            def uncertain_completion(command, **kwargs):
+                result = original_run(command, **kwargs)
+                attempts.append(command)
+                if len(attempts) == 1:
+                    # Model a timeout whose GPT writes have already committed.
+                    raise subprocess.TimeoutExpired(command, 15)
+                return result
+
+            with mock.patch.object(storage.subprocess, 'run', side_effect=uncertain_completion), \
+                    mock.patch.object(storage.time, 'sleep'), \
+                    mock.patch.object(storage, 'log'):
+                storage._repair_boot_gpt(str(disk))
+            self.assertEqual(len(attempts), 2)
+            with disk.open('rb') as file:
+                file.seek(2 * 1024 * 1024)
+                self.assertEqual(file.read(len(payload)), payload)
+                file.seek(-512, os.SEEK_END)
+                self.assertEqual(file.read(8), b'EFI PART')

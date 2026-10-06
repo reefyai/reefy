@@ -36,9 +36,21 @@ class ExistingVolumeUnavailableError(RuntimeError):
 
 def _repair_boot_gpt(disk):
     """Relocate an expanded boot disk's GPT without interactive prompts."""
-    subprocess.run(
-        ['parted', '--script', '--fix', disk, 'print'],
-        stdin=subprocess.DEVNULL, capture_output=True, timeout=15, check=True)
+    # This probe/relocation is idempotent. A timeout may occur after GPT
+    # writes completed while disk flushes are still settling. subprocess.run
+    # reaps the timed-out child before returning, so the retry cannot overlap.
+    for attempt in range(2):
+        try:
+            subprocess.run(
+                ['parted', '--script', '--fix', disk, 'print'],
+                stdin=subprocess.DEVNULL, capture_output=True,
+                timeout=15, check=True)
+            return
+        except subprocess.TimeoutExpired:
+            if attempt:
+                raise
+            log('storage', 'Boot GPT probe timed out; retrying once')
+            time.sleep(1)
 
 
 class Storage:
