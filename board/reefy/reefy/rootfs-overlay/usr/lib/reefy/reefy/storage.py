@@ -17,12 +17,14 @@ import os
 import re
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import tarfile
 import tempfile
 import time
 import uuid as uuid_mod
+import zlib
 from decimal import Decimal, InvalidOperation, ROUND_FLOOR
 from io import BytesIO
 
@@ -34,22 +36,85 @@ class ExistingVolumeUnavailableError(RuntimeError):
     """An owned data LV exists but cannot safely back its app path."""
 
 
+def _boot_gpt_identity(disk):
+    """Read a CRC-valid GPT identity/table without accepting empty conversion.
+
+    Invalid copies may be recovered from a valid counterpart; conflicting
+    valid tables and unknown formats are refused before any writes.
+    """
+    with open(disk, 'rb', buffering=0) as stream:
+        sector = 512
+        if stat.S_ISBLK(os.fstat(stream.fileno()).st_mode):
+            sector = struct.unpack('I', fcntl.ioctl(
+                stream.fileno(), 0x1268, struct.pack('I', 0)))[0]  # BLKSSZGET
+        if sector not in (512, 4096):
+            raise RuntimeError('Unsupported boot disk logical sector size')
+        total = stream.seek(0, os.SEEK_END)
+        if total % sector or total < sector * 34:
+            raise RuntimeError('Invalid boot disk GPT geometry')
+        sectors = total // sector
+        candidates = [1, sectors - 1]
+        valid = []
+        for position in candidates:
+            stream.seek(position * sector)
+            header = stream.read(sector)
+            if (len(header) != sector or header[:8] != b'EFI PART'
+                    or struct.unpack_from('<I', header, 8)[0] != 0x10000
+                    or header[20:24] != bytes(4) or header[56:72] == bytes(16)):
+                continue
+            size, checksum = struct.unpack_from('<II', header, 12)
+            if not 92 <= size <= sector:
+                continue
+            crc_header = bytearray(header[:size])
+            crc_header[16:20] = bytes(4)
+            if zlib.crc32(crc_header) != checksum:
+                continue
+            current, alternate, first, last = struct.unpack_from('<QQQQ', header, 24)
+            table, count, width, table_crc = struct.unpack_from('<QIII', header, 72)
+            if (current != position or not 0 < alternate < sectors
+                    or alternate == current or (position != 1 and alternate != 1)
+                    or not 2 <= first <= last < sectors
+                    or width != 128 or not 1 <= count <= 4096
+                    or table * sector + count * width > total):
+                continue
+            stream.seek(table * sector)
+            entries = stream.read(count * width)
+            if len(entries) != count * width or zlib.crc32(entries) != table_crc:
+                continue
+            if not any(entries[offset:offset + 16] != bytes(16)
+                       for offset in range(0, len(entries), width)):
+                continue
+            valid.append((header[56:72], entries))
+            if alternate not in candidates:
+                candidates.append(alternate)
+        if not valid or any(identity != valid[0] for identity in valid[1:]):
+            raise RuntimeError('No unambiguous CRC-valid boot GPT; preserving disk')
+        return valid[0]
+
+
 def _repair_boot_gpt(disk):
     """Relocate an expanded boot disk's GPT without interactive prompts."""
-    # This probe/relocation is idempotent. A timeout may occur after GPT
-    # writes completed while disk flushes are still settling. subprocess.run
-    # reaps the timed-out child before returning, so the retry cannot overlap.
+    # GNU Parted repair can clear both GPT headers before rewriting them.
+    # Killing it in that window destroys the readable table. Firmware's
+    # sgdisk writes a synchronous backup copy before touching the primary.
+    # Relocation retains partition identities/payloads and can be retried
+    # after the timed-out child is reaped, using the remaining valid copy.
+    identity = _boot_gpt_identity(disk)
     for attempt in range(2):
         try:
+            if _boot_gpt_identity(disk) != identity:
+                raise RuntimeError('Boot GPT changed during relocation; preserving disk')
             subprocess.run(
-                ['parted', '--script', '--fix', disk, 'print'],
+                ['sgdisk', '--move-second-header', disk],
                 stdin=subprocess.DEVNULL, capture_output=True,
                 timeout=15, check=True)
+            if _boot_gpt_identity(disk) != identity:
+                raise RuntimeError('Boot GPT relocation changed partition identity')
             return
         except subprocess.TimeoutExpired:
             if attempt:
                 raise
-            log('storage', 'Boot GPT probe timed out; retrying once')
+            log('storage', 'Boot GPT relocation timed out; retrying once')
             time.sleep(1)
 
 
@@ -387,11 +452,8 @@ class Storage:
                 _log('Creating key partition...')
             _repair_boot_gpt(disk)
             subprocess.run(
-                ['parted', '-s', disk, 'mkpart', 'primary', '2049MiB', '2050MiB'],
-                capture_output=True, timeout=15)
-            subprocess.run(
-                ['parted', '-s', disk, 'set', '3', 'msftres', 'on'],
-                capture_output=True, timeout=15)
+                ['sgdisk', '--new=3:2049M:+1M', '--typecode=3:0c01', disk],
+                capture_output=True, timeout=15, check=True)
             subprocess.run(['partprobe', disk], capture_output=True, timeout=10)
             time.sleep(1)
 
@@ -475,9 +537,11 @@ class Storage:
             _log('Creating USB data partition...')
         data_part = _part_dev(disk, 4)
         if not os.path.exists(data_part):
+            _repair_boot_gpt(disk)
             subprocess.run(
-                ['parted', '-s', disk, 'mkpart', 'reefy-data', '2050MiB', '100%'],
-                capture_output=True, timeout=15)
+                ['sgdisk', '--new=4:2050M:0', '--typecode=4:8300',
+                 '--change-name=4:reefy-data', disk],
+                capture_output=True, timeout=15, check=True)
             subprocess.run(['partprobe', disk], capture_output=True, timeout=10)
             time.sleep(1)
 
