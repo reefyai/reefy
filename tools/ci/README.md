@@ -42,3 +42,17 @@ message remains unavailable. The new build and fallback logs must establish
 whether this fixes it. Similar missing-pahole dependency reports:
 https://bugs.archlinux.org/task/69687
 https://bugs-devel.debian.org/cgi-bin/bugreport.cgi?bug=1098706
+
+## Interrupted AMD package downloads
+
+An AMD provider build can fail before compilation if its HTTPS package transfer
+ends with curl receive error 56 (for example, an SSL bad-record-MAC error).
+Default `--retry` does not cover that receive error. The read-only package GET
+uses bounded `--retry-all-errors` with connection/transfer timeouts. Output goes
+to a temporary file beside the destination and is renamed only after successful
+completion; failed partial downloads are removed. TLS verification stays enabled.
+The provider's normal package validation and compilation still run afterward.
+
+This handles interrupted downloads; it does not establish whether a particular
+TLS failure came from the server, network, proxy, or runner.
+See https://curl.se/docs/manpage.html#--retry-all-errors.

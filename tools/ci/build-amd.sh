@@ -16,7 +16,8 @@ done
 test -n "$kernel_build"
 driver_url=$(python3 -c 'import json; print(json.load(open("amd-provider/versions.json"))["amd_gpu_driver"]["package_url"])')
 mkdir -p "$BR_OUTPUT/reefy-artifacts/amd"
-curl -fL --retry 3 -o "$BR_OUTPUT/reefy-artifacts/amd/amdgpu-dkms.deb" "$driver_url"
+bash tools/ci/download-package.sh "$driver_url" \
+  "$BR_OUTPUT/reefy-artifacts/amd/amdgpu-dkms.deb"
 python3 amd-provider/scripts/build_modules.py \
   --driver-package "$BR_OUTPUT/reefy-artifacts/amd/amdgpu-dkms.deb" \
   --kernel-dir "$kernel_build" \

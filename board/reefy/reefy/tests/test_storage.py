@@ -1112,6 +1112,76 @@ class SensitiveDownloadLoggingTests(unittest.TestCase):
                     [{'path': path}], backup_paths={path})
 
 
+class StateLvCreateTimeoutTests(unittest.TestCase):
+    def _run(self, probe, second_timeout=False):
+        instance = storage.Storage()
+        calls = []
+        creates = 0
+        original = subprocess.TimeoutExpired(['lvcreate'], 15)
+
+        def run(command, **kwargs):
+            nonlocal creates
+            calls.append((command, kwargs))
+            if command[0] == 'vgs':
+                return types.SimpleNamespace(returncode=0, stdout=str(32 * 1024**3), stderr='')
+            if command[0] == 'lvcreate':
+                creates += 1
+                if creates == 1 or second_timeout:
+                    raise original
+            if command[0] == 'lvs':
+                if isinstance(probe, Exception):
+                    raise probe
+                return probe
+            return types.SimpleNamespace(returncode=0, stdout='', stderr='')
+
+        with mock.patch.object(storage.os.path, 'exists', return_value=False), \
+                mock.patch.object(storage.subprocess, 'run', side_effect=run):
+            try:
+                instance._ensure_state_lv()
+            except subprocess.TimeoutExpired as error:
+                return calls, error, original
+        return calls, None, original
+
+    def test_absent_metadata_allows_one_identical_retry_then_format(self):
+        probe = types.SimpleNamespace(returncode=0, stdout='{"report":[{"lv":[]}]}')
+        calls, error, _ = self._run(probe)
+        self.assertIsNone(error)
+        creates = [(command, kwargs) for command, kwargs in calls if command[0] == 'lvcreate']
+        self.assertEqual(len(creates), 2)
+        self.assertEqual(creates[0], creates[1])
+        self.assertEqual(creates[0][1]['timeout'], 15)
+        self.assertEqual([command[0] for command, _ in calls],
+                         ['vgs', 'lvcreate', 'lvs', 'lvcreate', 'mkfs.xfs'])
+
+    def test_committed_or_unknown_metadata_never_retries_or_formats(self):
+        for probe in [
+            types.SimpleNamespace(returncode=0, stdout='{"report":[{"lv":[{"lv_name":"reefy_state"}]}]}'),
+            types.SimpleNamespace(returncode=5, stdout='{"report":[{"lv":[]}]}'),
+            types.SimpleNamespace(returncode=0, stdout='not-json'),
+            types.SimpleNamespace(returncode=0, stdout='{"report":[]}'),
+            types.SimpleNamespace(returncode=0, stdout='{"report":[{"lv":[{"lv_name":""}]}]}'),
+            subprocess.TimeoutExpired(['lvs'], 10),
+        ]:
+            with self.subTest(probe=probe):
+                calls, error, original = self._run(probe)
+                self.assertIs(error, original)
+                self.assertEqual(sum(c[0] == 'lvcreate' for c, _ in calls), 1)
+                self.assertFalse(any(c[0] in ('mkfs.xfs', 'lvremove') for c, _ in calls))
+
+    def test_second_timeout_remains_fatal(self):
+        probe = types.SimpleNamespace(returncode=0, stdout='{"report":[{"lv":[]}]}')
+        calls, error, original = self._run(probe, second_timeout=True)
+        self.assertIs(error, original)
+        self.assertEqual(sum(c[0] == 'lvcreate' for c, _ in calls), 2)
+        self.assertFalse(any(c[0] == 'mkfs.xfs' for c, _ in calls))
+
+    def test_existing_state_volume_is_untouched(self):
+        with mock.patch.object(storage.os.path, 'exists', return_value=True), \
+                mock.patch.object(storage.subprocess, 'run') as run:
+            storage.Storage()._ensure_state_lv()
+        run.assert_not_called()
+
+
 class MountStateLvTests(unittest.TestCase):
     """_mount_state_lv: the holistic state-LV mount used by every provision
     path (and the boot shell's port source). Skips when the LV is absent or
@@ -1914,6 +1984,79 @@ class ExtendStorageSectorTests(unittest.TestCase):
 
 
 
+class BootGptIdentityTests(unittest.TestCase):
+    def _disk(self, directory, sector=512, conflicting=False, zero_primary=False,
+              zero_backup=False):
+        import struct
+        import zlib
+        disk = Path(directory) / 'synthetic-gpt.img'
+        size = 16 * 1024 * 1024
+        last = size // sector - 1
+        guid = bytes([17]) * 16
+        entries = bytearray(128 * 128)
+        entries[:32] = bytes([34]) * 16 + bytes([51]) * 16
+        struct.pack_into('<QQ', entries, 32, 2048, 3071)
+        backup_entries = bytearray(entries)
+        if conflicting:
+            backup_entries[16] ^= 1
+        table_sectors = len(entries) // sector
+        def header(current, alternate, table, payload):
+            result = bytearray(sector)
+            struct.pack_into('<8sIIIIQQQQ16sQIII', result, 0, b'EFI PART', 0x10000,
+                             92, 0, 0, current, alternate, 34,
+                             last - table_sectors - 1, guid, table, 128, 128,
+                             zlib.crc32(payload))
+            struct.pack_into('<I', result, 16, zlib.crc32(result[:92]))
+            return result
+        with disk.open('wb') as stream:
+            stream.truncate(size)
+            stream.seek(2 * sector);stream.write(entries)
+            stream.seek((last - table_sectors) * sector);stream.write(backup_entries)
+            if not zero_primary:
+                stream.seek(sector);stream.write(header(1, last, 2, entries))
+            if not zero_backup:
+                stream.seek(last * sector);stream.write(header(last, 1, last - table_sectors, backup_entries))
+        return disk, (guid, bytes(entries))
+
+    def test_valid_primary_and_backup_agree(self):
+        with tempfile.TemporaryDirectory() as directory:
+            disk, identity = self._disk(directory)
+            self.assertEqual(storage._boot_gpt_identity(str(disk)), identity)
+
+    def test_valid_backup_survives_primary_interruption(self):
+        with tempfile.TemporaryDirectory() as directory:
+            disk, identity = self._disk(directory, zero_primary=True)
+            self.assertEqual(storage._boot_gpt_identity(str(disk)), identity)
+
+    def test_corrupt_or_conflicting_metadata_is_preserved_without_tool_calls(self):
+        for options in ({'zero_primary': True, 'zero_backup': True}, {'conflicting': True}):
+            with self.subTest(options=options), tempfile.TemporaryDirectory() as directory:
+                disk, _ = self._disk(directory, **options)
+                before = disk.read_bytes()
+                with mock.patch.object(storage.subprocess, 'run') as run:
+                    with self.assertRaisesRegex(RuntimeError, 'preserving disk'):
+                        storage._repair_boot_gpt(str(disk))
+                run.assert_not_called()
+                self.assertEqual(disk.read_bytes(), before)
+
+    def test_entry_crc_failure_is_not_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            disk, _ = self._disk(directory, zero_backup=True)
+            with disk.open('r+b') as stream:
+                stream.seek(1024);stream.write(b'bad entries')
+            with self.assertRaisesRegex(RuntimeError, 'CRC-valid'):
+                storage._boot_gpt_identity(str(disk))
+
+    def test_4k_logical_sector_geometry(self):
+        import struct
+        import stat
+        with tempfile.TemporaryDirectory() as directory:
+            disk, identity = self._disk(directory, sector=4096)
+            with mock.patch.object(storage.os, 'fstat', return_value=types.SimpleNamespace(st_mode=stat.S_IFBLK)), \
+                    mock.patch.object(storage.fcntl, 'ioctl', return_value=struct.pack('I', 4096)):
+                self.assertEqual(storage._boot_gpt_identity(str(disk)), identity)
+
+
 class BootGptRepairTests(unittest.TestCase):
     def test_repair_failure_does_not_create_partition(self):
         calls = []
@@ -1923,14 +2066,16 @@ class BootGptRepairTests(unittest.TestCase):
                 return types.SimpleNamespace(stdout='tmpfs\n', returncode=0)
             raise subprocess.CalledProcessError(1, args)
         with mock.patch.object(storage.subprocess, 'run', side_effect=command), \
+                mock.patch.object(storage, '_boot_gpt_identity', return_value=('synthetic-guid', b'entries')), \
                 mock.patch.object(storage.Storage, '_find_reefy_disk',
                                   return_value=('/dev/synthetic', None)), \
                 mock.patch.object(storage.os.path, 'exists', return_value=False):
             with self.assertRaises(subprocess.CalledProcessError):
                 storage.Storage()._ensure_persistent_storage()
-        self.assertFalse(any('mkpart' in c for c in calls))
+        self.assertFalse(any(arg.startswith('--new=') for c in calls for arg in c))
 
-    @unittest.skipUnless(shutil.which('parted'), 'requires GNU Parted')
+    @unittest.skipUnless(shutil.which('parted') and shutil.which('sgdisk'),
+                         'requires GNU Parted and GPT fdisk')
     def test_grown_gpt_repair_preserves_partition_payload(self):
         with tempfile.TemporaryDirectory(prefix='synthetic-gpt-') as directory:
             disk = Path(directory) / 'disk.img'
@@ -1991,24 +2136,43 @@ if __name__ == '__main__':
 
 
 class BootGPTProbeRetryTests(unittest.TestCase):
+    def test_identity_change_before_mutation_is_refused(self):
+        with mock.patch.object(storage, '_boot_gpt_identity', side_effect=[
+                ('synthetic-guid', b'original'), ('synthetic-guid', b'changed')]), \
+                mock.patch.object(storage.subprocess, 'run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'changed during relocation'):
+                storage._repair_boot_gpt('/dev/synthetic')
+        run.assert_not_called()
+
+    def test_changed_partition_payload_is_not_accepted_after_tool_success(self):
+        with mock.patch.object(storage, '_boot_gpt_identity', side_effect=[
+                ('synthetic-guid', b'original'), ('synthetic-guid', b'original'),
+                ('synthetic-guid', b'changed')]), \
+                mock.patch.object(storage.subprocess, 'run', return_value=types.SimpleNamespace(returncode=0)) as run:
+            with self.assertRaisesRegex(RuntimeError, 'changed partition identity'):
+                storage._repair_boot_gpt('/dev/synthetic')
+        run.assert_called_once()
+
     def test_one_timeout_retries_only_the_same_probe(self):
-        command = ['parted', '--script', '--fix', '/dev/synthetic', 'print']
+        command = ['sgdisk', '--move-second-header', '/dev/synthetic']
         with mock.patch.object(storage.subprocess, 'run', side_effect=[
                 subprocess.TimeoutExpired(command, 15),
                 types.SimpleNamespace(returncode=0),
         ]) as run, mock.patch.object(storage.time, 'sleep'), \
+                mock.patch.object(storage, '_boot_gpt_identity', return_value=('synthetic-guid', b'entries')), \
                 mock.patch.object(storage, 'log'):
             storage._repair_boot_gpt('/dev/synthetic')
         self.assertEqual(run.call_count, 2)
         for call in run.call_args_list:
             self.assertEqual(call.args[0], command)
-            self.assertEqual(call.kwargs['timeout'], 15)
+            self.assertEqual(call.kwargs['timeout'], storage.BOOT_GPT_TIMEOUT_SECONDS)
             self.assertTrue(call.kwargs['check'])
             self.assertEqual(call.kwargs['stdin'], subprocess.DEVNULL)
 
     def test_second_timeout_is_reported(self):
-        error = subprocess.TimeoutExpired(['parted'], 15)
+        error = subprocess.TimeoutExpired(['sgdisk'], 15)
         with mock.patch.object(storage.subprocess, 'run', side_effect=error) as run, \
+                mock.patch.object(storage, '_boot_gpt_identity', return_value=('synthetic-guid', b'entries')), \
                 mock.patch.object(storage.time, 'sleep'), \
                 mock.patch.object(storage, 'log'):
             with self.assertRaises(subprocess.TimeoutExpired):
@@ -2017,14 +2181,16 @@ class BootGPTProbeRetryTests(unittest.TestCase):
 
     def test_explicit_probe_failure_is_not_retried(self):
         with mock.patch.object(storage.subprocess, 'run',
-                               side_effect=subprocess.CalledProcessError(1, ['parted'])) as run, \
+                               side_effect=subprocess.CalledProcessError(1, ['sgdisk'])) as run, \
+                mock.patch.object(storage, '_boot_gpt_identity', return_value=('synthetic-guid', b'entries')), \
                 mock.patch.object(storage.time, 'sleep') as sleep:
             with self.assertRaises(subprocess.CalledProcessError):
                 storage._repair_boot_gpt('/dev/synthetic')
         run.assert_called_once()
         sleep.assert_not_called()
 
-    @unittest.skipUnless(shutil.which('parted'), 'requires GNU Parted')
+    @unittest.skipUnless(shutil.which('parted') and shutil.which('sgdisk'),
+                         'requires GNU Parted and GPT fdisk')
     def test_retry_after_completed_relocation_preserves_payload(self):
         with tempfile.TemporaryDirectory(prefix='synthetic-gpt-retry-') as directory:
             disk = Path(directory) / 'disk.img'
