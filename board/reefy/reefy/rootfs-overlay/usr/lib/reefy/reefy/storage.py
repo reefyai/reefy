@@ -92,11 +92,15 @@ def _boot_gpt_identity(disk):
         return valid[0]
 
 
+# Adoption metadata updates are infrequent and may wait on storage flushes.
+BOOT_GPT_TIMEOUT_SECONDS = 60
+
+
 def _repair_boot_gpt(disk):
     """Relocate an expanded boot disk's GPT without interactive prompts."""
     # GNU Parted repair can clear both GPT headers before rewriting them.
-    # Killing it in that window destroys the readable table. Firmware's
-    # sgdisk writes a synchronous backup copy before touching the primary.
+    # Killing it in that window destroys the readable table.
+    # Stock sgdisk writes the backup copy before touching the primary.
     # Relocation retains partition identities/payloads and can be retried
     # after the timed-out child is reaped, using the remaining valid copy.
     identity = _boot_gpt_identity(disk)
@@ -107,7 +111,7 @@ def _repair_boot_gpt(disk):
             subprocess.run(
                 ['sgdisk', '--move-second-header', disk],
                 stdin=subprocess.DEVNULL, capture_output=True,
-                timeout=15, check=True)
+                timeout=BOOT_GPT_TIMEOUT_SECONDS, check=True)
             if _boot_gpt_identity(disk) != identity:
                 raise RuntimeError('Boot GPT relocation changed partition identity')
             return
@@ -453,7 +457,7 @@ class Storage:
             _repair_boot_gpt(disk)
             subprocess.run(
                 ['sgdisk', '--new=3:2049M:+1M', '--typecode=3:0c01', disk],
-                capture_output=True, timeout=15, check=True)
+                capture_output=True, timeout=BOOT_GPT_TIMEOUT_SECONDS, check=True)
             subprocess.run(['partprobe', disk], capture_output=True, timeout=10)
             time.sleep(1)
 
@@ -541,7 +545,7 @@ class Storage:
             subprocess.run(
                 ['sgdisk', '--new=4:2050M:0', '--typecode=4:8300',
                  '--change-name=4:reefy-data', disk],
-                capture_output=True, timeout=15, check=True)
+                capture_output=True, timeout=BOOT_GPT_TIMEOUT_SECONDS, check=True)
             subprocess.run(['partprobe', disk], capture_output=True, timeout=10)
             time.sleep(1)
 

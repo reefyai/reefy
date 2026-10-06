@@ -2165,7 +2165,7 @@ class BootGPTProbeRetryTests(unittest.TestCase):
         self.assertEqual(run.call_count, 2)
         for call in run.call_args_list:
             self.assertEqual(call.args[0], command)
-            self.assertEqual(call.kwargs['timeout'], 15)
+            self.assertEqual(call.kwargs['timeout'], storage.BOOT_GPT_TIMEOUT_SECONDS)
             self.assertTrue(call.kwargs['check'])
             self.assertEqual(call.kwargs['stdin'], subprocess.DEVNULL)
 
