@@ -1112,6 +1112,76 @@ class SensitiveDownloadLoggingTests(unittest.TestCase):
                     [{'path': path}], backup_paths={path})
 
 
+class StateLvCreateTimeoutTests(unittest.TestCase):
+    def _run(self, probe, second_timeout=False):
+        instance = storage.Storage()
+        calls = []
+        creates = 0
+        original = subprocess.TimeoutExpired(['lvcreate'], 15)
+
+        def run(command, **kwargs):
+            nonlocal creates
+            calls.append((command, kwargs))
+            if command[0] == 'vgs':
+                return types.SimpleNamespace(returncode=0, stdout=str(32 * 1024**3), stderr='')
+            if command[0] == 'lvcreate':
+                creates += 1
+                if creates == 1 or second_timeout:
+                    raise original
+            if command[0] == 'lvs':
+                if isinstance(probe, Exception):
+                    raise probe
+                return probe
+            return types.SimpleNamespace(returncode=0, stdout='', stderr='')
+
+        with mock.patch.object(storage.os.path, 'exists', return_value=False), \
+                mock.patch.object(storage.subprocess, 'run', side_effect=run):
+            try:
+                instance._ensure_state_lv()
+            except subprocess.TimeoutExpired as error:
+                return calls, error, original
+        return calls, None, original
+
+    def test_absent_metadata_allows_one_identical_retry_then_format(self):
+        probe = types.SimpleNamespace(returncode=0, stdout='{"report":[{"lv":[]}]}')
+        calls, error, _ = self._run(probe)
+        self.assertIsNone(error)
+        creates = [(command, kwargs) for command, kwargs in calls if command[0] == 'lvcreate']
+        self.assertEqual(len(creates), 2)
+        self.assertEqual(creates[0], creates[1])
+        self.assertEqual(creates[0][1]['timeout'], 15)
+        self.assertEqual([command[0] for command, _ in calls],
+                         ['vgs', 'lvcreate', 'lvs', 'lvcreate', 'mkfs.xfs'])
+
+    def test_committed_or_unknown_metadata_never_retries_or_formats(self):
+        for probe in [
+            types.SimpleNamespace(returncode=0, stdout='{"report":[{"lv":[{"lv_name":"reefy_state"}]}]}'),
+            types.SimpleNamespace(returncode=5, stdout='{"report":[{"lv":[]}]}'),
+            types.SimpleNamespace(returncode=0, stdout='not-json'),
+            types.SimpleNamespace(returncode=0, stdout='{"report":[]}'),
+            types.SimpleNamespace(returncode=0, stdout='{"report":[{"lv":[{"lv_name":""}]}]}'),
+            subprocess.TimeoutExpired(['lvs'], 10),
+        ]:
+            with self.subTest(probe=probe):
+                calls, error, original = self._run(probe)
+                self.assertIs(error, original)
+                self.assertEqual(sum(c[0] == 'lvcreate' for c, _ in calls), 1)
+                self.assertFalse(any(c[0] in ('mkfs.xfs', 'lvremove') for c, _ in calls))
+
+    def test_second_timeout_remains_fatal(self):
+        probe = types.SimpleNamespace(returncode=0, stdout='{"report":[{"lv":[]}]}')
+        calls, error, original = self._run(probe, second_timeout=True)
+        self.assertIs(error, original)
+        self.assertEqual(sum(c[0] == 'lvcreate' for c, _ in calls), 2)
+        self.assertFalse(any(c[0] == 'mkfs.xfs' for c, _ in calls))
+
+    def test_existing_state_volume_is_untouched(self):
+        with mock.patch.object(storage.os.path, 'exists', return_value=True), \
+                mock.patch.object(storage.subprocess, 'run') as run:
+            storage.Storage()._ensure_state_lv()
+        run.assert_not_called()
+
+
 class MountStateLvTests(unittest.TestCase):
     """_mount_state_lv: the holistic state-LV mount used by every provision
     path (and the boot shell's port source). Skips when the LV is absent or

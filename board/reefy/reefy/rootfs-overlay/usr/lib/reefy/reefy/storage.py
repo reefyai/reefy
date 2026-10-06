@@ -744,10 +744,38 @@ class Storage:
         size = min(4 * gib, vg_bytes // 10) if vg_bytes else gib
         size = max(size, 256 * 1024 * 1024)  # floor for tiny media
         size_mib = size // (1024 * 1024)
-        r = subprocess.run(
-            ['lvcreate', '-L', f'{size_mib}M', '-n', self.STATE_LV,
-             self.STORAGE_VG],
-            capture_output=True, text=True, timeout=15)
+        create_command = ['lvcreate', '-L', f'{size_mib}M', '-n', self.STATE_LV,
+                          self.STORAGE_VG]
+        try:
+            r = subprocess.run(create_command, capture_output=True,
+                               text=True, timeout=15)
+        except subprocess.TimeoutExpired:
+            # subprocess.run has killed and reaped the timed-out process.
+            # A path check alone cannot distinguish missing metadata from a
+            # committed LV whose udev node is delayed. Retry only after a
+            # successful, structurally valid metadata read proves absence.
+            # A late concurrent commit remains protected by the unique name:
+            # lvcreate fails rather than overwriting or formatting that LV.
+            absent = False
+            try:
+                probe = subprocess.run(
+                    ['lvs', '--reportformat', 'json', '-o', 'lv_name', self.STORAGE_VG],
+                    capture_output=True, text=True, timeout=10)
+                reports = json.loads(probe.stdout)['report']
+                rows = [row for report in reports for row in report['lv']]
+                absent = (probe.returncode == 0 and len(reports) == 1
+                          and all(isinstance(row.get('lv_name'), str)
+                                  and bool(row['lv_name'].strip()) for row in rows)
+                          and all(row['lv_name'].strip() != self.STATE_LV for row in rows))
+            except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError,
+                    AttributeError):
+                pass
+            if not absent:
+                raise
+            if _log:
+                _log('State LV create timed out without committed metadata; retrying once')
+            r = subprocess.run(create_command, capture_output=True,
+                               text=True, timeout=15)
         if r.returncode != 0:
             if _log:
                 _log(f'state LV create failed: {r.stderr}')
