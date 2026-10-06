@@ -45,5 +45,34 @@ class ArtifactChecks(unittest.TestCase):
             self.assertEqual(archive.require_debug(Path('module.ko'), 'readelf'), 'abc123')
 
 
+class ParallelArchive(unittest.TestCase):
+    def test_parallel_results_preserve_input_order(self):
+        self.assertEqual(archive.parallel_map(lambda n: n * n, [4, 1, 3]), [16, 1, 9])
+
+    def test_worker_failure_is_not_suppressed(self):
+        def verify(value):
+            if value == 2:
+                raise RuntimeError('module verification failed')
+            return value
+        with self.assertRaisesRegex(RuntimeError, 'module verification failed'):
+            archive.parallel_map(verify, [1, 2, 3])
+
+    @unittest.skipUnless(shutil.which('pigz'), 'requires pigz')
+    def test_parallel_gzip_preserves_payload_and_propagates_failure(self):
+        import tarfile
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stage = root / 'bundle'
+            stage.mkdir()
+            payload = b'debug fixture' * 10000
+            (stage / 'vmlinux').write_bytes(payload)
+            destination = root / 'debug.tar.gz'
+            archive.compress_bundle(stage, destination)
+            with tarfile.open(destination, 'r:gz') as bundle:
+                self.assertEqual(bundle.extractfile('./vmlinux').read(), payload)
+            with self.assertRaises(subprocess.CalledProcessError):
+                archive.compress_bundle(root / 'missing', destination)
+
+
 if __name__ == '__main__':
     unittest.main()

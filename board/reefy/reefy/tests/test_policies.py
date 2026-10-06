@@ -147,7 +147,7 @@ class UnsupportedApstTests(ApstTests):
         self.absent_interface()
         with patch('reefy.policies.subprocess.run', return_value=Mock(
                 returncode=0, stdout='{"apsta": 1}')):
-            with self.assertRaisesRegex(RuntimeError, 'no APST latency QoS interface'):
+            with self.assertRaisesRegex(RuntimeError, 'supports APST but has no latency QoS interface'):
                 self.apply('disabled')
 
     def test_capability_failure_is_not_silent_success(self):
