@@ -125,3 +125,14 @@ Before promotion, verify:
 
 See upstream's [release notes](https://buildroot.org/news.html) and
 [migration guidance](https://buildroot.org/downloads/manual/manual.html#_migrating_to_new_buildroot_versions).
+
+## Provisioning discovery under parallel load
+
+The one-time existing-volume `vgscan` uses a bounded 60-second deadline.
+Record elapsed time on success. Before terminating a timed-out scan, record
+its process state, kernel wait channel/stack and CPU, memory and I/O pressure,
+plus bounded command output. Discovery errors stop provisioning; do not
+retry blindly or proceed to new data-volume creation after an incomplete scan.
+This does not change six-worker E2E execution or the overall adoption deadline.
+A longer command budget accommodates transient startup contention but does
+not establish the cause of a previous timeout.
