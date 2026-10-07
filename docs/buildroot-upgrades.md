@@ -34,6 +34,21 @@ structure are unchanged from 1.3.2. Verify the generated Cargo archive with
 Buildroot's pinned Cargo toolchain and locked dependencies; do not reuse a
 checksum from an older Cargo archive format or disable download verification.
 
+## Build cache and image versions
+
+Do not reuse a previous Buildroot release's output tree. The firmware
+workflow uses `/buildroot-cache/output-buildroot-2026.08`, retaining the
+shared download and compiler caches. The old output directory is preserved
+for independent validation of the preceding release.
+
+The existing image version format remains unchanged. Serialized CI builds
+allocate the next sequence from the highest current-day counter in the new
+output, the legacy output and a shared counter outside the output trees.
+The allocator mirrors the result back to the legacy counter so alternating
+release branches cannot reuse an already allocated version. Invalid counters
+or dates going backwards stop publication. Firmware jobs must remain
+serialized on the build runner.
+
 ## systemd EFI runtime support
 
 Enable `BR2_PACKAGE_SYSTEMD_EFI=y` for Reefy's UEFI firmware. Without it,

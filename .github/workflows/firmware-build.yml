@@ -76,7 +76,10 @@ jobs:
       # actions/checkout's `clean: true` default.
       BR2_DL_DIR: /buildroot-cache/dl
       BR2_CCACHE_DIR: /buildroot-cache/ccache
-      BR_OUTPUT: /buildroot-cache/output
+      # Do not reuse an older release's host tools, target files or stamps.
+      BR_OUTPUT: /buildroot-cache/output-buildroot-2026.08
+      # Keep the image sequence continuous when switching output directories.
+      REEFY_VERSION_COUNTER_FILES: /buildroot-cache/output/build/.reefy-last-version:/buildroot-cache/.reefy-last-version
       REEFY_E2E_BUILD_IDENTITY_SALT: ${{ inputs.e2e_build_identity_salt || '' }}
 
     steps:
