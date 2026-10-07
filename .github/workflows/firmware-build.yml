@@ -122,6 +122,10 @@ jobs:
         working-directory: buildroot
         run: make BR2_EXTERNAL=.. O="$BR_OUTPUT" reefy_defconfig
 
+      - name: Refresh systemd EFI configuration
+        working-directory: buildroot
+        run: python3 ../tools/ci/systemd-config.py "$BR_OUTPUT"
+
       - name: Refresh linux-firmware package selection
         working-directory: buildroot
         run: make O="$BR_OUTPUT" linux-firmware-dirclean
@@ -129,6 +133,17 @@ jobs:
       - name: Refresh thin-provisioning-tools package
         working-directory: buildroot
         run: make O="$BR_OUTPUT" thin-provisioning-tools-dirclean
+
+      - name: Refresh Ansible build metadata
+        working-directory: buildroot
+        run: |
+          for stamp in "$BR_OUTPUT"/build/python-ansible-core-*/.stamp_patched; do
+            [ -f "$stamp" ] || continue
+            if ! grep -Fq 'wheel >= 0.45.1' "$(dirname "$stamp")/pyproject.toml"; then
+              make O="$BR_OUTPUT" python-ansible-core-dirclean
+              break
+            fi
+          done
 
       - name: Heal stale kernel module cache
         working-directory: buildroot
@@ -197,6 +212,9 @@ jobs:
       - name: Build (post_image.sh loops flavors)
         working-directory: buildroot
         run: bash "$GITHUB_WORKSPACE/tools/ci/logged-build.sh" "$GITHUB_WORKSPACE/tools/ci/build-firmware.sh"
+
+      - name: Verify compiled systemd EFI configuration
+        run: python3 tools/ci/systemd-config.py "$BR_OUTPUT" --verify
 
       - name: Build exact AMD provider modules
         run: bash tools/ci/logged-build.sh tools/ci/build-amd.sh

@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-THIN_PROVISIONING_TOOLS_VERSION = 1.3.2
+THIN_PROVISIONING_TOOLS_VERSION = 1.3.4
 THIN_PROVISIONING_TOOLS_SITE = $(call github,device-mapper-utils,thin-provisioning-tools,v$(THIN_PROVISIONING_TOOLS_VERSION))
 THIN_PROVISIONING_TOOLS_LICENSE = GPL-3.0-only
 THIN_PROVISIONING_TOOLS_LICENSE_FILES = COPYING

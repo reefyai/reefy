@@ -11,8 +11,10 @@ PYTHON_ANSIBLE_CORE_SETUP_TYPE = pep517
 PYTHON_ANSIBLE_CORE_LICENSE = GPL-3.0-or-later
 PYTHON_ANSIBLE_CORE_LICENSE_FILES = COPYING
 
-# Runtime dependencies for ansible-core
+# Explicit host build backend and runtime dependencies for ansible-core
 PYTHON_ANSIBLE_CORE_DEPENDENCIES = \
+	host-python-setuptools \
+	host-python-wheel \
 	python3 \
 	python-cryptography \
 	python-jinja2 \

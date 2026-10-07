@@ -208,7 +208,17 @@ fi
 cp -a "${INTEL_NPU_FIRMWARE_BUILD}/intel/vpu/." \
   "${INTEL_FIRMWARE}/lib/firmware/intel/vpu/"
 for license in LICENSE.i915 LICENSE.xe; do
-  cp "${LINUX_FIRMWARE_BUILD}/${license}" \
+  # Newer linux-firmware puts notices under LICENSES; older releases used
+  # the source root. Keep the provider's installed notice names unchanged.
+  license_source="${LINUX_FIRMWARE_BUILD}/LICENSES/${license}"
+  if [ ! -f "${license_source}" ]; then
+    license_source="${LINUX_FIRMWARE_BUILD}/${license}"
+  fi
+  if [ ! -f "${license_source}" ]; then
+    echo "ERROR: missing required Intel firmware license ${license}" >&2
+    exit 1
+  fi
+  cp "${license_source}" \
     "${INTEL_FIRMWARE}/usr/share/licenses/intel-provider/${license}"
 done
 
