@@ -92,14 +92,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: reefyai/reefy-artifact-fixtures
-          ref: 1e51a8edb8547ce173cf67b5973eb1ff61f88f50
+          ref: 85dce99586e9b21f6ff10e7773a058ca2d6793db
           path: artifact-fixtures
 
       - name: Checkout AMD provider builder
         uses: actions/checkout@v4
         with:
           repository: reefyai/reefy-amd
-          ref: 7c9621c8cb25d8d278e09929d135c112cccdafaa
+          ref: b8f83b494d63d4d891277bc19d38dbc0b11f8b07
           path: amd-provider
 
       - name: Validate E2E build identity salt
@@ -445,28 +445,28 @@ jobs:
 
   publish-nvidia-provider:
     needs: build
-    uses: reefyai/reefy-nvidia/.github/workflows/publish.yml@9f39d2415dfe3fadaf97afa94338a80367535992
+    uses: reefyai/reefy-nvidia/.github/workflows/publish.yml@0ae51db06548a1d9044bd5fccec30c8b18251866
     with:
       input_artifact: reefy-nvidia-inputs
     secrets: inherit
 
   publish-intel-provider:
     needs: build
-    uses: reefyai/reefy-intel/.github/workflows/publish.yml@ce5cc66ea2dcb7b2ff50bb2955b54c2cd3cfb3b5
+    uses: reefyai/reefy-intel/.github/workflows/publish.yml@5e3d17253f5e94dda7b03974b703e24a32800c18
     with:
       input_artifact: reefy-intel-inputs
     secrets: inherit
 
   publish-amd-provider:
     needs: build
-    uses: reefyai/reefy-amd/.github/workflows/publish.yml@7c9621c8cb25d8d278e09929d135c112cccdafaa
+    uses: reefyai/reefy-amd/.github/workflows/publish.yml@b8f83b494d63d4d891277bc19d38dbc0b11f8b07
     with:
       input_artifact: reefy-amd-inputs
     secrets: inherit
 
   publish-artifact-fixture:
     needs: build
-    uses: reefyai/reefy-artifact-fixtures/.github/workflows/publish.yml@1e51a8edb8547ce173cf67b5973eb1ff61f88f50
+    uses: reefyai/reefy-artifact-fixtures/.github/workflows/publish.yml@85dce99586e9b21f6ff10e7773a058ca2d6793db
     with:
       input_artifact: reefy-artifact-fixture-inputs
     secrets: inherit
