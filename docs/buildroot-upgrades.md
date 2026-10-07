@@ -57,6 +57,12 @@ provider publisher is pinned to the reviewed source in
 Verified installer inputs and payload layout do not establish GPU runtime
 compatibility; exact-kernel compilation and hardware validation remain gates.
 
+Update the AMD driver and matching firmware to 31.60 through
+[the AMD update PR](https://github.com/reefyai/reefy-amd/pull/3), retaining
+Container Toolkit 1.3.0 and the current official AMD-SMI package. Package
+sizes and hashes match AMD's published Ubuntu 24.04 apt metadata. Validate
+the stock source against the pinned Linux 6.18.54 and the supported GPUs.
+
 ## Build cache and image versions
 
 Do not reuse a previous Buildroot release's output tree. The firmware
