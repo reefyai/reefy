@@ -123,19 +123,17 @@ jobs:
 
       - name: Configure
         working-directory: buildroot
-        run: make BR2_EXTERNAL=.. O="$BR_OUTPUT" reefy_defconfig
+        run: |
+          make BR2_EXTERNAL=.. O="$BR_OUTPUT" reefy_defconfig
+          # Settle hidden/default Kconfig values before taking cache inputs.
+          make O="$BR_OUTPUT" olddefconfig
 
       - name: Refresh systemd EFI configuration
         working-directory: buildroot
         run: python3 ../tools/ci/systemd-config.py "$BR_OUTPUT"
 
-      - name: Refresh linux-firmware package selection
-        working-directory: buildroot
-        run: make O="$BR_OUTPUT" linux-firmware-dirclean
-
-      - name: Refresh thin-provisioning-tools package
-        working-directory: buildroot
-        run: make O="$BR_OUTPUT" thin-provisioning-tools-dirclean
+      - name: Refresh changed firmware and thin tools packages
+        run: python3 tools/ci/package-cache.py "$BR_OUTPUT"
 
       - name: Refresh Ansible build metadata
         working-directory: buildroot
@@ -339,6 +337,9 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 90
+
+      - name: Mark verified package caches current
+        run: python3 tools/ci/package-cache.py "$BR_OUTPUT" --commit
 
       - name: Mark verified kernel cache current
         run: mv "$BR_OUTPUT/.reefy-kernel-inputs.pending" "$BR_OUTPUT/.reefy-kernel-inputs"
