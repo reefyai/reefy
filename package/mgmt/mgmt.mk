@@ -5,6 +5,10 @@
 ################################################################################
 
 MGMT_VERSION = 1.0.2
+# Pin host generators: @latest can raise its Go requirement independently
+# of the Buildroot host toolchain and break unchanged firmware sources.
+MGMT_NEX_VERSION = v0.0.0-20210330102341-1a3320dab988
+MGMT_GOYACC_VERSION = v0.38.0
 MGMT_SITE = $(call github,purpleidea,mgmt,$(MGMT_VERSION))
 
 MGMT_LICENSE = GPL-3.0+
@@ -76,8 +80,8 @@ MGMT_FMT_ENV = $(HOST_GO_COMMON_ENV) GOFLAGS=
 
 define MGMT_CODEGEN
 	# Install Go-based code generation tools
-	$(MGMT_GOINSTALL_ENV) $(GO_BIN) install github.com/blynn/nex@latest
-	$(MGMT_GOINSTALL_ENV) $(GO_BIN) install golang.org/x/tools/cmd/goyacc@latest
+	$(MGMT_GOINSTALL_ENV) $(GO_BIN) install github.com/blynn/nex@$(MGMT_NEX_VERSION)
+	$(MGMT_GOINSTALL_ENV) $(GO_BIN) install golang.org/x/tools/cmd/goyacc@$(MGMT_GOYACC_VERSION)
 	# Generate lexer (nex): merge duplicate import blocks and deduplicate
 	cd $(@D)/lang && \
 	$(HOST_DIR)/bin/nex -e -o parser/lexer.nn.go parser/lexer.nex && \
