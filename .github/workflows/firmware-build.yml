@@ -41,6 +41,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   packages: write
   # For actions/attest-build-provenance@v2: write attestations to
   # the repo's transparency log. id-token: write is what fetches
@@ -121,6 +122,11 @@ jobs:
             findutils gawk wget python3 git libncurses-dev libssl-dev \
             systemd systemd-boot-efi qemu-utils zip ca-certificates \
             ragel parted dosfstools udev pigz
+
+      - name: Preserve firmware sequence across full package rebuilds
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/ci/preserve-version.py --output "$BR_OUTPUT"
 
       - name: Configure
         working-directory: buildroot
