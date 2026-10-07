@@ -212,6 +212,17 @@ jobs:
             make O="$BR_OUTPUT" nvidia-container-toolkit-dirclean
           fi
 
+      - name: Refresh open-vm-tools compiler mode
+        working-directory: buildroot
+        run: |
+          for stamp in "$BR_OUTPUT"/build/openvmtools-*/.stamp_configured; do
+            [ -f "$stamp" ] || continue
+            if ! grep -q -- '-std=gnu17' "$(dirname "$stamp")/Makefile"; then
+              make O="$BR_OUTPUT" openvmtools-dirclean
+              break
+            fi
+          done
+
       - name: Build (post_image.sh loops flavors)
         working-directory: buildroot
         run: bash "$GITHUB_WORKSPACE/tools/ci/logged-build.sh" "$GITHUB_WORKSPACE/tools/ci/build-firmware.sh"

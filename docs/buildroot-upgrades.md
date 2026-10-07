@@ -34,6 +34,20 @@ structure are unchanged from 1.3.2. Verify the generated Cargo archive with
 Buildroot's pinned Cargo toolchain and locked dependencies; do not reuse a
 checksum from an older Cargo archive format or disable download verification.
 
+## open-vm-tools compatibility
+
+Keep open-vm-tools enabled. Buildroot's 11.3.5 source has a known callback
+declaration conflict under GCC 15's new default C23 mode. Compile only this
+package with `-std=gnu17` through
+`board/reefy/reefy/package-overrides/openvmtools.mk`, preserving the preceding compiler's C dialect
+without changing the vendor source. The workflow invalidates an existing
+package configuration that did not include this mode.
+
+[Upstream issue #750](https://github.com/vmware/open-vm-tools/issues/750)
+records the same failure. [The 13.0.0 release notes](https://github.com/vmware/open-vm-tools/blob/stable-13.0.0/ReleaseNotes.md)
+confirm its source fix. Remove the workaround once the upstream Buildroot
+recipe uses a fixed release. Keep the newer GCC for all other packages.
+
 ## Build cache and image versions
 
 Do not reuse a previous Buildroot release's output tree. The firmware
