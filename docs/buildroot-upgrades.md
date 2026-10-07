@@ -48,6 +48,15 @@ records the same failure. [The 13.0.0 release notes](https://github.com/vmware/o
 confirm its source fix. Remove the workaround once the upstream Buildroot
 recipe uses a fixed release. Keep the newer GCC for all other packages.
 
+## GPU provider refresh
+
+Update NVIDIA's R595 production driver to 595.104.02 with matching open
+modules, GSP firmware and userspace, plus Container Toolkit 1.20.1. The
+provider publisher is pinned to the reviewed source in
+[the NVIDIA update PR](https://github.com/reefyai/reefy-nvidia/pull/2).
+Verified installer inputs and payload layout do not establish GPU runtime
+compatibility; exact-kernel compilation and hardware validation remain gates.
+
 ## Build cache and image versions
 
 Do not reuse a previous Buildroot release's output tree. The firmware

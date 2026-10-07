@@ -1,5 +1,5 @@
-# Computed locally from GitHub release tarball
-sha256  750163b631cac7676ebd8927b54a6e17fc3f6c87174f206a5b202731ebc324eb  595.84.tar.gz
+# Matching NVIDIA production tag (verified upstream commit)
+sha256  11576ab27914d674e5e7917251b1d7bd838590149c800115075826ae70c5665d  595.104.02.tar.gz
 
 # License file
 sha256  d8e96d29bc323000e7ba56102d77c88226a7a3d0d94e2081cb4b071ae9de4a06  COPYING

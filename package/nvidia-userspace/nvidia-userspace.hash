@@ -1,2 +1,2 @@
-# Same .run file as nvidia-gsp-firmware
-sha256  99c404e52131bf27bca6da0268dcce3ebedc7a73ab174071a995cf1a6c5eba06  NVIDIA-Linux-x86_64-595.84.run
+# Computed from the matching NVIDIA production installer
+sha256  e421c202e4c79f58c3c7f3161bbe71454ebb3d88936f88205a0e327cd04c59ca  NVIDIA-Linux-x86_64-595.104.02.run
