@@ -5,6 +5,9 @@ import subprocess
 import tempfile
 import unittest
 import platform
+import json
+import tarfile
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('userspace_archive', Path(__file__).with_name('archive.py'))
 archive = importlib.util.module_from_spec(spec)
@@ -67,6 +70,88 @@ class NativeSymbolsTests(unittest.TestCase):
         subprocess.run(['strip', '--strip-unneeded', str(self.binary)], check=True)
         with self.assertRaisesRegex(RuntimeError, 'does not match'):
             archive.capture(self.root)
+
+    @unittest.skipUnless(shutil.which('gdb') and shutil.which('pigz'), 'requires native debugger/compressor')
+    def test_archived_symbols_resolve_a_real_core_to_source_line(self):
+        package = self.root / 'build/synthetic-crash'
+        package.mkdir(parents=True)
+        (package / '.stamp_target_installed').touch()
+        source = package / 'crash.c'
+        source.write_text('#include <stdlib.h>\n__attribute__((noinline)) void crash_me(void) { abort(); }\nint main(void) { crash_me(); return 0; }\n')
+        subprocess.run(['gcc', '-g2', '-O1', '-Wl,--build-id=sha1', str(source), '-o', str(self.binary)], check=True)
+        core = self.root / 'synthetic.core'
+        generated = subprocess.run(['gdb', '-nx', '-batch', '-ex', 'set auto-load off', '-ex', 'run',
+                        '-ex', 'generate-core-file ' + str(core), '--args', str(self.binary)],
+                       capture_output=True, text=True, timeout=30)
+        self.assertEqual(generated.returncode, 0, generated.stdout + generated.stderr)
+        self.assertTrue(core.is_file())
+        archive.capture(self.root)
+        subprocess.run(['strip', '--strip-unneeded', str(self.binary)], check=True)
+        (self.root / '.config').write_text('BR2_ENABLE_DEBUG=y\n')
+        release = self.root / 'target/usr/lib/os-release'
+        release.parent.mkdir(parents=True)
+        release.write_text('IMAGE_VERSION=2099.01.01-01\nREEFY_BUILD_ID=' + 'a' * 64 + '\n')
+        bundle = self.root / 'debug.tar.gz'
+        with patch.object(archive.subprocess, 'check_output', return_value='synthetic-source\n'):
+            archive.archive(self.root, bundle)
+        unpacked = self.root / 'unpacked'
+        unpacked.mkdir()
+        with tarfile.open(bundle) as tar:
+            tar.extractall(unpacked, filter='data')
+        record = json.loads((unpacked / 'metadata.json').read_text())['elfs'][0]
+        self.assertTrue(record['dwarf'])
+        self.assertFalse(record['shipped_dwarf'])
+        result = subprocess.run(['gdb', '-nx', '-batch', '-ex', 'set auto-load off',
+            '-ex', 'set debug-file-directory ' + str(unpacked / 'debug'),
+            '-ex', 'set substitute-path ' + str(self.root) + ' ' + str(unpacked / 'sources'),
+            '-ex', 'bt', str(unpacked / 'unstripped/usr/bin/synthetic'), str(core)],
+            check=True, capture_output=True, text=True, timeout=30)
+        self.assertIn('crash_me', result.stdout)
+        self.assertRegex(result.stdout, r'crash\.c:[1-9][0-9]*')
+        self.assertTrue((unpacked / 'sources/build/synthetic-crash/crash.c').is_file())
+
+
+    @unittest.skipUnless(shutil.which('gdb') and shutil.which('pigz'), 'requires native debugger/compressor')
+    def test_minimal_core_omits_heap_and_resolves_faulting_source(self):
+        package = self.root / 'build/synthetic-minimal'
+        package.mkdir(parents=True)
+        (package / '.stamp_target_installed').touch()
+        marker = b'REEFY_SYNTHETIC_PRIVATE_HEAP_CONTENT'
+        source = package / 'minimal.c'
+        source.write_text(
+            '#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n'
+            'char *private_heap;\n'
+            '__attribute__((noinline)) void crash_me(void) { __asm__ volatile ("ud2"); }\n'
+            'int main(void) { private_heap = malloc(8 * 1024 * 1024); '
+            'memset(private_heap, 65, 8 * 1024 * 1024); '
+            'strcpy(private_heap, "REEFY_SYNTHETIC_PRIVATE_HEAP_CONTENT"); '
+            'FILE *f = fopen("/proc/self/coredump_filter", "w"); '
+            'if (!f) return 2; fputs("0x10", f); fclose(f); '
+            'crash_me(); return private_heap[0]; }\n')
+        subprocess.run(['gcc', '-g2', '-O1', '-Wl,--build-id=sha1',
+                        str(source), '-o', str(self.binary)], check=True)
+        core = self.root / 'minimal.core'
+        generated = subprocess.run([
+            'gdb', '-nx', '-batch', '-ex', 'set auto-load off',
+            '-ex', 'set use-coredump-filter on', '-ex', 'run',
+            '-ex', 'x/s private_heap',
+            '-ex', 'generate-core-file ' + str(core), '--args', str(self.binary)],
+            capture_output=True, text=True, timeout=30)
+        self.assertEqual(generated.returncode, 0, generated.stdout + generated.stderr)
+        self.assertIn(marker.decode(), generated.stdout)
+        self.assertTrue(core.is_file())
+        self.assertLess(core.stat().st_size, 1024 * 1024)
+        self.assertNotIn(marker, core.read_bytes())
+        archive.capture(self.root)
+        subprocess.run(['strip', '--strip-unneeded', str(self.binary)], check=True)
+        info = archive.elf(self.binary)
+        original = self.root / 'reefy-userspace-symbols' / archive.key(info)
+        result = subprocess.run([
+            'gdb', '-nx', '-batch', '-ex', 'set auto-load off',
+            '-ex', 'frame 0', '-ex', 'info line *$pc', str(original), str(core)],
+            check=True, capture_output=True, text=True, timeout=30)
+        self.assertIn('crash_me', result.stdout)
+        self.assertRegex(result.stdout, r'minimal\.c:[1-9][0-9]*')
 
 
 if __name__ == '__main__':

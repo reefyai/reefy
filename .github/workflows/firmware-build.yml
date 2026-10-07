@@ -56,7 +56,7 @@ jobs:
     runs-on: [self-hosted, large]
     steps:
       - uses: actions/checkout@v4
-      - run: apt-get update && apt-get install -y pigz
+      - run: apt-get update && apt-get install -y pigz gdb build-essential
       - run: python3 -m unittest discover -s tools/kernel-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/userspace-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/ci -p 'test_*.py'
