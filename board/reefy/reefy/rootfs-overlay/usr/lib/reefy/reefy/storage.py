@@ -767,12 +767,26 @@ class Storage:
             ['lvs', '--noheadings', '--nosuffix', '--units', 'b',
              '-o', 'lv_size', pool_path],
             capture_output=True, text=True, timeout=10).stdout.strip()
-        result = subprocess.run(
-            ['lvcreate', '--thin', '--virtualsize', f'{pool_size}B',
-             '-n', self.STORAGE_LV, pool_path],
-            capture_output=True, text=True, timeout=15)
+        # Initial provisioning may wait for udev/device activation under
+        # load. Give this one-time operation a bounded 60-second budget.
+        # A timeout can leave committed LVM metadata behind; never format,
+        # remove or silently retry a volume whose creation did not finish.
+        started = time.monotonic()
+        try:
+            result = subprocess.run(
+                ['lvcreate', '--thin', '--virtualsize', f'{pool_size}B',
+                 '-n', self.STORAGE_LV, pool_path],
+                capture_output=True, text=True, timeout=60)
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError(
+                'Default LV creation timed out after 60 seconds; '
+                'preserving any partially created volume without formatting '
+                'or retrying it') from error
         if result.returncode != 0:
             raise RuntimeError(f'default LV create failed: {result.stderr}')
+        if _log:
+            _log(f'Default LV creation completed in '
+                 f'{time.monotonic() - started:.3f}s')
         # XFS for the main data LV too (not just per-app volumes): it
         # holds docker's overlay2 (many small layer files) and any
         # uncapped media - the exact dynamic-inode case XFS was chosen

@@ -2225,3 +2225,60 @@ class BootGPTProbeRetryTests(unittest.TestCase):
                 self.assertEqual(file.read(len(payload)), payload)
                 file.seek(-512, os.SEEK_END)
                 self.assertEqual(file.read(8), b'EFI PART')
+
+
+class DefaultLVProvisioningTests(unittest.TestCase):
+    """Slow activation and ambiguous creation must not lose existing data."""
+
+    def setUp(self):
+        self.s = storage.Storage()
+        self.commands = []
+
+    def _run(self, command, **kwargs):
+        self.commands.append(command)
+        if command[:2] == ['lvcreate', '--thin']:
+            if self.creation_error:
+                raise self.creation_error
+            # Model a command that needs more than the previous 15s budget.
+            if kwargs['timeout'] < 16:
+                raise subprocess.TimeoutExpired(command, kwargs['timeout'])
+        output = '104857600' if command[0] == 'lvs' else ''
+        return subprocess.CompletedProcess(command, 0, output, '')
+
+    def _provision(self, error=None):
+        self.creation_error = error
+        with mock.patch.object(self.s, '_require_common_mapper_sector_size',
+                               return_value=512), \
+                mock.patch.object(self.s, '_pv_vg_name', return_value='reefy'), \
+                mock.patch.object(self.s, '_ensure_state_lv'), \
+                mock.patch.object(storage.os.path, 'exists', return_value=False), \
+                mock.patch.object(storage.subprocess, 'run', side_effect=self._run):
+            return self.s._ensure_lvm_stack(['/dev/mapper/reefy-data'])
+
+    def test_slow_activation_finishes_before_formatting(self):
+        self._provision()
+        create = next(i for i, cmd in enumerate(self.commands)
+                      if cmd[:2] == ['lvcreate', '--thin'])
+        format_volume = next(i for i, cmd in enumerate(self.commands)
+                             if cmd[0] == 'mkfs.xfs')
+        self.assertLess(create, format_volume)
+
+    def test_timeout_preserves_partial_volume_without_format_or_retry(self):
+        with self.assertRaisesRegex(RuntimeError, 'preserving any partially'):
+            self._provision(subprocess.TimeoutExpired(['lvcreate'], 60))
+        self.assertEqual(sum(cmd[:2] == ['lvcreate', '--thin']
+                             for cmd in self.commands), 1)
+        self.assertFalse(any(cmd[0] in ('mkfs.xfs', 'lvremove', 'wipefs')
+                             for cmd in self.commands))
+
+    def test_existing_volume_is_never_formatted(self):
+        self.creation_error = None
+        with mock.patch.object(self.s, '_require_common_mapper_sector_size',
+                               return_value=512), \
+                mock.patch.object(self.s, '_pv_vg_name', return_value='reefy'), \
+                mock.patch.object(storage.os.path, 'exists', return_value=True), \
+                mock.patch.object(storage.subprocess, 'run', side_effect=self._run):
+            self.assertEqual(self.s._ensure_lvm_stack(
+                ['/dev/mapper/reefy-data']), 'existing')
+        self.assertFalse(any(cmd[0] in ('lvcreate', 'mkfs.xfs', 'lvremove')
+                             for cmd in self.commands))
