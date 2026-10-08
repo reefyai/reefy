@@ -2,7 +2,9 @@
 
 Reefy enables the stock systemd-coredump handler and coredumpctl. Native systemd
 records crash metadata in journald and stores compressed userspace ELF cores.
-No vendor source patch or automatic upload is used. This captures userspace
+No vendor source patch or automatic upload is used. Crash dumps remain on the
+customer's device; the customer or their authorized administrator controls
+whether to export and share them. This captures userspace
 fatal signals, not kernel panics, firmware faults or power loss.
 
 Before persistent storage is available, files are stored in a private 256 MiB
@@ -69,7 +71,7 @@ See [systemd-coredump metadata](https://www.freedesktop.org/software/systemd/man
 
 Matching symbols can resolve the faulting instruction to a function and source
 line, but missing stack memory normally prevents a complete backtrace. For an
-explicit diagnostic session, an operator can override one unit with
+explicit diagnostic session, the customer or their authorized administrator can override one unit with
 `CoredumpFilter=default` in its own service drop-in. That captures private memory
 and may retain secrets. The QEMU source-backtrace test uses this fuller profile
 only for a synthetic crash process; default-profile coverage separately checks
@@ -78,3 +80,6 @@ that a synthetic heap payload is absent.
 Kernel mapping-filter semantics are documented in
 [core(5)](https://man7.org/linux/man-pages/man5/core.5.html), and the per-service
 setting in [systemd.exec](https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#CoredumpFilter=).
+
+For symbol collection, evidence matching, access controls and trust limitations,
+see [diagnostic traceability](DEBUGGING-TRUST.md).
