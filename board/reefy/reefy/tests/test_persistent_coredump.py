@@ -51,6 +51,16 @@ class CoreStorageTests(unittest.TestCase):
         self.assertIn('size=256M,mode=0700,nodev,nosuid,noexec', self.commands[0])
         self.assertEqual(core.RUNTIME.stat().st_mode & 0o777, 0o700)
 
+    def test_spool_is_isolated_before_binding_and_disk_overlay(self):
+        core.attach()
+        bind_ram = ['mount', '--bind', str(core.RUNTIME), str(core.DESTINATION)]
+        bind_disk = ['mount', '--bind', str(core.DATA / 'coredumps'), str(core.DESTINATION)]
+        private_ram = ['mount', '--make-private', str(core.RUNTIME)]
+        private_destination = ['mount', '--make-private', str(core.DESTINATION)]
+        self.assertLess(self.commands.index(private_ram), self.commands.index(bind_ram))
+        self.assertLess(self.commands.index(private_destination), self.commands.index(bind_disk))
+        self.assertEqual(self.commands[-1], private_destination)
+
     def test_completed_early_dumps_are_preserved_and_temporary_files_ignored(self):
         source = core.RUNTIME / 'core.synthetic'
         source.write_bytes(b'\x7fELFsynthetic retained payload')

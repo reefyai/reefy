@@ -34,9 +34,14 @@ def early():
     if not os.path.ismount(RUNTIME):
         run(['mount', '-t', 'tmpfs', '-o', 'size=256M,mode=0700,nodev,nosuid,noexec',
              'reefy-coredumps', str(RUNTIME)])
+    # A bind of a shared mount inherits its peer group. Without isolation,
+    # stacking disk storage over DESTINATION also propagates over RUNTIME,
+    # hiding the early cores before migrate() can read them.
+    run(['mount', '--make-private', str(RUNTIME)])
     directory(DESTINATION)
     if not os.path.ismount(DESTINATION):
         run(['mount', '--bind', str(RUNTIME), str(DESTINATION)])
+    run(['mount', '--make-private', str(DESTINATION)])
 
 
 def budget(available):
@@ -109,7 +114,9 @@ def attach():
         early()
     # Mount on top of our own RAM binding. Existing workers retain their spool
     # namespace; new workers see persistent storage. The spool remains bounded.
+    run(['mount', '--make-private', str(DESTINATION)])
     run(['mount', '--bind', str(destination), str(DESTINATION)])
+    run(['mount', '--make-private', str(DESTINATION)])
     configure(limits)
     # Coredump workers read config at startup; no daemon restart is needed.
     migrate(destination)
