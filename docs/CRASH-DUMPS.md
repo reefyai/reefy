@@ -78,3 +78,6 @@ that a synthetic heap payload is absent.
 Kernel mapping-filter semantics are documented in
 [core(5)](https://man7.org/linux/man-pages/man5/core.5.html), and the per-service
 setting in [systemd.exec](https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#CoredumpFilter=).
+
+For symbol collection, evidence matching, access controls and trust limitations,
+see [diagnostic traceability](DEBUGGING-TRUST.md).

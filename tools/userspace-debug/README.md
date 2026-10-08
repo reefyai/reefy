@@ -25,8 +25,8 @@ The archive contains:
 - Buildroot configuration, firmware identity, repository identities, an ELF
   coverage inventory, code/content hashes and SHA256SUMS.
 
-The index selects the exact firmware image/build and authenticates the archive
-contents by SHA-256. The archive prints its measured compressed size in CI.
+The index selects the exact firmware image/build and checks the archive
+contents by SHA-256 (this is integrity checking, not independent provenance). The archive prints its measured compressed size in CI.
 Shipped build IDs and code sections/addresses must match their original debug
 ELF. RPATH normalization is allowed; arbitrary ELF substitutions are not.
 
@@ -41,3 +41,6 @@ Target links explicitly enable GNU build IDs with stock `BR2_TARGET_LDFLAGS`.
 The CI configuration guard performs a full rebuild when debug mode or target
 linker flags change, so cached binaries cannot retain the previous settings.
 DWARF alone is insufficient: capture rejects binaries without a GNU/Go identity.
+
+See [collection, traceability and security](../../docs/DEBUGGING-TRUST.md) for
+the end-to-end verification chain and current provenance limits.

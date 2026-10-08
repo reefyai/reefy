@@ -331,6 +331,9 @@ For local QEMU testing from the repository root:
   -i buildroot/output/images/reefy-dev.raw -r
 ```
 
+For crash capture, kernel/system symbols and evidence verification, see
+[diagnostic traceability and security](docs/DEBUGGING-TRUST.md).
+
 ## Open source
 
 Reefy-authored source is developed in the open under the [MIT license](LICENSE).

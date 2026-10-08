@@ -56,3 +56,6 @@ before using layouts. A kernel release string alone is insufficient. New
 firmware must be validated for boot, provider loading, and runtime BTF before
 using it for tracing. Enabling BTF does not itself implement payload hashing,
 PRP/SGL capture or comprehensive DMA lifetime tracking.
+
+See [collection, traceability and security](../../docs/DEBUGGING-TRUST.md) for
+matching firmware, kernel, userspace symbols and private crash evidence.
