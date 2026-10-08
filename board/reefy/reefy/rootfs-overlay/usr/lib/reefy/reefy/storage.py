@@ -36,6 +36,48 @@ class ExistingVolumeUnavailableError(RuntimeError):
     """An owned data LV exists but cannot safely back its app path."""
 
 
+def _scan_existing_volumes(_log=None):
+    """Bound discovery and preserve wait diagnostics before killing a timeout."""
+    emit = _log or log
+    started = time.monotonic()
+    emit('Scanning existing LVM volumes (timeout=60s)...')
+    with subprocess.Popen(['vgscan'], stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True) as process:
+        try:
+            out, err = process.communicate(timeout=60)
+        except subprocess.TimeoutExpired as error:
+            diagnostics = {}
+            for name, path in {
+                'process_state': f'/proc/{process.pid}/stat',
+                'wait_channel': f'/proc/{process.pid}/wchan',
+                'kernel_stack': f'/proc/{process.pid}/stack',
+                'io_pressure': '/proc/pressure/io',
+                'cpu_pressure': '/proc/pressure/cpu',
+                'memory_pressure': '/proc/pressure/memory',
+            }.items():
+                try:
+                    with open(path) as stream:
+                        diagnostics[name] = stream.read(4096).strip()
+                except OSError as diagnostic_error:
+                    diagnostics[name] = f'unavailable: {diagnostic_error.strerror}'
+            process.kill()
+            out, err = process.communicate()
+            elapsed = time.monotonic() - started
+            emit(f'LVM discovery timeout after {elapsed:.3f}s: '
+                 f'{json.dumps(diagnostics, sort_keys=True)}; '
+                 f'stdout={out[-4096:]!r}; stderr={err[-4096:]!r}')
+            raise RuntimeError(
+                'LVM discovery timed out after 60 seconds; provisioning '
+                'stopped without retrying or creating data volumes') from error
+        elapsed = time.monotonic() - started
+        emit(f'LVM discovery completed in {elapsed:.3f}s '
+             f'(exit={process.returncode})')
+        if process.returncode != 0:
+            raise RuntimeError(
+                f'LVM discovery failed (exit={process.returncode}): '
+                f'{err[-4096:].strip() or out[-4096:].strip()}')
+
+
 def _boot_gpt_identity(disk):
     """Read a CRC-valid GPT identity/table without accepting empty conversion.
 
@@ -497,7 +539,7 @@ class Storage:
                     _log(f'Opened existing LUKS on {dev}')
 
         # Check if we can activate LVM from opened drives
-        subprocess.run(['vgscan'], capture_output=True, timeout=10)
+        _scan_existing_volumes(_log)
         if subprocess.run(['vgs', 'reefy'], capture_output=True,
                           timeout=5).returncode == 0:
             result = subprocess.run(

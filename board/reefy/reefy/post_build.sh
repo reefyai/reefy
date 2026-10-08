@@ -8,6 +8,11 @@ OS_RELEASE="${TARGET_DIR}/usr/lib/os-release"
 # Buildroot overwrites os-release with '>' before post_build.sh runs,
 # so persist last version in a side file to detect same-day rebuilds.
 VERSION_FILE="${BUILD_DIR}/.reefy-last-version"
+if [ -z "${IMAGE_VERSION:-}" ] && [ -n "${REEFY_VERSION_COUNTER_FILES:-}" ]; then
+  IFS=: read -r -a counter_files <<< "$REEFY_VERSION_COUNTER_FILES"
+  IMAGE_VERSION=$(python3 "${BR2_EXTERNAL_REEFY_PATH}/tools/ci/next-version.py" \
+    --date "$DATE" "$VERSION_FILE" "${counter_files[@]}")
+fi
 if [ -z "${IMAGE_VERSION:-}" ]; then
   SEQ=0
   if [ -f "${VERSION_FILE}" ]; then
@@ -208,7 +213,17 @@ fi
 cp -a "${INTEL_NPU_FIRMWARE_BUILD}/intel/vpu/." \
   "${INTEL_FIRMWARE}/lib/firmware/intel/vpu/"
 for license in LICENSE.i915 LICENSE.xe; do
-  cp "${LINUX_FIRMWARE_BUILD}/${license}" \
+  # Newer linux-firmware puts notices under LICENSES; older releases used
+  # the source root. Keep the provider's installed notice names unchanged.
+  license_source="${LINUX_FIRMWARE_BUILD}/LICENSES/${license}"
+  if [ ! -f "${license_source}" ]; then
+    license_source="${LINUX_FIRMWARE_BUILD}/${license}"
+  fi
+  if [ ! -f "${license_source}" ]; then
+    echo "ERROR: missing required Intel firmware license ${license}" >&2
+    exit 1
+  fi
+  cp "${license_source}" \
     "${INTEL_FIRMWARE}/usr/share/licenses/intel-provider/${license}"
 done
 

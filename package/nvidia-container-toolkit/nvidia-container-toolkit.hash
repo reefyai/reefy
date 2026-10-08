@@ -1,2 +1,4 @@
-# Locally computed
-sha256  7171b5a49adc26e62901677360e7a3f62ae031eda2df44bcae6f4eb682c9e69c  nvidia-container-toolkit-1.18.2-go2.tar.gz
+# Upstream v1.20.1 includes vendor/; Buildroot's Go post-process is unchanged.
+# Verified twice with the exact Go 1.26.6 version used by Buildroot 2026.08.
+sha256  1c5b0f17bd3f56f3d1faa0ddaba8fa0c606fc416aeaf0ee0953265a438fab647  nvidia-container-toolkit-1.20.1-go2.tar.gz
+sha256  cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30  LICENSE

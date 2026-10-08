@@ -1837,6 +1837,9 @@ class LuksProvisionTests(unittest.TestCase):
 
 class InternalStorageFailFastTests(unittest.TestCase):
     def setUp(self):
+        scan = mock.patch.object(storage, '_scan_existing_volumes')
+        scan.start()
+        self.addCleanup(scan.stop)
         self.s = storage.Storage()
         self.config = {'devices': ['sda', 'sdb']}
 
@@ -2282,3 +2285,64 @@ class DefaultLVProvisioningTests(unittest.TestCase):
                 ['/dev/mapper/reefy-data']), 'existing')
         self.assertFalse(any(cmd[0] in ('lvcreate', 'mkfs.xfs', 'lvremove')
                              for cmd in self.commands))
+
+
+class LvmDiscoveryDeadlineTests(unittest.TestCase):
+    def process(self, returncode=0):
+        process = mock.MagicMock()
+        process.__enter__.return_value = process
+        process.returncode = returncode
+        process.pid = 12345
+        return process
+
+    def test_scan_can_finish_after_old_deadline(self):
+        process = self.process()
+        process.communicate.return_value = ('', '')
+        messages = []
+        with mock.patch.object(storage.subprocess, 'Popen', return_value=process), \
+                mock.patch.object(storage.time, 'monotonic', side_effect=[0, 25]):
+            storage._scan_existing_volumes(messages.append)
+        process.communicate.assert_called_once_with(timeout=60)
+        self.assertIn('25.000s', messages[-1])
+        process.kill.assert_not_called()
+
+    def test_timeout_snapshots_before_kill_and_never_retries(self):
+        process = self.process()
+        process.communicate.side_effect = [
+            subprocess.TimeoutExpired(['vgscan'], 60), ('partial output', 'scan error')]
+        events = []
+        process.kill.side_effect = lambda: events.append('kill')
+        def diagnostic(path, *args, **kwargs):
+            events.append('snapshot')
+            return mock.mock_open(read_data='synthetic wait').return_value
+        messages = []
+        with mock.patch.object(storage.subprocess, 'Popen', return_value=process) as launch, \
+                mock.patch('builtins.open', side_effect=diagnostic):
+            with self.assertRaisesRegex(RuntimeError, 'without retrying'):
+                storage._scan_existing_volumes(messages.append)
+        self.assertEqual(events, ['snapshot'] * 6 + ['kill'])
+        launch.assert_called_once()
+        self.assertIn('wait_channel', messages[-1])
+        self.assertIn('scan error', messages[-1])
+
+    def test_failed_scan_is_fatal(self):
+        process = self.process(returncode=5)
+        process.communicate.return_value = ('', 'synthetic scan failure')
+        with mock.patch.object(storage.subprocess, 'Popen', return_value=process):
+            with self.assertRaisesRegex(RuntimeError, 'synthetic scan failure'):
+                storage._scan_existing_volumes(lambda message: None)
+
+    def test_scan_timeout_stops_provisioning_before_data_creation(self):
+        result = types.SimpleNamespace(stdout='tmpfs\n', returncode=0, stderr='')
+        with mock.patch.object(storage.subprocess, 'run', return_value=result) as run, \
+                mock.patch.object(storage.os.path, 'exists', return_value=True), \
+                mock.patch.object(storage.Storage, '_find_reefy_disk',
+                                  return_value=('/dev/synthetic', None)), \
+                mock.patch.object(storage, '_scan_existing_volumes',
+                                  side_effect=RuntimeError('LVM discovery timed out')), \
+                mock.patch.object(storage.Storage, '_setup_internal_persistent') as setup:
+            with self.assertRaisesRegex(RuntimeError, 'LVM discovery timed out'):
+                storage.Storage()._ensure_persistent_storage()
+        setup.assert_not_called()
+        self.assertFalse(any(call.args[0][0] in ('pvcreate', 'vgcreate', 'lvcreate', 'mkfs.xfs')
+                             for call in run.call_args_list))

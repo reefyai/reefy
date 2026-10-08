@@ -43,16 +43,11 @@ cp "$nvidia/metadata.env" "$intel/metadata.env"
 
 amd="$BR_OUTPUT/reefy-artifacts/amd"
 for module in amdgpu amdkcl amdxcp amdttm amd-sched \
-    amddrm_ttm_helper amddrm_buddy amddrm_exec; do
+    amddrm_ttm_helper amddrm_buddy amddrm_exec amddrm_suballoc_helper; do
   find "$amd/modules-root/lib/modules/$kernel_release" \
     -name "${module}.ko" | grep -q . \
     || { echo "missing AMD provider input ${module}"; exit 1; }
 done
-if find "$amd/modules-root" -name 'amddrm_suballoc_helper.ko' \
-    | grep -q .; then
-  echo "conflicting AMD suballocator helper was staged"
-  exit 1
-fi
 cp "$nvidia/metadata.env" "$amd/metadata.env"
 
 fixture="$BR_OUTPUT/reefy-artifacts/fixture"

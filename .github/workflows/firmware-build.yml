@@ -76,7 +76,10 @@ jobs:
       # actions/checkout's `clean: true` default.
       BR2_DL_DIR: /buildroot-cache/dl
       BR2_CCACHE_DIR: /buildroot-cache/ccache
-      BR_OUTPUT: /buildroot-cache/output
+      # Do not reuse an older release's host tools, target files or stamps.
+      BR_OUTPUT: /buildroot-cache/output-buildroot-2026.08
+      # Keep the image sequence continuous when switching output directories.
+      REEFY_VERSION_COUNTER_FILES: /buildroot-cache/output/build/.reefy-last-version:/buildroot-cache/.reefy-last-version
       REEFY_E2E_BUILD_IDENTITY_SALT: ${{ inputs.e2e_build_identity_salt || '' }}
 
     steps:
@@ -89,14 +92,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: reefyai/reefy-artifact-fixtures
-          ref: 1e51a8edb8547ce173cf67b5973eb1ff61f88f50
+          ref: 85dce99586e9b21f6ff10e7773a058ca2d6793db
           path: artifact-fixtures
 
       - name: Checkout AMD provider builder
         uses: actions/checkout@v4
         with:
           repository: reefyai/reefy-amd
-          ref: 5d91d46cb20ef16d81d4576e74da8130250d9692
+          ref: b8f83b494d63d4d891277bc19d38dbc0b11f8b07
           path: amd-provider
 
       - name: Validate E2E build identity salt
@@ -122,6 +125,10 @@ jobs:
         working-directory: buildroot
         run: make BR2_EXTERNAL=.. O="$BR_OUTPUT" reefy_defconfig
 
+      - name: Refresh systemd EFI configuration
+        working-directory: buildroot
+        run: python3 ../tools/ci/systemd-config.py "$BR_OUTPUT"
+
       - name: Refresh linux-firmware package selection
         working-directory: buildroot
         run: make O="$BR_OUTPUT" linux-firmware-dirclean
@@ -129,6 +136,17 @@ jobs:
       - name: Refresh thin-provisioning-tools package
         working-directory: buildroot
         run: make O="$BR_OUTPUT" thin-provisioning-tools-dirclean
+
+      - name: Refresh Ansible build metadata
+        working-directory: buildroot
+        run: |
+          for stamp in "$BR_OUTPUT"/build/python-ansible-core-*/.stamp_patched; do
+            [ -f "$stamp" ] || continue
+            if ! grep -Fq 'wheel >= 0.45.1' "$(dirname "$stamp")/pyproject.toml"; then
+              make O="$BR_OUTPUT" python-ansible-core-dirclean
+              break
+            fi
+          done
 
       - name: Heal stale kernel module cache
         working-directory: buildroot
@@ -194,9 +212,23 @@ jobs:
             make O="$BR_OUTPUT" nvidia-container-toolkit-dirclean
           fi
 
+      - name: Refresh open-vm-tools compiler mode
+        working-directory: buildroot
+        run: |
+          for stamp in "$BR_OUTPUT"/build/openvmtools-*/.stamp_configured; do
+            [ -f "$stamp" ] || continue
+            if ! grep -q -- '-std=gnu17' "$(dirname "$stamp")/Makefile"; then
+              make O="$BR_OUTPUT" openvmtools-dirclean
+              break
+            fi
+          done
+
       - name: Build (post_image.sh loops flavors)
         working-directory: buildroot
         run: bash "$GITHUB_WORKSPACE/tools/ci/logged-build.sh" "$GITHUB_WORKSPACE/tools/ci/build-firmware.sh"
+
+      - name: Verify compiled systemd EFI configuration
+        run: python3 tools/ci/systemd-config.py "$BR_OUTPUT" --verify
 
       - name: Build exact AMD provider modules
         run: bash tools/ci/logged-build.sh tools/ci/build-amd.sh
@@ -413,28 +445,28 @@ jobs:
 
   publish-nvidia-provider:
     needs: build
-    uses: reefyai/reefy-nvidia/.github/workflows/publish.yml@bae37235695f797f86c05efc06daa0b927752a19
+    uses: reefyai/reefy-nvidia/.github/workflows/publish.yml@0ae51db06548a1d9044bd5fccec30c8b18251866
     with:
       input_artifact: reefy-nvidia-inputs
     secrets: inherit
 
   publish-intel-provider:
     needs: build
-    uses: reefyai/reefy-intel/.github/workflows/publish.yml@ce5cc66ea2dcb7b2ff50bb2955b54c2cd3cfb3b5
+    uses: reefyai/reefy-intel/.github/workflows/publish.yml@5e3d17253f5e94dda7b03974b703e24a32800c18
     with:
       input_artifact: reefy-intel-inputs
     secrets: inherit
 
   publish-amd-provider:
     needs: build
-    uses: reefyai/reefy-amd/.github/workflows/publish.yml@5d91d46cb20ef16d81d4576e74da8130250d9692
+    uses: reefyai/reefy-amd/.github/workflows/publish.yml@b8f83b494d63d4d891277bc19d38dbc0b11f8b07
     with:
       input_artifact: reefy-amd-inputs
     secrets: inherit
 
   publish-artifact-fixture:
     needs: build
-    uses: reefyai/reefy-artifact-fixtures/.github/workflows/publish.yml@1e51a8edb8547ce173cf67b5973eb1ff61f88f50
+    uses: reefyai/reefy-artifact-fixtures/.github/workflows/publish.yml@85dce99586e9b21f6ff10e7773a058ca2d6793db
     with:
       input_artifact: reefy-artifact-fixture-inputs
     secrets: inherit

@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-NVIDIA_OPEN_GPU_VERSION = 595.84
+NVIDIA_OPEN_GPU_VERSION = 595.104.02
 NVIDIA_OPEN_GPU_SITE = https://github.com/NVIDIA/open-gpu-kernel-modules/archive/refs/tags
 NVIDIA_OPEN_GPU_SOURCE = $(NVIDIA_OPEN_GPU_VERSION).tar.gz
 NVIDIA_OPEN_GPU_LICENSE = MIT, GPL-2.0

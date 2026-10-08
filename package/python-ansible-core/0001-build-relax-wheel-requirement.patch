@@ -1,0 +1,18 @@
+From: Reefy maintainers <maintainers@reefy.ai>
+Subject: [PATCH] build: allow newer wheel with the tested setuptools backend
+
+The exact wheel 0.45.1 build requirement prevents an offline build with
+Buildroot 2026.08's wheel 0.47.0. Building the unchanged ansible-core 2.20.3
+source succeeds with setuptools 80.9.0 and wheel 0.47.0 after relaxing this
+metadata constraint. Keep the lower bound and normal dependency validation.
+This does not change Ansible's runtime requirements or implementation.
+
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -1,5 +1,5 @@
+ [build-system]
+-requires = ["setuptools >= 66.1.0, <= 82.0.0", "wheel == 0.45.1"]  # lower bound to support controller Python versions, upper bound for latest version tested at release
++requires = ["setuptools >= 66.1.0, <= 82.0.0", "wheel >= 0.45.1"]  # lower bound to support controller Python versions, upper bound for latest version tested at release
+ build-backend = "setuptools.build_meta"
+ 
+ [project]
