@@ -55,7 +55,7 @@ See [crash storage details](CRASH-DUMPS.md) and
 | Bundle | Contents and verification | Actions retention |
 | --- | --- | --- |
 | `reefy-kernel-debug` | Exact vmlinux with DWARF/BTF, configs, maps, generated headers, base/provider module originals, source identities, recipes and toolchain identity. Extracted EFI kernels match the build output; shipped modules match original build IDs. BTF availability is recorded. | 90 days |
-| `reefy-userspace-debug` | Shipped amd64 system ELF sysroot, pre-strip originals, GNU build-ID lookup links, source inventory, exact Reefy Python scripts, resolved configuration and firmware/repository identities. GNU/Go identities and code bytes/addresses must match. Missing DWARF or identity blocks capture. | Main: 90 days; branches: 14 days |
+| `reefy-userspace-debug` | Shipped amd64 system ELF sysroot, pre-strip originals, GNU build-ID lookup links, source inventory, exact Reefy Python scripts, resolved configuration and firmware/repository identities. GNU/Go identities and code bytes/addresses must match. Unexpected missing DWARF or any missing identity blocks capture; reviewed gaps are reported separately. | Main: 90 days; branches: 14 days |
 | `reefy-userspace-debug-index` | Exact image version, Reefy build identity, archive SHA-256, compressed bytes and ELF count. | Main: 90 days; branches: 14 days |
 
 Debug data stays outside deployed firmware images. Target packages compile with
@@ -76,6 +76,13 @@ source path is available. Use each bundle's inventory and metadata to determine
 actual coverage. Optimized code can inline functions or remove variables.
 See [kernel bundle format](../tools/kernel-debug/README.md) and
 [userspace bundle format](../tools/userspace-debug/README.md).
+
+Known userspace coverage gaps currently include eight sysstat tools, `mgmt`,
+`cpupower`, `iwconfig` and prebuilt Borg. The archive retains these shipped
+binaries but cannot provide their missing DWARF. Always read `SYMBOL-GAPS.txt`
+alongside the verified symbol inventory; an archive's existence does not imply
+source-level coverage of every executable. See the detailed list in the
+[userspace bundle documentation](../tools/userspace-debug/README.md).
 
 ## Traceability and verification
 
@@ -209,9 +216,9 @@ Validation must establish all of the following before release:
 - Native tests reject missing DWARF/identity and mismatched code, survive runtime
   stripping, resolve a synthetic core to source, and omit a synthetic heap
   payload under the minimal filter.
-- Firmware publication verifies kernel/module originals and the complete
-  selected installed userspace ELF inventory, rather than silently omitting
-  a failed binary.
+- Firmware publication verifies kernel/module originals and selected installed
+  userspace ELF coverage. Every reviewed missing-symbol binary is retained
+  with its hash, identity and reason in `SYMBOL-GAPS.txt`; unknown gaps fail.
 - Regular QEMU coverage captures a crash before actual data mount, transfers
   it after adoption, captures on persistent storage, retains it after reboot,
   checks the default minimal profile, and resolves an explicit synthetic full

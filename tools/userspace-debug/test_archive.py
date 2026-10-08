@@ -49,6 +49,57 @@ class NativeSymbolsTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'lacks GNU/Go build identity'):
             archive.capture(self.root)
 
+    def make_known_gap(self):
+        gap = self.root / 'target/usr/lib/sa/sadc'
+        gap.parent.mkdir(parents=True)
+        source = self.root / 'synthetic_gap.c'
+        source.write_text('int main(void) { return 43; }\n')
+        subprocess.run(['gcc', '-g2', '-Wl,--build-id=sha1', str(source),
+                        '-o', str(gap)], check=True, capture_output=True)
+        subprocess.run(['strip', '--strip-unneeded', str(gap)], check=True)
+        return gap
+
+    def test_reviewed_gap_does_not_create_fake_symbols(self):
+        gap = self.make_known_gap()
+        archive.capture(self.root)
+        self.assertFalse((self.root / 'reefy-userspace-symbols' /
+                          archive.key(archive.elf(gap))).exists())
+        self.assertEqual(len(archive.KNOWN_SYMBOL_GAPS), 12)
+
+    def test_reviewed_path_with_bad_cached_original_still_fails(self):
+        gap = self.make_known_gap()
+        saved = self.root / 'reefy-userspace-symbols' / archive.key(archive.elf(gap))
+        saved.parent.mkdir()
+        shutil.copy2(self.binary, saved)
+        with self.assertRaisesRegex(RuntimeError, 'does not match'):
+            archive.capture(self.root)
+
+    @unittest.skipUnless(shutil.which('pigz'), 'requires compressor')
+    def test_archive_records_gap_identity_hash_and_shipped_binary(self):
+        gap = self.make_known_gap()
+        archive.capture(self.root)
+        subprocess.run(['strip', '--strip-unneeded', str(self.binary)], check=True)
+        (self.root / '.config').write_text('BR2_ENABLE_DEBUG=y\n')
+        (self.root / 'build').mkdir()
+        release = self.root / 'target/usr/lib/os-release'
+        release.parent.mkdir(parents=True, exist_ok=True)
+        release.write_text('IMAGE_VERSION=2099.01.01-01\nREEFY_BUILD_ID=' + 'a' * 64 + '\n')
+        bundle = self.root / 'debug.tar.gz'
+        with patch.object(archive.subprocess, 'check_output', return_value='synthetic-source\n'):
+            archive.archive(self.root, bundle)
+        unpacked = self.root / 'unpacked'
+        unpacked.mkdir()
+        with tarfile.open(bundle) as tar:
+            tar.extractall(unpacked, filter='data')
+        report = (unpacked / 'SYMBOL-GAPS.txt').read_text()
+        self.assertIn('Path: usr/lib/sa/sadc', report)
+        self.assertIn(archive.sha(gap), report)
+        self.assertIn(archive.elf(gap)['build_id'], report)
+        self.assertEqual((unpacked / 'sysroot/usr/lib/sa/sadc').read_bytes(), gap.read_bytes())
+        self.assertFalse((unpacked / 'unstripped/usr/lib/sa/sadc').exists())
+        self.assertIn('SYMBOL-GAPS.txt', (unpacked / 'SHA256SUMS').read_text())
+        self.assertEqual(len(json.loads((unpacked / 'metadata.json').read_text())['elfs']), 1)
+
     def test_missing_dwarf_without_a_matching_cache_is_a_failure(self):
         subprocess.run(['strip', '--strip-unneeded', str(self.binary)], check=True)
         with self.assertRaisesRegex(RuntimeError, 'no DWARF'):

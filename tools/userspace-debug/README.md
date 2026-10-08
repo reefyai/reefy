@@ -9,9 +9,9 @@ by this change, and no container images are included.
 Buildroot compiles target packages with level-2 debug information and still
 strips deployed ELF files. A pre-strip target-finalize hook caches unstripped
 system executables and libraries by GNU or Go build identity. Warm builds reuse
-only exact matching originals. Missing DWARF, missing identities, changed code
-or changed code addresses block publication instead of producing a partial
-coverage claim. Kernel modules and non-amd64 firmware blobs are excluded; their
+only exact matching originals. Unexpected missing DWARF, missing identities,
+changed code or changed code addresses block publication. The 12 reviewed
+missing-DWARF paths are documented below; this is partial symbol coverage. Kernel modules and non-amd64 firmware blobs are excluded; their
 kernel debug archive remains separate. Source-mode transitions require a clean
 Buildroot toolchain/package rebuild while download and compiler caches remain.
 
@@ -49,3 +49,26 @@ DWARF alone is insufficient: capture rejects binaries without a GNU/Go identity.
 
 See [collection, traceability and security](../../docs/DEBUGGING-TRUST.md) for
 the end-to-end verification chain and current provenance limits.
+
+## Known missing symbols
+
+The reviewed exceptions are eight sysstat executables (`sadc`, `cifsiostat`,
+`iostat`, `mpstat`, `pidstat`, `sar`, `sadf`, `tapestat`), `mgmt`, `cpupower`,
+`iwconfig` and the prebuilt Borg executable. Exact installed paths and reasons
+are in `KNOWN_SYMBOL_GAPS` in `archive.py`.
+
+Sysstat strips during linking; mgmt's package uses Go `-s -w`; cpupower's
+production build strips before installation; wireless-tools' multicall link
+hardcodes stripping. Borg is already stripped upstream. No vendor patch or
+repackaging is introduced to fix these gaps in this change.
+
+The archive includes their actual shipped files in `sysroot` and records each
+missing-symbol path, reason, GNU/Go build identity and shipped SHA-256 in
+`SYMBOL-GAPS.txt`. That report and the files are covered by `SHA256SUMS`.
+No unstripped original or source-level analysis is promised for these files.
+The metadata ELF inventory and `system_elf_count` index value count verified
+symbol originals; consult the gap report as well for the complete coverage view.
+Unknown missing DWARF still fails. Missing build identities or incorrect cached
+originals fail even for a reviewed path. If real matching symbols become
+available, those binaries receive normal full verification and no gap entry.
+These exceptions require review when versions or packaging change.

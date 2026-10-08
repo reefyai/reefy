@@ -71,6 +71,28 @@ def key(info):
     return hashlib.sha256((info['identity_type'] + ':' + info['build_id']).encode()).hexdigest()
 
 
+# Explicitly reviewed coverage gaps, not a basename/glob exclusion. Build IDs
+# remain mandatory. Never use this list to accept a mismatched cached original.
+KNOWN_SYMBOL_GAPS = {
+    'usr/lib/sa/sadc': 'sysstat links with -s by default',
+    'usr/bin/cifsiostat': 'sysstat links with -s by default',
+    'usr/bin/iostat': 'sysstat links with -s by default',
+    'usr/bin/mpstat': 'sysstat links with -s by default',
+    'usr/bin/pidstat': 'sysstat links with -s by default',
+    'usr/bin/sar': 'sysstat links with -s by default',
+    'usr/bin/sadf': 'sysstat links with -s by default',
+    'usr/bin/tapestat': 'sysstat links with -s by default',
+    'usr/bin/mgmt': 'Reefy Go package links with -s -w',
+    'usr/bin/cpupower': 'upstream production build strips before installation',
+    'usr/bin/iwconfig': 'upstream multicall link hardcodes -Wl,-s',
+    'usr/bin/borg': 'upstream prebuilt standalone executable has no DWARF',
+}
+
+
+def symbol_gap(relative, info):
+    return KNOWN_SYMBOL_GAPS.get(str(relative)) if not info['dwarf'] else None
+
+
 def native_files(root):
     for directory, _, names in os.walk(root, followlinks=False):
         for name in names:
@@ -106,7 +128,11 @@ def capture(output):
             shutil.copy2(path, temporary)
             os.replace(temporary, saved)
         elif not saved.is_file():
-            # Package recipes must honor debug settings; do not invent symbols.
+            reason = symbol_gap(relative, info)
+            if reason:
+                print(f'documented symbol gap: {relative}: {reason}')
+                continue
+            # Unexpected gaps still fail; do not invent symbols.
             raise RuntimeError(f'no DWARF for installed system ELF: {relative}')
         original = elf(saved)
         if not original['dwarf'] or any(original[k] != info[k] for k in ('build_id', 'identity_type', 'code_sha256')):
@@ -122,10 +148,19 @@ def archive(output, destination):
     with tempfile.TemporaryDirectory(prefix='reefy-userspace-debug-') as directory:
         root = Path(directory)
         records = []
+        gaps = []
         for path, info, relative in installed_files(output):
             original = cache / key(info)
             if not original.is_file():
-                raise RuntimeError(f'missing system debug original: {relative}')
+                reason = symbol_gap(relative, info)
+                if not reason:
+                    raise RuntimeError(f'missing system debug original: {relative}')
+                shipped = root / 'sysroot' / relative
+                shipped.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, shipped)
+                gaps.append((str(relative), reason, info['identity_type'],
+                             info['build_id'], sha(path)))
+                continue
             debug = elf(original)
             if not debug['dwarf'] or any(info[k] != debug[k] for k in ('build_id', 'identity_type', 'code_sha256')):
                 raise RuntimeError('shipped system ELF mismatches archived symbols')
@@ -143,6 +178,17 @@ def archive(output, destination):
                             'unstripped_sha256': sha(original)})
         if not records:
             raise RuntimeError('empty system ELF debug inventory')
+        # Human-readable coverage report is hashed with the bundle. The existing
+        # metadata ELF inventory/index count continues to describe verified
+        # symbol originals; unresolved runtime binaries are listed separately.
+        report = ['Documented missing DWARF coverage',
+                  'No unstripped originals or source-level debugging promised for these files.',
+                  f'Verified symbol originals: {len(records)}',
+                  f'Known unresolved binaries: {len(gaps)}', '']
+        for path, reason, kind, identity, digest in sorted(gaps):
+            report.extend([f'Path: {path}', f'Reason: {reason}',
+                           f'Identity: {kind}:{identity}', f'Shipped SHA256: {digest}', ''])
+        (root / 'SYMBOL-GAPS.txt').write_text('\n'.join(report) + '\n')
         # Preserve runtime aliases without absolute symlinks escaping the sysroot.
         for directory, names, files in os.walk(target, followlinks=False):
             for name in names + files:
