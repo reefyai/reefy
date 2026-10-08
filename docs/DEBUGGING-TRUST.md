@@ -41,7 +41,7 @@ The default for systemd services is `CoredumpFilter=elf-headers`. Anonymous heap
 and stack mappings and ordinary mapped-file contents are omitted. Register
 notes, mapping metadata, ELF headers and the vDSO remain. A faulting instruction
 can often resolve to a source line; a complete stack backtrace usually needs
-stack memory. An operator may explicitly use `CoredumpFilter=default` for one
+stack memory. The customer or their authorized administrator may explicitly use `CoredumpFilter=default` for one
 unit during an approved diagnostic session. That captures private memory.
 Service limits, Linux dumpability and process overrides can prevent or change
 capture. Filtering is inherited by child processes; it is not a universal
@@ -135,7 +135,7 @@ by this collection feature.
 
 ## Authorized on-device inspection and analysis
 
-Access the device and export evidence only with operator approval. These
+Access the device and export evidence only with customer authorization. These
 commands run locally on the authorized device; no automatic upload is enabled:
 
 ```sh
@@ -175,6 +175,13 @@ Kernel layouts require the matching vmlinux/module originals; BTF availability
 alone does not implement tracing probes or DMA/payload instrumentation.
 
 ## Security, retention and validation
+
+Crash dumps remain on the customer's device and are not automatically uploaded
+to Reefy servers or third parties. The customer or their authorized
+administrator controls whether to export and share diagnostic evidence.
+This statement concerns crash dumps and their local diagnostic records, not
+other device telemetry. Debug-symbol archives are separate build artifacts
+and contain no collected device memory.
 
 Crash directories are root-owned mode 0700. Native file access controls still
 apply; protect extracted cores, analysis output and backups separately. Minimal
