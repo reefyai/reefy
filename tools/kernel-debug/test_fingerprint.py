@@ -40,5 +40,16 @@ class CacheInputs(unittest.TestCase):
                     else:
                         self.assertNotEqual(module.fingerprint(), baseline, name)
                     Path(name).write_text('original\n')
+                compiler = Path(directory) / 'output/host/bin/rustc'
+                compiler.parent.mkdir(parents=True)
+                compiler.write_text('#!/bin/sh\nprintf "rustc synthetic-one\\n"\n')
+                compiler.chmod(0o755)
+                with_toolchain = module.fingerprint(compiler.parents[2])
+                self.assertEqual(module.fingerprint(compiler.parents[2]), with_toolchain)
+                compiler.write_text('#!/bin/sh\nprintf "rustc synthetic-two\\n"\n')
+                self.assertNotEqual(module.fingerprint(compiler.parents[2]), with_toolchain)
+                compiler.unlink()
+                with self.assertRaises(FileNotFoundError):
+                    module.fingerprint(compiler.parents[2])
             finally:
                 os.chdir(previous)

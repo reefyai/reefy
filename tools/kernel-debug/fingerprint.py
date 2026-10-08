@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Conservative kernel cache key over tracked build inputs, not timestamps."""
+import argparse
 import hashlib
 import subprocess
 from pathlib import Path
@@ -14,7 +15,7 @@ def kernel_input(path):
     return True
 
 
-def fingerprint():
+def fingerprint(output=None):
     h = hashlib.sha256(b'reefy-kernel-debug-cache-v2\0')
     # Retain conservative coverage of build recipes, patches and configuration.
     # Runtime overlay code and tests do not compile the kernel or modules.
@@ -31,8 +32,17 @@ def fingerprint():
         h.update(path.read_bytes() if not path.is_symlink() else str(path.readlink()).encode())
         h.update(b'\0')
     h.update(subprocess.check_output(['git', 'ls-tree', 'HEAD', 'buildroot']))
+    if output is not None:
+        # Match the Rust compiler on Buildroot's kernel PATH. Its presence and
+        # capabilities affect resolved Kconfig even for a C-only kernel.
+        compiler = Path(output).resolve() / 'host/bin/rustc'
+        identity = subprocess.check_output([str(compiler), '--version', '--verbose'])
+        h.update(b'kernel-rust-toolchain\0' + identity + b'\0')
+        h.update(hashlib.sha256(compiler.read_bytes()).digest())
     return h.hexdigest()
 
 
 if __name__ == '__main__':
-    print(fingerprint())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', type=Path)
+    print(fingerprint(parser.parse_args().output))

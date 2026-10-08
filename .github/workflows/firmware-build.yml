@@ -145,7 +145,10 @@ jobs:
       - name: Verify toolchain default build identities
         working-directory: buildroot
         run: |
-          make O="$BR_OUTPUT" host-gcc-final
+          # Kernel Kconfig probes Rust even when CONFIG_RUST is disabled.
+          # Prepare the selected toolchain before the first kernel configure,
+          # rather than letting thin-provisioning-tools install it afterward.
+          make O="$BR_OUTPUT" host-gcc-final host-rustc
           python3 ../tools/userspace-debug/check-toolchain.py --output "$BR_OUTPUT"
 
       - name: Refresh systemd feature configuration
@@ -184,7 +187,7 @@ jobs:
           expected_kernel=$(sed -n 's/^BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION="v\([0-9.]*\)"$/\1/p' ../configs/reefy_defconfig)
           test -n "$expected_kernel" || { echo "could not read pinned kernel version"; exit 1; }
 
-          fingerprint=$(cd .. && python3 tools/kernel-debug/fingerprint.py)
+          fingerprint=$(cd .. && python3 tools/kernel-debug/fingerprint.py --output "$BR_OUTPUT")
           needs_clean=false
           if [ "$(cat "$BR_OUTPUT/.reefy-kernel-inputs" 2>/dev/null || true)" != "$fingerprint" ]; then
             echo "kernel build inputs changed; rebuilding kernel and dependent modules"
