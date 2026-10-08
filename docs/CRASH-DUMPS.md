@@ -18,7 +18,9 @@ to the smaller of 2 GiB and half the pool budget. These native size/free-space
 policies are not a filesystem quota and can temporarily overshoot during capture.
 Oversized cores may be truncated and unsuitable for complete analysis.
 
-Completed early dumps are copied with their metadata, synced and published
+The RAM spool and destination mounts use private propagation so attaching
+persistent storage cannot hide early files by propagating an overlay back
+onto the spool. Completed early dumps are copied with their metadata, synced and published
 before their RAM source is removed. The RAM mount stays available to early
 workers in private namespaces; a timer collects late-completing files and
 retries attachment after recovery/adoption. An interrupted or failed transfer
