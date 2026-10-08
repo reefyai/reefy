@@ -1,0 +1,17 @@
+[Unit]
+Description=Attach Reefy crash dumps to persistent data
+After=reefy-storage.service reefy-coredump-spool.service
+Wants=reefy-coredump-spool.service
+Before=umount.target
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/usr/lib/reefy
+ExecStart=/usr/bin/python3 -m reefy.persistent_coredump
+ExecStop=/usr/bin/python3 -m reefy.persistent_coredump stop
+RemainAfterExit=yes
+TimeoutStartSec=95
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target

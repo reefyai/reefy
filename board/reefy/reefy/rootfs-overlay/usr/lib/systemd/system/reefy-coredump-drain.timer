@@ -1,0 +1,10 @@
+[Unit]
+Description=Retry persistent Reefy crash attachment and drain late early dumps
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=1min
+Unit=reefy-coredump-drain.service
+
+[Install]
+WantedBy=timers.target

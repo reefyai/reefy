@@ -984,7 +984,8 @@ class Storage:
         try:
             subprocess.run(
                 ['systemctl', '--no-block', 'restart',
-                 'reefy-persistent-journal.service'],
+                 'reefy-persistent-journal.service',
+                 'reefy-persistent-coredump.service'],
                 capture_output=True, timeout=5, check=True)
         except (OSError, subprocess.SubprocessError):
             if _log:

@@ -2119,7 +2119,8 @@ class JournalMountLifecycleTests(unittest.TestCase):
                 result = instance._finalize_data_mount('/dev/synthetic/data')
             self.assertEqual(result, mount_ok)
             request = ['systemctl', '--no-block', 'restart',
-                       'reefy-persistent-journal.service']
+                       'reefy-persistent-journal.service',
+                       'reefy-persistent-coredump.service']
             self.assertEqual(request in commands, mount_ok)
 
     def test_journal_request_failure_does_not_fail_storage(self):

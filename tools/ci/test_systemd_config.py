@@ -20,7 +20,7 @@ class SystemdConfigTest(unittest.TestCase):
         (self.package / '.stamp_configured').touch()
 
     def header(self, value):
-        (self.package / 'buildroot-build/config.h').write_text(f'#define ENABLE_EFI {value}\n')
+        (self.package / 'buildroot-build/config.h').write_text(f'#define ENABLE_EFI {value}\n#define ENABLE_COREDUMP 0\n')
 
     @patch.object(module.subprocess, 'run')
     def test_changed_option_invalidates_old_binary(self, run):
@@ -47,3 +47,24 @@ class SystemdConfigTest(unittest.TestCase):
         module.check(self.output)
         with self.assertRaisesRegex(RuntimeError, 'compiled systemd'):
             module.check(self.output, verify=True)
+
+
+    @patch.object(module.subprocess, 'run')
+    def test_crash_feature_change_invalidates_compiled_cache(self, run):
+        (self.output / '.config').write_text(
+            'BR2_PACKAGE_SYSTEMD_EFI=y\nBR2_PACKAGE_SYSTEMD_COREDUMP=y\n')
+        self.header(1)
+        module.check(self.output)
+        run.assert_called_once()
+        with self.assertRaisesRegex(RuntimeError, 'ENABLE_COREDUMP=0, expected 1'):
+            module.check(self.output, verify=True)
+
+    @patch.object(module.subprocess, 'run')
+    def test_current_crash_feature_is_preserved(self, run):
+        (self.output / '.config').write_text(
+            'BR2_PACKAGE_SYSTEMD_EFI=y\nBR2_PACKAGE_SYSTEMD_COREDUMP=y\n')
+        (self.package / 'buildroot-build/config.h').write_text(
+            '#define ENABLE_EFI 1\n#define ENABLE_COREDUMP 1\n')
+        module.check(self.output)
+        module.check(self.output, verify=True)
+        run.assert_not_called()
