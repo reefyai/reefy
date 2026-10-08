@@ -37,9 +37,14 @@ unstripped executable. Go executables can have Go rather than GNU build IDs;
 select their unstripped executable explicitly. These archives are not a
 complete compiler SDK and optimized code can inline or optimize away locals.
 
-Target links explicitly enable GNU build IDs with stock `BR2_TARGET_LDFLAGS`.
-The CI configuration guard performs a full rebuild when debug mode or target
-linker flags change, so cached binaries cannot retain the previous settings.
+The internal GCC toolchain enables its documented `--enable-linker-build-id`
+option through stock `BR2_EXTRA_GCC_CONFIG_OPTIONS`. No global GCC-style linker
+flag is passed to packages that call `ld` directly. CI links an executable and
+shared library with no explicit build-ID flags and verifies their IDs/DWARF
+before building the remaining packages. The configuration guard performs a
+full rebuild when debug mode, target linker flags or GCC configure options
+change, so cached binaries cannot retain the previous settings.
+See [GCC configuration](https://gcc.gnu.org/install/configure.html).
 DWARF alone is insufficient: capture rejects binaries without a GNU/Go identity.
 
 See [collection, traceability and security](../../docs/DEBUGGING-TRUST.md) for

@@ -131,16 +131,22 @@ jobs:
       - name: Configure
         working-directory: buildroot
         run: |
-          old_debug=$(grep -E '^BR2_(ENABLE_DEBUG|TARGET_LDFLAGS)=' "$BR_OUTPUT/.config" 2>/dev/null || true)
+          old_debug=$(grep -E '^BR2_(ENABLE_DEBUG|TARGET_LDFLAGS|EXTRA_GCC_CONFIG_OPTIONS)=' "$BR_OUTPUT/.config" 2>/dev/null || true)
           make BR2_EXTERNAL=.. O="$BR_OUTPUT" reefy_defconfig
-          new_debug=$(grep -E '^BR2_(ENABLE_DEBUG|TARGET_LDFLAGS)=' "$BR_OUTPUT/.config" || true)
+          new_debug=$(grep -E '^BR2_(ENABLE_DEBUG|TARGET_LDFLAGS|EXTRA_GCC_CONFIG_OPTIONS)=' "$BR_OUTPUT/.config" || true)
           if [ "$old_debug" != "$new_debug" ]; then
-            echo "system debug compiler/linker settings changed; rebuilding all target packages/toolchain"
+            echo "system debug/toolchain settings changed; rebuilding all target packages/toolchain"
             make O="$BR_OUTPUT" clean
             make BR2_EXTERNAL=.. O="$BR_OUTPUT" reefy_defconfig
           fi
           make O="$BR_OUTPUT" olddefconfig
 
+
+      - name: Verify toolchain default build identities
+        working-directory: buildroot
+        run: |
+          make O="$BR_OUTPUT" host-gcc-final
+          python3 ../tools/userspace-debug/check-toolchain.py --output "$BR_OUTPUT"
 
       - name: Refresh systemd feature configuration
         working-directory: buildroot

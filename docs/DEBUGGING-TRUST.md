@@ -59,7 +59,9 @@ See [crash storage details](CRASH-DUMPS.md) and
 | `reefy-userspace-debug-index` | Exact image version, Reefy build identity, archive SHA-256, compressed bytes and ELF count. | Main: 90 days; branches: 14 days |
 
 Debug data stays outside deployed firmware images. Target packages compile with
-level-2 DWARF and explicit GNU linker build IDs, then runtime ELFs are stripped.
+level-2 DWARF and GCC's configured default GNU build IDs, then runtime ELFs
+are stripped. Buildroot passes `--enable-linker-build-id` through
+`BR2_EXTRA_GCC_CONFIG_OPTIONS`; there is no global GCC-style `LDFLAGS` injection.
 The pre-strip cache only reuses matching originals; debug/compiler-linker mode
 changes trigger a clean package/toolchain build. Go identities can differ from
 GNU identities. Kernel modules and non-amd64 blobs use separate handling.
