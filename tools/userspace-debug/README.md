@@ -72,3 +72,6 @@ Unknown missing DWARF still fails. Missing build identities or incorrect cached
 originals fail even for a reviewed path. If real matching symbols become
 available, those binaries receive normal full verification and no gap entry.
 These exceptions require review when versions or packaging change.
+
+See [firmware build timing history](../../docs/firmware-build-timing.md) for
+measured symbol collection, archive storage, cache reuse and validation costs.
