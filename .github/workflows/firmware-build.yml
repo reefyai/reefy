@@ -128,12 +128,13 @@ jobs:
           # Settle hidden/default Kconfig values before taking cache inputs.
           make O="$BR_OUTPUT" olddefconfig
 
-      - name: Refresh systemd EFI configuration
+      - name: Refresh systemd feature configuration
         working-directory: buildroot
         run: python3 ../tools/ci/systemd-config.py "$BR_OUTPUT"
 
       - name: Refresh changed firmware and thin tools packages
         run: python3 tools/ci/package-cache.py "$BR_OUTPUT"
+
 
       - name: Refresh Ansible build metadata
         working-directory: buildroot
@@ -225,7 +226,7 @@ jobs:
         working-directory: buildroot
         run: bash "$GITHUB_WORKSPACE/tools/ci/logged-build.sh" "$GITHUB_WORKSPACE/tools/ci/build-firmware.sh"
 
-      - name: Verify compiled systemd EFI configuration
+      - name: Verify compiled systemd feature configuration
         run: python3 tools/ci/systemd-config.py "$BR_OUTPUT" --verify
 
       - name: Build exact AMD provider modules
@@ -319,6 +320,12 @@ jobs:
       # (e.g. `2026.04.14-07`) for S3 object naming and latest.json -
       # without it the version label falls back to `gh-run-<id>` which
       # isn't a meaningful release tag.
+      - name: Verify stock crash capture outputs
+        run: |
+          test -x "$BR_OUTPUT/target/usr/bin/coredumpctl"
+          test -x "$BR_OUTPUT/target/usr/lib/systemd/systemd-coredump"
+          test -f "$BR_OUTPUT/target/usr/lib/sysctl.d/50-coredump.conf"
+
       - name: Stage os-release alongside images
         run: cp "$BR_OUTPUT/target/usr/lib/os-release" "$BR_OUTPUT/images/os-release"
 

@@ -1,0 +1,14 @@
+[Unit]
+Description=Prepare bounded early Reefy crash storage
+DefaultDependencies=no
+Before=systemd-sysctl.service systemd-coredump.socket sysinit.target
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/usr/lib/reefy
+ExecStart=/usr/bin/python3 -m reefy.persistent_coredump early
+RemainAfterExit=yes
+TimeoutStartSec=30
+
+[Install]
+WantedBy=sysinit.target
