@@ -7,22 +7,16 @@ DATE=$(date +%Y.%m.%d)
 OS_RELEASE="${TARGET_DIR}/usr/lib/os-release"
 # Buildroot overwrites os-release with '>' before post_build.sh runs,
 # so persist last version in a side file to detect same-day rebuilds.
-VERSION_FILE="${BUILD_DIR}/.reefy-last-version"
-if [ -z "${IMAGE_VERSION:-}" ] && [ -n "${REEFY_VERSION_COUNTER_FILES:-}" ]; then
-  IFS=: read -r -a counter_files <<< "$REEFY_VERSION_COUNTER_FILES"
-  IMAGE_VERSION=$(python3 "${BR2_EXTERNAL_REEFY_PATH}/tools/ci/next-version.py" \
-    --date "$DATE" "$VERSION_FILE" "${counter_files[@]}")
-fi
+VERSION_FILE="$(dirname "${BUILD_DIR}")/.reefy-last-version"
+LEGACY_VERSION_FILE="${BUILD_DIR}/.reefy-last-version"
 if [ -z "${IMAGE_VERSION:-}" ]; then
-  SEQ=0
-  if [ -f "${VERSION_FILE}" ]; then
-    PREV=$(grep -oP "^${DATE}-\d+" "${VERSION_FILE}" || true)
-    if [ -n "${PREV}" ]; then
-      PREV_SEQ=${PREV##*-}
-      SEQ=$((10#${PREV_SEQ} + 1))
-    fi
+  counter_files=("$VERSION_FILE" "$LEGACY_VERSION_FILE")
+  if [ -n "${REEFY_VERSION_COUNTER_FILES:-}" ]; then
+    IFS=: read -r -a shared_counter_files <<< "$REEFY_VERSION_COUNTER_FILES"
+    counter_files+=("${shared_counter_files[@]}")
   fi
-  IMAGE_VERSION=$(printf '%s-%02d' "${DATE}" "${SEQ}")
+  IMAGE_VERSION=$(python3 "${BR2_EXTERNAL_REEFY_PATH}/tools/ci/next-version.py" \
+    --date "$DATE" "${counter_files[@]}")
 fi
 echo "${IMAGE_VERSION}" > "${VERSION_FILE}"
 echo "IMAGE_ID=reefy-linux" >> "${OS_RELEASE}"

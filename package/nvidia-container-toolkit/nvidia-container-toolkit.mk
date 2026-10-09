@@ -12,8 +12,11 @@ NVIDIA_CONTAINER_TOOLKIT_LICENSE_FILES = LICENSE
 NVIDIA_CONTAINER_TOOLKIT_GOMOD = github.com/NVIDIA/nvidia-container-toolkit
 
 NVIDIA_CONTAINER_TOOLKIT_LDFLAGS = \
-	-s -w \
 	-X $(NVIDIA_CONTAINER_TOOLKIT_GOMOD)/internal/info.version=$(NVIDIA_CONTAINER_TOOLKIT_VERSION)
+
+ifeq ($(BR2_ENABLE_DEBUG),)
+NVIDIA_CONTAINER_TOOLKIT_LDFLAGS += -s -w
+endif
 
 # go-nvml uses dlopen("libnvidia-ml.so.1") at runtime, so NVML symbols
 # must not be resolved at link time.

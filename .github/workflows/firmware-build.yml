@@ -41,6 +41,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   packages: write
   # For actions/attest-build-provenance@v2: write attestations to
   # the repo's transparency log. id-token: write is what fetches
@@ -55,8 +56,9 @@ jobs:
     runs-on: [self-hosted, large]
     steps:
       - uses: actions/checkout@v4
-      - run: apt-get update && apt-get install -y pigz
+      - run: apt-get update && apt-get install -y pigz gdb build-essential
       - run: python3 -m unittest discover -s tools/kernel-debug -p 'test_*.py'
+      - run: python3 -m unittest discover -s tools/userspace-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/ci -p 'test_*.py'
 
   build:
@@ -121,16 +123,48 @@ jobs:
             systemd systemd-boot-efi qemu-utils zip ca-certificates \
             ragel parted dosfstools udev pigz
 
+      - name: Preserve firmware sequence across full package rebuilds
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/ci/preserve-version.py --output "$BR_OUTPUT"
+
       - name: Configure
         working-directory: buildroot
         run: |
+          old_debug=$(grep -E '^BR2_(ENABLE_DEBUG|TARGET_LDFLAGS|EXTRA_GCC_CONFIG_OPTIONS)=' "$BR_OUTPUT/.config" 2>/dev/null || true)
           make BR2_EXTERNAL=.. O="$BR_OUTPUT" reefy_defconfig
-          # Settle hidden/default Kconfig values before taking cache inputs.
+          new_debug=$(grep -E '^BR2_(ENABLE_DEBUG|TARGET_LDFLAGS|EXTRA_GCC_CONFIG_OPTIONS)=' "$BR_OUTPUT/.config" || true)
+          if [ "$old_debug" != "$new_debug" ]; then
+            echo "system debug/toolchain settings changed; rebuilding all target packages/toolchain"
+            make O="$BR_OUTPUT" clean
+            make BR2_EXTERNAL=.. O="$BR_OUTPUT" reefy_defconfig
+          fi
           make O="$BR_OUTPUT" olddefconfig
+
+
+      - name: Verify toolchain default build identities
+        working-directory: buildroot
+        run: |
+          # Kernel Kconfig probes Rust even when CONFIG_RUST is disabled.
+          # Prepare the selected toolchain before the first kernel configure,
+          # rather than letting thin-provisioning-tools install it afterward.
+          make O="$BR_OUTPUT" host-gcc-final host-rustc
+          python3 ../tools/userspace-debug/check-toolchain.py --output "$BR_OUTPUT"
 
       - name: Refresh systemd feature configuration
         working-directory: buildroot
         run: python3 ../tools/ci/systemd-config.py "$BR_OUTPUT"
+      - name: Refresh missing host-tool debug originals
+        working-directory: buildroot
+        run: |
+          if grep -q '^BR2_ENABLE_DEBUG=y$' "$BR_OUTPUT/.config" \
+              && ! python3 "$GITHUB_WORKSPACE/tools/userspace-debug/archive.py" provider-ready --output "$BR_OUTPUT"; then
+            make O="$BR_OUTPUT" nvidia-container-toolkit-dirclean
+          fi
+
+
+
+
 
       - name: Refresh changed firmware and thin tools packages
         run: python3 tools/ci/package-cache.py "$BR_OUTPUT"
@@ -153,7 +187,7 @@ jobs:
           expected_kernel=$(sed -n 's/^BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION="v\([0-9.]*\)"$/\1/p' ../configs/reefy_defconfig)
           test -n "$expected_kernel" || { echo "could not read pinned kernel version"; exit 1; }
 
-          fingerprint=$(cd .. && python3 tools/kernel-debug/fingerprint.py)
+          fingerprint=$(cd .. && python3 tools/kernel-debug/fingerprint.py --output "$BR_OUTPUT")
           needs_clean=false
           if [ "$(cat "$BR_OUTPUT/.reefy-kernel-inputs" 2>/dev/null || true)" != "$fingerprint" ]; then
             echo "kernel build inputs changed; rebuilding kernel and dependent modules"
@@ -345,8 +379,29 @@ jobs:
           compression-level: 0
           retention-days: 90
 
+      - name: Archive and verify system userspace debug files
+        run: python3 tools/userspace-debug/archive.py archive --output "$BR_OUTPUT"
+
+      - name: Upload system userspace debug archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: reefy-userspace-debug
+          path: ${{ env.BR_OUTPUT }}/images/reefy-userspace-debug.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: ${{ github.ref == 'refs/heads/main' && 90 || 14 }}
+
+      - name: Upload system debug lookup index
+        uses: actions/upload-artifact@v4
+        with:
+          name: reefy-userspace-debug-index
+          path: ${{ env.BR_OUTPUT }}/images/reefy-userspace-debug.json
+          if-no-files-found: error
+          retention-days: ${{ github.ref == 'refs/heads/main' && 90 || 14 }}
+
       - name: Mark verified package caches current
         run: python3 tools/ci/package-cache.py "$BR_OUTPUT" --commit
+
 
       - name: Mark verified kernel cache current
         run: mv "$BR_OUTPUT/.reefy-kernel-inputs.pending" "$BR_OUTPUT/.reefy-kernel-inputs"
