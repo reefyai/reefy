@@ -56,3 +56,24 @@ The provider's normal package validation and compilation still run afterward.
 This handles interrupted downloads; it does not establish whether a particular
 TLS failure came from the server, network, proxy, or runner.
 See https://curl.se/docs/manpage.html#--retry-all-errors.
+
+## Conditional package refresh
+
+`package-cache.py` replaces unconditional clean rebuilds of `linux-firmware`
+and `thin-provisioning-tools`. Its input key covers the resolved Buildroot
+configuration, Buildroot revision, tracked external package recipes and board
+build hooks. Runtime overlay and test edits do not invalidate these packages.
+A hit also requires completed installation stamps and matching SHA-256 of
+`br-firmware.tar` or the installed `pdata_tools` binary. Missing, changed or
+malformed records trigger the normal Buildroot `dirclean` target.
+
+The workflow removes the old success record before building and writes a new
+record only after firmware and debug verification succeed. Interrupted builds
+therefore cannot authorize subsequent reuse. Existing image, module, license,
+provider, signature and release checks remain mandatory. This optimization
+changes no deployment artifact names or metadata contracts.
+
+Measure a cold build and a second build with a runtime-only change on the same
+runner, then compare package compilation and total critical-path timings.
+Do not claim a measured speedup from unit tests alone. Fresh A/B and rollback
+build identities remain required even when package binaries are reused.
