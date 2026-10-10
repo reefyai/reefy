@@ -131,7 +131,10 @@ class NativeSymbolsTests(unittest.TestCase):
         source.write_text('#include <stdlib.h>\n__attribute__((noinline)) void crash_me(void) { abort(); }\nint main(void) { crash_me(); return 0; }\n')
         subprocess.run(['gcc', '-g2', '-O1', '-Wl,--build-id=sha1', str(source), '-o', str(self.binary)], check=True)
         core = self.root / 'synthetic.core'
-        generated = subprocess.run(['gdb', '-nx', '-batch', '-ex', 'set auto-load off', '-ex', 'run',
+        # This synthetic full-core test needs its stack even if the runner
+        # inherits Reefy's minimal production core filter (ELF headers only).
+        generated = subprocess.run(['gdb', '-nx', '-batch', '-ex', 'set auto-load off',
+                        '-ex', 'set use-coredump-filter off', '-ex', 'run',
                         '-ex', 'generate-core-file ' + str(core), '--args', str(self.binary)],
                        capture_output=True, text=True, timeout=30)
         self.assertEqual(generated.returncode, 0, generated.stdout + generated.stderr)
