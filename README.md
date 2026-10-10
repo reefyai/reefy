@@ -353,3 +353,8 @@ Volumes declared `bulk` share a bounded storage allowance, adjusted from real
 thin-pool free space. Config and database volumes default to `state`; this first
 implementation adds no state or Docker quotas. Setup and repair run in the
 background without restarting Docker. See [bulk storage details](docs/bulk-storage.md).
+
+## Regression E2E coverage
+
+Follow [the durable E2E testing policy](docs/testing-policy.md). Temporary
+reproductions must become committed tests before final regression validation.
