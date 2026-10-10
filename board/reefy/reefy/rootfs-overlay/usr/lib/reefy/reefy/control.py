@@ -81,6 +81,7 @@ class ControlPlane:
         self._command_results_lock = threading.Lock()
         self._command_results = OrderedDict()
         self._commands_running = set()
+        self._provision_failure = None
 
     @staticmethod
     def _load_compatibility():
@@ -401,6 +402,12 @@ class ControlPlane:
 
         # Publish registration with CSR
         self._register_device(client)
+        # A failed bootstrap attempt can outlive its MQTT connection. Replay
+        # its result, without retrying storage or retaining a stale broker stage.
+        failure = getattr(self, '_provision_failure', None)
+        if failure and failure[0] == self.current_uuid:
+            topic = f"{self.topic_prefix}/devices/{failure[0]}/stage"
+            client.publish(topic, json.dumps(failure[1]), qos=1)
         print("[mqtt] Waiting for provisioning response...")
 
     def _get_hw_info(self):
@@ -555,18 +562,20 @@ class ControlPlane:
             raise ValueError("Missing uuid or device_cert")
 
         log('mqtt', f'Received provisioning: UUID={uuid}')
+        self._provision_failure = None
 
         def _log_prov(msg):
             log('reconciler', msg)
 
         def _fail(error_msg):
             """Publish error stage so dashboard shows failure instead of spinning."""
+            error_msg = shared.redact_log_message(error_msg)
             log('mqtt', f'Provision failed: {error_msg}')
             _log_prov(f'ERROR: {error_msg}')
+            data = {"stage": "error", "message": error_msg, "timestamp": time.time()}
+            self._provision_failure = (uuid, data)
             topic = f"{self.topic_prefix}/devices/{uuid}/stage"
-            self.client.publish(topic, json.dumps({
-                "stage": "error", "message": error_msg, "timestamp": time.time()
-            }))
+            self.client.publish(topic, json.dumps(data), qos=1)
 
         try:
             return self._do_provision(payload, uuid, certificate, _log_prov)
