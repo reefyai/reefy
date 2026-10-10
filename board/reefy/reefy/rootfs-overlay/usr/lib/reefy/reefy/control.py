@@ -29,7 +29,7 @@ from io import BytesIO
 from reefy import shared
 from reefy.compatibility import load_manifest
 from reefy.shared import _part_dev, log
-from reefy.storage import Storage
+from reefy.storage import Storage, _boot_gpt_identity
 
 # Check if paho-mqtt is available
 try:
@@ -1058,11 +1058,23 @@ class ControlPlane:
             # Flash USB
             self._publish_stage('flashing', 'Writing to USB — DO NOT POWER OFF')
             log('mqtt', f'Flashing {usb_disk} from {download_path}')
-            result = subprocess.run(
-                ['dd', f'if={download_path}', f'of={usb_disk}', 'bs=1M', 'conv=fsync'],
-                capture_output=True, text=True, timeout=3600)
-            if result.returncode != 0:
-                log('mqtt', f'dd failed: {result.stderr}')
+            try:
+                identity = _boot_gpt_identity(download_path)
+                # Write the replacement before touching old boot metadata.
+                # Adoption handles the obsolete physical-end GPT using the
+                # matching primary/referenced pair. Do not ask disk tools to
+                # erase or reread the mounted boot disk during reflashing.
+                # Once writing starts, wait for its fsync even on slow USB.
+                # A wall-clock timeout can kill a partially completed image.
+                subprocess.run(
+                    ['dd', f'if={download_path}', f'of={usb_disk}',
+                     'bs=1M', 'conv=fsync'],
+                    stdin=subprocess.DEVNULL, capture_output=True,
+                    check=True)
+                if _boot_gpt_identity(usb_disk) != identity:
+                    raise RuntimeError('Reflashed boot GPT does not match downloaded image')
+            except Exception as error:
+                log('mqtt', f'Reflash USB write or verification failed ({type(error).__name__})')
                 self._publish_stage('error', 'Reflash USB write failed')
                 return
             log('mqtt', f'USB re-flashed successfully')
