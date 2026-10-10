@@ -182,6 +182,35 @@ EOF
     log_info "  Bootstrap: $(openssl x509 -noout -fingerprint -sha256 -in ${CERTS_DIR}/bootstrap.crt | cut -d= -f2)"
 }
 
+# Operator credential stays on the host; never include it in the USB bundle.
+# Also used when refreshing an existing broker with --skip-certs.
+generate_admin_certificate() {
+    if [[ -f "${CERTS_DIR}/admin.crt" && -f "${CERTS_DIR}/admin.key" ]] \
+        && openssl verify -CAfile "${CERTS_DIR}/ca.crt" "${CERTS_DIR}/admin.crt" &>/dev/null; then
+        chmod 600 "${CERTS_DIR}/admin.key"
+        return
+    fi
+    log_info "Generating operator certificate (CN=reefy-admin)..."
+    (
+        cd "${CERTS_DIR}"
+        umask 077
+        openssl genrsa -out admin.key 2048 2>/dev/null
+        openssl req -new -key admin.key -out admin.csr \
+            -subj "/O=Reefy/OU=Operators/CN=reefy-admin" 2>/dev/null
+        cat > admin-ext.cnf <<EOF
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = clientAuth
+EOF
+        openssl x509 -req -in admin.csr -CA ca.crt -CAkey ca.key \
+            -CAcreateserial -out admin.crt -days 3650 \
+            -extfile admin-ext.cnf 2>/dev/null
+        rm admin.csr admin-ext.cnf
+        chmod 644 admin.crt
+        chmod 600 admin.key
+    )
+}
+
 # Function to generate device-specific certificate
 generate_device_cert() {
     local uuid="$1"
@@ -234,9 +263,9 @@ create_broker_config() {
 {allow, {user, "bootstrap"}, publish, ["reefy/devices/bootstrap/#"]}.
 {allow, {user, "bootstrap"}, subscribe, ["reefy/devices/bootstrap/#"]}.
 
-%% Admin (bootstrap cert) can send commands to devices and monitor status
-{allow, {user, "bootstrap"}, publish, ["reefy/devices/+/commands"]}.
-{allow, {user, "bootstrap"}, subscribe, ["reefy/devices/+/status"]}.
+%% Host-only operator certificate can send commands and monitor status
+{allow, {user, "reefy-admin"}, publish, ["reefy/devices/+/commands"]}.
+{allow, {user, "reefy-admin"}, subscribe, ["reefy/devices/+/status"]}.
 
 %% Any authenticated user can publish and subscribe to their own topics
 %% ${username} is replaced with the CN extracted from the client certificate
@@ -466,6 +495,7 @@ main() {
     # Generate certificates, broker config, and USB bundle if needed
     if [[ "${SKIP_CERTS}" == "false" ]]; then
         generate_certificates
+        generate_admin_certificate
         create_broker_config
         create_usb_bundle
     else
@@ -479,6 +509,8 @@ main() {
             log_error "No existing USB bundle found in ${USB_BUNDLE_DIR}"
             exit 1
         fi
+        generate_admin_certificate
+        create_broker_config
         log_info "Using existing USB bundle: ${USB_BUNDLE_DIR}/"
     fi
 

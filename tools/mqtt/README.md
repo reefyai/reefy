@@ -30,10 +30,29 @@ Generate certificates, configure broker, and create USB bundle:
 ```
 
 This creates:
-- `mqtt-server/certs/` - CA, broker, and bootstrap certificates
+- `mqtt-server/certs/` - CA, broker, bootstrap, and host-only admin certificates
 - `mqtt-server/broker-config/` - EMQX configuration and docker-compose.yml
 - `mqtt-server/usb-bundle/mqtt/` - USB flash bundle ready to copy to devices
 - `mqtt-server/device-certs/` - Directory for device-specific certificates (generated on-demand)
+
+The host-only `admin.crt`/`admin.key` certificate (`CN=reefy-admin`) lets the
+local Playbook and MCL tools send commands and read device status. Keep its key
+private on the operator host; it is never copied into the USB bundle. Bootstrap
+credentials can only access the enrollment topic tree and cannot administer
+adopted devices. Device certificates retain access to their own UUID topics.
+
+To upgrade an existing local broker without rotating its CA or device identities:
+
+```bash
+./setup-mqtt-server.sh --skip-certs -d YOUR_BROKER_HOST -o ./mqtt-server
+# Restart so EMQX loads the refreshed ACL.
+docker compose -f ./mqtt-server/broker-config/docker-compose.yml restart
+```
+
+The local test menu's Setup action also refreshes the ACL and creates the admin
+credential when you choose to keep existing certificates. `--skip-certs` now
+preserves existing certificates and the USB bundle while refreshing broker
+configuration and creating the admin credential if needed.
 
 ### 2. Start EMQX Broker
 
@@ -460,3 +479,20 @@ MQTT_TOPIC_PREFIX=customer1
 - [EMQX-MIGRATION.md](./EMQX-MIGRATION.md) - Migration notes from Mosquitto to EMQX
 - [EMQX Documentation](https://www.emqx.io/docs/en/latest/)
 - [MQTT v3.1.1 Specification](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/mqtt-v3.1.1.html)
+
+### MQTT credential regression checks
+
+Run the host-side regression tests (requires Python 3, OpenSSL, Bash, and jq):
+
+```bash
+python3 -m unittest discover -s tools/mqtt/tests -v
+```
+
+Test the generated ACL against a running test broker with real TLS/MQTT packets:
+
+```bash
+python3 tools/mqtt/tests/check_broker_acl.py --certs tools/mqtt/mqtt-server/certs --host localhost
+```
+
+This checks that bootstrap can enroll but cannot publish device commands or
+subscribe to device status, and that the operator certificate can do both.
