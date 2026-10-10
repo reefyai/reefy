@@ -234,10 +234,6 @@ create_broker_config() {
 {allow, {user, "bootstrap"}, publish, ["reefy/devices/bootstrap/#"]}.
 {allow, {user, "bootstrap"}, subscribe, ["reefy/devices/bootstrap/#"]}.
 
-%% Admin (bootstrap cert) can send commands to devices and monitor status
-{allow, {user, "bootstrap"}, publish, ["reefy/devices/+/commands"]}.
-{allow, {user, "bootstrap"}, subscribe, ["reefy/devices/+/status"]}.
-
 %% Any authenticated user can publish and subscribe to their own topics
 %% ${username} is replaced with the CN extracted from the client certificate
 {allow, all, all, ["reefy/devices/${username}/#"]}.
