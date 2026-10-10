@@ -21,7 +21,7 @@
 # The certs directory must contain:
 #   - ca.crt                CA certificate
 #   - device cert+key with CN=UUID (from device-certs/{UUID}/)
-#     OR bootstrap.crt/bootstrap.key for testing
+#     OR admin.crt/admin.key for host-side testing
 #
 # Examples:
 #   # Send a single mcl file (auto-renamed to main.mcl on device)
@@ -126,17 +126,16 @@ if [[ ! -f "${CERTS_DIR}/ca.crt" ]]; then
     exit 1
 fi
 
-# Find client cert/key - try device cert first, then bootstrap
-if [[ -f "${CERTS_DIR}/device.crt" ]] && [[ -f "${CERTS_DIR}/device.key" ]]; then
+# Find operator credentials, or use a device certificate for its own UUID
+if [[ -f "${CERTS_DIR}/admin.crt" ]] && [[ -f "${CERTS_DIR}/admin.key" ]]; then
+    CLIENT_CERT="${CERTS_DIR}/admin.crt"
+    CLIENT_KEY="${CERTS_DIR}/admin.key"
+elif [[ -f "${CERTS_DIR}/device.crt" ]] && [[ -f "${CERTS_DIR}/device.key" ]]; then
     CLIENT_CERT="${CERTS_DIR}/device.crt"
     CLIENT_KEY="${CERTS_DIR}/device.key"
-elif [[ -f "${CERTS_DIR}/bootstrap.crt" ]] && [[ -f "${CERTS_DIR}/bootstrap.key" ]]; then
-    CLIENT_CERT="${CERTS_DIR}/bootstrap.crt"
-    CLIENT_KEY="${CERTS_DIR}/bootstrap.key"
-    log_warn "Using bootstrap cert - ACL may deny publish to device topic"
 else
     log_error "No client certificate found in ${CERTS_DIR}"
-    log_error "Expected device.crt/device.key or bootstrap.crt/bootstrap.key"
+    log_error "Expected admin.crt/admin.key or device.crt/device.key; bootstrap credentials cannot send commands"
     exit 1
 fi
 

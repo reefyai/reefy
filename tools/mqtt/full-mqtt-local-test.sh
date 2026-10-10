@@ -139,6 +139,8 @@ do_setup() {
                 docker stop reefy-mqtt-broker &>/dev/null || true
                 docker rm reefy-mqtt-broker &>/dev/null || true
             fi
+            # Refresh ACL and operator credentials while preserving CA/device identities.
+            ./setup-mqtt-server.sh --skip-certs -d "${BROKER_IP}" -o mqtt-server
             # Start broker with correct paths
             echo -e "${CYAN}Starting broker...${NC}"
             docker compose -f "${BROKER_DIR}/docker-compose.yml" up -d

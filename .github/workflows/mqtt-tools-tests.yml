@@ -1,0 +1,41 @@
+name: MQTT tools regression tests
+
+on:
+  push:
+    paths:
+      - 'tools/mqtt/**'
+      - '.github/workflows/mqtt-tools-tests.yml'
+  pull_request:
+    paths:
+      - 'tools/mqtt/**'
+      - '.github/workflows/mqtt-tools-tests.yml'
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check shell syntax
+        run: |
+          for script in tools/mqtt/*.sh; do
+            bash -n "$script"
+          done
+      - name: Exercise setup, upgrade, and command tools
+        run: python -m unittest discover -s tools/mqtt/tests -v
+      - name: Check authorization against EMQX
+        run: |
+          broker_dir="$RUNNER_TEMP/mqtt-acl"
+          bash tools/mqtt/setup-mqtt-server.sh -d localhost -o "$broker_dir"
+          docker compose -f "$broker_dir/broker-config/docker-compose.yml" up -d --wait --wait-timeout 120
+          python tools/mqtt/tests/check_broker_acl.py --certs "$broker_dir/certs" --host localhost
+      - name: Broker diagnostics and cleanup
+        if: always()
+        run: |
+          compose="$RUNNER_TEMP/mqtt-acl/broker-config/docker-compose.yml"
+          if [ -f "$compose" ]; then
+            docker compose -f "$compose" logs
+            docker compose -f "$compose" down -v
+          fi
