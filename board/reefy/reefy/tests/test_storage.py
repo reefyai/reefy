@@ -2026,6 +2026,59 @@ class BootGptIdentityTests(unittest.TestCase):
             disk, identity = self._disk(directory)
             self.assertEqual(storage._boot_gpt_identity(str(disk)), identity)
 
+    def _with_stale_physical_backup(self, directory, **options):
+        import struct
+        import zlib
+        corrupt_primary = options.pop('corrupt_primary', False)
+        zero_backup = options.pop('zero_backup', False)
+        same_guid = options.pop('same_guid', False)
+        disk, identity = self._disk(directory, **options)
+        with disk.open('r+b') as stream:
+            stream.seek(-512, os.SEEK_END)
+            header = bytearray(stream.read(512))
+            old_table = struct.unpack_from('<Q', header, 72)[0]
+            stream.seek(old_table * 512)
+            entries = bytearray(stream.read(128 * 128))
+            entries[16] ^= 2
+            stream.truncate(32 * 1024**2)
+            last = 32 * 1024**2 // 512 - 1
+            struct.pack_into('<QQ', header, 24, last, 1)
+            struct.pack_into('<Q', header, 48, last - 33)
+            if not same_guid:
+                header[56] ^= 2
+            struct.pack_into('<Q', header, 72, last - 32)
+            struct.pack_into('<I', header, 88, zlib.crc32(entries))
+            header[16:20] = bytes(4)
+            struct.pack_into('<I', header, 16, zlib.crc32(header[:92]))
+            stream.seek((last - 32) * 512)
+            stream.write(entries)
+            stream.seek(last * 512)
+            stream.write(header)
+            if corrupt_primary:
+                stream.seek(512 + 16)
+                stream.write(bytes(4))
+            if zero_backup:
+                stream.seek((16 * 1024**2 // 512 - 1) * 512)
+                stream.write(bytes(512))
+        return disk, identity
+
+    def test_raw_reflash_prefers_agreeing_primary_and_referenced_backup(self):
+        for same_guid in (False, True):
+            with self.subTest(same_guid=same_guid), tempfile.TemporaryDirectory() as directory:
+                disk, identity = self._with_stale_physical_backup(directory, same_guid=same_guid)
+                before = disk.read_bytes()
+                self.assertEqual(storage._boot_gpt_identity(str(disk)), identity)
+                self.assertEqual(disk.read_bytes(), before)
+
+    def test_raw_reflash_refuses_conflicting_or_invalid_referenced_pair(self):
+        for options in ({'conflicting': True}, {'corrupt_primary': True}, {'zero_backup': True}):
+            with self.subTest(options=options), tempfile.TemporaryDirectory() as directory:
+                disk, _ = self._with_stale_physical_backup(directory, **options)
+                with mock.patch.object(storage.subprocess, 'run') as run:
+                    with self.assertRaisesRegex(RuntimeError, 'preserving disk'):
+                        storage._repair_boot_gpt(str(disk))
+                run.assert_not_called()
+
     def test_valid_backup_survives_primary_interruption(self):
         with tempfile.TemporaryDirectory() as directory:
             disk, identity = self._disk(directory, zero_primary=True)
