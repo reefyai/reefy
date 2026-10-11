@@ -836,3 +836,27 @@ class BootstrapKeyReuseTests(unittest.TestCase):
         with mock.patch.object(control.os,'makedirs'):
             plane._handle_bootstrap_connect(client)
         client.subscribe.assert_called_once_with('reefy/synthetic-public/devices/synthetic-device/commands',qos=1)
+
+
+class LifecycleDeliveryTests(unittest.TestCase):
+    def test_setup_stage_requests_acknowledged_delivery(self):
+        control = _load_control_module()
+        plane = object.__new__(control.ControlPlane)
+        plane.mode = 'device'
+        plane.device_uuid = 'synthetic-device'
+        plane.topic_prefix = 'reefy/synthetic-public'
+        plane.client = mock.Mock()
+        plane._publish_stage('error','Synthetic setup failure')
+        self.assertEqual(plane.client.publish.call_args.kwargs.get('qos'),1)
+        self.assertFalse(plane.client.publish.call_args.kwargs.get('retain',False))
+
+    def test_app_health_requests_acknowledged_delivery(self):
+        control = _load_control_module()
+        plane = object.__new__(control.ControlPlane)
+        plane.mode = 'device'
+        plane.device_uuid = 'synthetic-device'
+        plane.topic_prefix = 'reefy/synthetic-public'
+        plane.client = mock.Mock()
+        plane._publish_instance_event('a1b2c3d4','health','running')
+        self.assertEqual(plane.client.publish.call_args.kwargs.get('qos'),1)
+        self.assertFalse(plane.client.publish.call_args.kwargs.get('retain',False))

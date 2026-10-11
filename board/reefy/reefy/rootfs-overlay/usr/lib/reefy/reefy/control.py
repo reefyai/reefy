@@ -1802,7 +1802,7 @@ class ControlPlane:
             "message": message,
             "timestamp": time.time()
         }
-        self.client.publish(topic, json.dumps(data))
+        self.client.publish(topic, json.dumps(data), qos=1)
         log('mqtt', f'Stage: {stage} - {message}')
 
     def _publish_instance_event(self, iuuid, action, status, extra=None):
