@@ -791,3 +791,48 @@ class ProvisionFailureReplayTests(unittest.TestCase):
         with mock.patch.object(control.os, 'makedirs'):
             plane._handle_bootstrap_connect(plane.client)
         plane.client.publish.assert_not_called()
+
+
+class BootstrapKeyReuseTests(unittest.TestCase):
+    def test_reconnect_and_control_restart_preserve_key_and_csr(self):
+        import builtins
+        import os
+        import subprocess
+        import tempfile
+        control = _load_control_module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mapping = {'/mnt/reefy-data/state/device.key':str(root/'key'),
+                       '/tmp/device.csr':str(root/'csr')}
+            def redirected(path):
+                return mapping.get(str(path),path)
+            run,opened,chmod,unlink,exists = subprocess.run,builtins.open,os.chmod,os.unlink,os.path.exists
+            def run_crypto(argv,**kwargs):
+                return run([redirected(a) for a in argv],**kwargs)
+            with mock.patch.object(control.subprocess,'run',side_effect=run_crypto), \
+                    mock.patch('builtins.open',side_effect=lambda path,*a,**k:opened(redirected(path),*a,**k)), \
+                    mock.patch.object(control.os,'chmod',side_effect=lambda path,mode:chmod(redirected(path),mode)), \
+                    mock.patch.object(control.os,'unlink',side_effect=lambda path:unlink(redirected(path))), \
+                    mock.patch.object(control.os.path,'exists',side_effect=lambda path:exists(redirected(path))):
+                plane = object.__new__(control.ControlPlane)
+                plane.hostname = 'synthetic-bootstrap'
+                first = plane._generate_keypair_and_csr()
+                key = (root/'key').read_bytes()
+                second = plane._generate_keypair_and_csr()
+                self.assertEqual(__import__('hashlib').sha256((root/'key').read_bytes()).hexdigest(),__import__('hashlib').sha256(key).hexdigest())
+                self.assertEqual(first,second)
+                restarted = object.__new__(control.ControlPlane)
+                restarted.hostname = plane.hostname
+                self.assertEqual(restarted._generate_keypair_and_csr(),first)
+
+    def test_bootstrap_commands_subscribe_with_acknowledged_delivery(self):
+        control = _load_control_module()
+        plane = object.__new__(control.ControlPlane)
+        plane.topic_prefix = 'reefy/synthetic-public'
+        plane.current_uuid = 'synthetic-device'
+        plane._register_device = mock.Mock()
+        client = mock.Mock()
+        client.subscribe.return_value = (0,1)
+        with mock.patch.object(control.os,'makedirs'):
+            plane._handle_bootstrap_connect(client)
+        client.subscribe.assert_called_once_with('reefy/synthetic-public/devices/synthetic-device/commands',qos=1)

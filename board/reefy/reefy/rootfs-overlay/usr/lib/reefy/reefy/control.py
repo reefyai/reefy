@@ -277,12 +277,14 @@ class ControlPlane:
         state_dir = '/mnt/reefy-data/state'
         key_path = os.path.join(state_dir, 'device.key')
 
-        # Generate RSA-2048 private key
-        subprocess.run([
-            'openssl', 'genrsa', '-out', key_path, '2048'
-        ], check=True, capture_output=True)
-        os.chmod(key_path, 0o600)
-        log('mqtt', f'Generated device key: {key_path}')
+        # Reconnecting a bootstrap session must not replace the key for
+        # the certificate already being signed or delivered by the server.
+        if not os.path.exists(key_path):
+            subprocess.run([
+                'openssl', 'genrsa', '-out', key_path, '2048'
+            ], check=True, capture_output=True)
+            os.chmod(key_path, 0o600)
+            log('mqtt', f'Generated device key: {key_path}')
 
         # Generate CSR with hostname as CN (server will override CN with UUID)
         csr_path = '/tmp/device.csr'
@@ -329,7 +331,7 @@ class ControlPlane:
                 # during reconnect storms.
                 self._subscribe_confirmed.clear()
                 topic = f"{self.topic_prefix}/devices/{self.current_uuid}/commands"
-                result, mid = client.subscribe(topic)
+                result, mid = client.subscribe(topic, qos=1)
                 log('mqtt', f'Subscribe sent: topic={topic}, result={result}, mid={mid}')
 
                 # Publish online status after subscribe is queued. Include
@@ -377,7 +379,7 @@ class ControlPlane:
                 return  # SUBACK received, done
             if not client.is_connected():
                 return  # disconnected, on_connect will re-subscribe
-            result, mid = client.subscribe(topic)
+            result, mid = client.subscribe(topic, qos=1)
             log('mqtt', f'Subscribe retry {attempt}/{max_retries}: result={result}, mid={mid}')
         log('mqtt', f'WARNING: Subscribe not confirmed after {max_retries} retries')
 
@@ -397,7 +399,7 @@ class ControlPlane:
 
         # Subscribe to commands (unified — same topic for bootstrap and device mode)
         cmd_topic = f"{self.topic_prefix}/devices/{self.current_uuid}/commands"
-        result, mid = client.subscribe(cmd_topic)
+        result, mid = client.subscribe(cmd_topic, qos=1)
         log('mqtt', f'Subscribe sent: topic={cmd_topic}, result={result}, mid={mid}')
 
         # Publish registration with CSR
