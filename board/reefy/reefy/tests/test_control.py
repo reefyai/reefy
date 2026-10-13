@@ -100,6 +100,7 @@ class ConnectionOwnershipTests(unittest.TestCase):
         instance.broker = 'broker.example.invalid'
         instance.port = 8883
         instance._start_connection_watchdog = mock.Mock()
+        instance._start_tailscale_monitor = mock.Mock()
         instance._start_control_varlink = mock.Mock()
         with mock.patch.object(control.threading, 'Thread') as thread, \
                 mock.patch.object(control.subprocess, 'Popen') as process:
@@ -113,6 +114,7 @@ class ConnectionOwnershipTests(unittest.TestCase):
         thread.assert_not_called()
         process.assert_not_called()
         instance._start_connection_watchdog.assert_called_once()
+        instance._start_tailscale_monitor.assert_called_once()
         instance._start_control_varlink.assert_called_once()
 
 
