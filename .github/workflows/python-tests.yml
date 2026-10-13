@@ -18,6 +18,7 @@ on:
       - '.github/workflows/python-tests.yml'
   pull_request:
     paths:
+      - '.github/workflows/python-tests.yml'
       - 'board/reefy/reefy/rootfs-overlay/usr/lib/reefy/**'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-backup'
       - 'board/reefy/reefy/rootfs-overlay/usr/share/varlink/**'
