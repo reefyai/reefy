@@ -6,6 +6,7 @@ name: reefy python unit tests
 # behavioural gate is the e2e suite in reefy-service.
 on:
   push:
+    branches: [main]
     paths:
       - 'board/reefy/reefy/rootfs-overlay/usr/lib/reefy/**'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-control'
@@ -17,14 +18,19 @@ on:
       - '.github/workflows/python-tests.yml'
   pull_request:
     paths:
+      - '.github/workflows/python-tests.yml'
       - 'board/reefy/reefy/rootfs-overlay/usr/lib/reefy/**'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-backup'
       - 'board/reefy/reefy/rootfs-overlay/usr/share/varlink/**'
       - 'board/reefy/reefy/tests/**'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || (github.head_ref && format('refs/heads/{0}', github.head_ref)) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch') }}
+
 jobs:
   unit:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && '["ubuntu-latest"]' || '["self-hosted","Linux","X64","big-bird"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

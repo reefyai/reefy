@@ -536,7 +536,7 @@ jobs:
 
   provider-catalog:
     needs: [build, publish-nvidia-provider, publish-amd-provider, publish-intel-provider, publish-artifact-fixture]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && '["ubuntu-24.04"]' || '["self-hosted","Linux","X64","big-bird","large"]') }}
     steps:
       - name: Build exact provider catalog
         env:
@@ -610,7 +610,7 @@ jobs:
       - publish-artifact-fixture
       - provider-catalog
     if: ${{ success() }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && '["ubuntu-24.04"]' || '["self-hosted","Linux","X64","big-bird","large"]') }}
     steps:
       - name: Record complete release
         run: printf '%s\n' "$GITHUB_SHA" > reefy-release-ready
