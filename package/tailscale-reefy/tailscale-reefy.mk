@@ -8,7 +8,7 @@
 #
 ################################################################################
 
-TAILSCALE_REEFY_VERSION = 1.94.2
+TAILSCALE_REEFY_VERSION = 1.104.1
 TAILSCALE_REEFY_SITE = $(call github,tailscale,tailscale,v$(TAILSCALE_REEFY_VERSION))
 TAILSCALE_REEFY_LICENSE = BSD-3-Clause
 TAILSCALE_REEFY_LICENSE_FILES = LICENSE
