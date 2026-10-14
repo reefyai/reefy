@@ -88,7 +88,7 @@ class ProviderWorkflowTests(unittest.TestCase):
             'reefyai/reefy-intel':
                 '9703ecef5082148a57d9aa8a5116cf9084a80e01',
             'reefyai/reefy-amd':
-                'b8f83b494d63d4d891277bc19d38dbc0b11f8b07',
+                '29a1a1de64dfe13e69f14a5bdf98507393cfad7e',
             'reefyai/reefy-artifact-fixtures':
                 '85dce99586e9b21f6ff10e7773a058ca2d6793db',
         }
