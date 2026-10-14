@@ -36,6 +36,25 @@ class ExistingVolumeUnavailableError(RuntimeError):
     """An owned data LV exists but cannot safely back its app path."""
 
 
+
+LVM_PROBE_TIMEOUT_S = 30
+PV_CREATE_TIMEOUT_S = 60
+
+
+def _run_lvm_timed(command, *, timeout, **kwargs):
+    """Bound a provisioning command and report slow elapsed time only."""
+    started = time.monotonic()
+    try:
+        return subprocess.run(command, timeout=timeout, **kwargs)
+    finally:
+        elapsed = time.monotonic() - started
+        if elapsed >= 1:
+            try:
+                print(f'[mqtt] Storage command {command[0]} elapsed={elapsed:.3f}s '
+                      f'budget={timeout}s', flush=True)
+            except OSError:
+                pass
+
 def _scan_existing_volumes(_log=None):
     """Bound discovery and preserve wait diagnostics before killing a timeout."""
     emit = _log or log
@@ -560,8 +579,8 @@ class Storage:
 
         # Check if we can activate LVM from opened drives
         _scan_existing_volumes(_log)
-        if subprocess.run(['vgs', 'reefy'], capture_output=True,
-                          timeout=5).returncode == 0:
+        if _run_lvm_timed(['vgs', 'reefy'], capture_output=True,
+                          timeout=LVM_PROBE_TIMEOUT_S).returncode == 0:
             result = subprocess.run(
                 ['vgchange', '-ay', 'reefy'], capture_output=True,
                 text=True, timeout=10)
@@ -738,9 +757,9 @@ class Storage:
                 continue
             # Reserve VG metadata at both ends of newly created PVs. Existing
             # members keep their original layout, including single-area PVs.
-            result = subprocess.run(
+            result = _run_lvm_timed(
                 ['pvcreate', '--pvmetadatacopies', '2', '-ff', '-y', pv],
-                capture_output=True, text=True, timeout=15)
+                capture_output=True, text=True, timeout=PV_CREATE_TIMEOUT_S)
             if result.returncode != 0:
                 raise RuntimeError(
                     f'PV create failed on {pv}: '
@@ -2083,9 +2102,9 @@ class Storage:
                 f'extension devices')
 
         for pv_path in new_pvs:
-            result = subprocess.run(
+            result = _run_lvm_timed(
                 ['pvcreate', '--pvmetadatacopies', '2', '-ff', '-y', pv_path],
-                capture_output=True, text=True, timeout=15)
+                capture_output=True, text=True, timeout=PV_CREATE_TIMEOUT_S)
             if result.returncode != 0:
                 raise RuntimeError(
                     f'PV create failed on {pv_path}: '

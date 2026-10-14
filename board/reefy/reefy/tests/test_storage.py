@@ -1112,6 +1112,38 @@ class SensitiveDownloadLoggingTests(unittest.TestCase):
                     [{'path': path}], backup_paths={path})
 
 
+
+class LvmCommandTimingTests(unittest.TestCase):
+    def test_timeout_is_propagated_without_retry(self):
+        error = subprocess.TimeoutExpired(['pvcreate'], 60)
+        with mock.patch.object(storage.subprocess, 'run', side_effect=error) as run, \
+                mock.patch.object(storage.time, 'monotonic', side_effect=[0, 60]), \
+                mock.patch('builtins.print') as report:
+            with self.assertRaises(subprocess.TimeoutExpired) as caught:
+                storage._run_lvm_timed(['pvcreate'], timeout=60,
+                                       capture_output=True, text=True)
+        self.assertIs(caught.exception, error)
+        run.assert_called_once_with(['pvcreate'], timeout=60,
+                                    capture_output=True, text=True)
+        self.assertIn('elapsed=60.000s', report.call_args.args[0])
+
+    def test_logging_failure_does_not_mask_command_failure(self):
+        error = subprocess.TimeoutExpired(['vgs'], 30)
+        with mock.patch.object(storage.subprocess, 'run', side_effect=error), \
+                mock.patch.object(storage.time, 'monotonic', side_effect=[0, 30]), \
+                mock.patch('builtins.print', side_effect=BrokenPipeError):
+            with self.assertRaises(subprocess.TimeoutExpired) as caught:
+                storage._run_lvm_timed(['vgs'], timeout=30)
+        self.assertIs(caught.exception, error)
+
+    def test_fast_probe_does_not_log(self):
+        result = types.SimpleNamespace(returncode=0)
+        with mock.patch.object(storage.subprocess, 'run', return_value=result), \
+                mock.patch.object(storage.time, 'monotonic', side_effect=[0, .01]), \
+                mock.patch('builtins.print') as report:
+            self.assertIs(storage._run_lvm_timed(['vgs'], timeout=30), result)
+        report.assert_not_called()
+
 class StateLvCreateTimeoutTests(unittest.TestCase):
     def _run(self, probe, second_timeout=False):
         instance = storage.Storage()
