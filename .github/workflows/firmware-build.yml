@@ -51,9 +51,9 @@ permissions:
 
 jobs:
   debug-archive-tests:
-    # Keep the prerequisite on the same available runner pool as the build.
-    # Hosted-runner allocation failures must not prevent firmware compilation.
-    runs-on: [self-hosted, large]
+    # Lightweight archive checks use the general pool; preserve the heavy
+    # runner and its persistent cache for compilation and provider packaging.
+    runs-on: [self-hosted, Linux, X64, big-bird]
     steps:
       - uses: actions/checkout@v4
       - run: apt-get update && apt-get install -y pigz gdb build-essential
@@ -536,7 +536,7 @@ jobs:
 
   provider-catalog:
     needs: [build, publish-nvidia-provider, publish-amd-provider, publish-intel-provider, publish-artifact-fixture]
-    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && '["ubuntu-24.04"]' || '["self-hosted","Linux","X64","big-bird","large"]') }}
+    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && '["ubuntu-24.04"]' || '["self-hosted","Linux","X64","big-bird"]') }}
     steps:
       - name: Build exact provider catalog
         env:
@@ -610,7 +610,7 @@ jobs:
       - publish-artifact-fixture
       - provider-catalog
     if: ${{ success() }}
-    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && '["ubuntu-24.04"]' || '["self-hosted","Linux","X64","big-bird","large"]') }}
+    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && '["ubuntu-24.04"]' || '["self-hosted","Linux","X64","big-bird"]') }}
     steps:
       - name: Record complete release
         run: printf '%s\n' "$GITHUB_SHA" > reefy-release-ready
