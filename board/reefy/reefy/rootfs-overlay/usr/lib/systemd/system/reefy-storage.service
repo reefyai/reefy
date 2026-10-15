@@ -9,6 +9,8 @@ Type=oneshot
 # storage_boot owns the recovery deadline and preserves a reboot guard first.
 TimeoutStartSec=infinity
 ExecStart=/usr/bin/boot-reefy-storage.sh
+# Queue maintenance without waiting or making storage success depend on it.
+ExecStartPost=-/usr/bin/systemctl --no-block start reefy-pv-redundancy.service
 RemainAfterExit=true
 
 [Install]
