@@ -101,7 +101,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: reefyai/reefy-amd
-          ref: b8f83b494d63d4d891277bc19d38dbc0b11f8b07
+          ref: 29a1a1de64dfe13e69f14a5bdf98507393cfad7e
           path: amd-provider
 
       - name: Validate E2E build identity salt
@@ -515,14 +515,14 @@ jobs:
 
   publish-intel-provider:
     needs: build
-    uses: reefyai/reefy-intel/.github/workflows/publish.yml@9703ecef5082148a57d9aa8a5116cf9084a80e01
+    uses: reefyai/reefy-intel/.github/workflows/publish.yml@1bc240609be398bce3846d7cf52cf62e83c6deb3
     with:
       input_artifact: reefy-intel-inputs
     secrets: inherit
 
   publish-amd-provider:
     needs: build
-    uses: reefyai/reefy-amd/.github/workflows/publish.yml@b8f83b494d63d4d891277bc19d38dbc0b11f8b07
+    uses: reefyai/reefy-amd/.github/workflows/publish.yml@29a1a1de64dfe13e69f14a5bdf98507393cfad7e
     with:
       input_artifact: reefy-amd-inputs
     secrets: inherit

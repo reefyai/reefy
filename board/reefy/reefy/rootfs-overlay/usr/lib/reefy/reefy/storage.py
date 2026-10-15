@@ -36,6 +36,25 @@ class ExistingVolumeUnavailableError(RuntimeError):
     """An owned data LV exists but cannot safely back its app path."""
 
 
+
+LVM_PROBE_TIMEOUT_S = 30
+PV_CREATE_TIMEOUT_S = 60
+
+
+def _run_lvm_timed(command, *, timeout, **kwargs):
+    """Bound a provisioning command and report slow elapsed time only."""
+    started = time.monotonic()
+    try:
+        return subprocess.run(command, timeout=timeout, **kwargs)
+    finally:
+        elapsed = time.monotonic() - started
+        if elapsed >= 1:
+            try:
+                print(f'[mqtt] Storage command {command[0]} elapsed={elapsed:.3f}s '
+                      f'budget={timeout}s', flush=True)
+            except OSError:
+                pass
+
 def _scan_existing_volumes(_log=None):
     """Bound discovery and preserve wait diagnostics before killing a timeout."""
     emit = _log or log
@@ -81,8 +100,9 @@ def _scan_existing_volumes(_log=None):
 def _boot_gpt_identity(disk):
     """Read a CRC-valid GPT identity/table without accepting empty conversion.
 
-    Invalid copies may be recovered from a valid counterpart; conflicting
-    valid tables and unknown formats are refused before any writes.
+    A matching primary/referenced-backup pair is authoritative after a raw
+    reflash, even if an obsolete copy remains at the physical disk end.
+    Other conflicting valid tables and unknown formats are refused.
     """
     with open(disk, 'rb', buffering=0) as stream:
         sector = 512
@@ -97,6 +117,7 @@ def _boot_gpt_identity(disk):
         sectors = total // sector
         candidates = [1, sectors - 1]
         valid = []
+        copies = {}
         for position in candidates:
             stream.seek(position * sector)
             header = stream.read(sector)
@@ -107,6 +128,13 @@ def _boot_gpt_identity(disk):
             size, checksum = struct.unpack_from('<II', header, 12)
             if not 92 <= size <= sector:
                 continue
+            # An invalid primary can still name a valid backup on an
+            # expanded image. Reading that bounded location is safe; only
+            # fully validated copies below can authorize a write.
+            if position == 1:
+                named_backup = struct.unpack_from('<Q', header, 32)[0]
+                if 1 < named_backup < sectors and named_backup not in candidates:
+                    candidates.append(named_backup)
             crc_header = bytearray(header[:size])
             crc_header[16:20] = bytes(4)
             if zlib.crc32(crc_header) != checksum:
@@ -126,9 +154,20 @@ def _boot_gpt_identity(disk):
             if not any(entries[offset:offset + 16] != bytes(16)
                        for offset in range(0, len(entries), width)):
                 continue
-            valid.append((header[56:72], entries))
+            identity = (header[56:72], entries)
+            valid.append(identity)
+            copies[position] = (alternate, first, last, identity)
             if alternate not in candidates:
                 candidates.append(alternate)
+        primary = copies.get(1)
+        if primary and primary[0] != sectors - 1:
+            referenced = copies.get(primary[0])
+            if referenced == (1, primary[1], primary[2], primary[3]):
+                # The primary names this older, image-sized backup. A raw
+                # image overwrite cannot clear a previous physical-end GPT.
+                # Require both named copies to agree before replacing that
+                # unreferenced residue; successful boot alone is insufficient.
+                return primary[3]
         if not valid or any(identity != valid[0] for identity in valid[1:]):
             raise RuntimeError('No unambiguous CRC-valid boot GPT; preserving disk')
         return valid[0]
@@ -540,8 +579,8 @@ class Storage:
 
         # Check if we can activate LVM from opened drives
         _scan_existing_volumes(_log)
-        if subprocess.run(['vgs', 'reefy'], capture_output=True,
-                          timeout=5).returncode == 0:
+        if _run_lvm_timed(['vgs', 'reefy'], capture_output=True,
+                          timeout=LVM_PROBE_TIMEOUT_S).returncode == 0:
             result = subprocess.run(
                 ['vgchange', '-ay', 'reefy'], capture_output=True,
                 text=True, timeout=10)
@@ -718,9 +757,9 @@ class Storage:
                 continue
             # Reserve VG metadata at both ends of newly created PVs. Existing
             # members keep their original layout, including single-area PVs.
-            result = subprocess.run(
+            result = _run_lvm_timed(
                 ['pvcreate', '--pvmetadatacopies', '2', '-ff', '-y', pv],
-                capture_output=True, text=True, timeout=15)
+                capture_output=True, text=True, timeout=PV_CREATE_TIMEOUT_S)
             if result.returncode != 0:
                 raise RuntimeError(
                     f'PV create failed on {pv}: '
@@ -2063,9 +2102,9 @@ class Storage:
                 f'extension devices')
 
         for pv_path in new_pvs:
-            result = subprocess.run(
+            result = _run_lvm_timed(
                 ['pvcreate', '--pvmetadatacopies', '2', '-ff', '-y', pv_path],
-                capture_output=True, text=True, timeout=15)
+                capture_output=True, text=True, timeout=PV_CREATE_TIMEOUT_S)
             if result.returncode != 0:
                 raise RuntimeError(
                     f'PV create failed on {pv_path}: '
