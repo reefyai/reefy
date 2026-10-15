@@ -48,6 +48,7 @@ class Tailscale:
         self.last_request = 0
         self.request_id = str(uuid.uuid4())
         self.error = None
+        self._applied_hostname = None
 
     def _binding(self):
         try:
@@ -89,6 +90,22 @@ class Tailscale:
             result.update(state='error', error=self.error)
         return result
 
+    def _sync_hostname(self, config):
+        # Only Reefy-owned connections follow the existing desired hostname.
+        # Explicit preferences survive daemon startup before hostname apply.
+        name = config.get('hostname')
+        if (not isinstance(name, str) or not name
+                or self._binding().get('connection_id') != config.get('connection_id')
+                or name == self._applied_hostname):
+            return
+        try:
+            result = subprocess.run(['tailscale', 'set', '--hostname=' + name],
+                                    capture_output=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            return
+        if result.returncode == 0:
+            self._applied_hostname = name
+
     def tick(self, config):
         if not config or not config.get('enabled') or not config.get('connection_id'):
             return
@@ -99,6 +116,7 @@ class Tailscale:
                 return
             state = self.status()
             if state['state'] in ('connected', 'needs_approval', 'unmanaged', 'stopped'):
+                self._sync_hostname(config)
                 return
             subprocess.run(['systemctl', 'start', 'tailscaled.service'],
                            capture_output=True, timeout=10)
@@ -125,6 +143,7 @@ class Tailscale:
             prepare_state()
             state = self.status()
             if state['state'] in ('connected', 'needs_approval', 'unmanaged', 'stopped'):
+                self._sync_hostname(config)
                 self.publish('tailscale/result', state)
                 return
             binding = self._binding()
@@ -150,10 +169,16 @@ class Tailscale:
                 with tempfile.NamedTemporaryFile(mode='w', dir='/run', prefix='reefy-ts-') as secret:
                     secret.write(key)
                     secret.flush()
-                    subprocess.run(['tailscale', 'up', '--auth-key=file:' + secret.name,
-                                    '--accept-dns=false', '--accept-routes=false',
-                                    '--ssh=false', '--timeout=30s'],
-                                   capture_output=True, timeout=35)
+                    command = ['tailscale', 'up', '--auth-key=file:' + secret.name,
+                               '--accept-dns=false', '--accept-routes=false',
+                               '--ssh=false', '--timeout=30s', '--hostname=']
+                    result = subprocess.run(command, capture_output=True, timeout=35)
+                    if result.returncode == 0:
+                        # The up CLI validates DNS labels more strictly than
+                        # native OS hostnames. Apply the saved name separately
+                        # so a provider-rejected name cannot prevent login.
+                        # Tailscale owns any MagicDNS normalization.
+                        self._sync_hostname(config)
                 state = self.status()
                 self.error = None if state['state'] in ('connected', 'needs_approval') else 'enrollment_failed'
             except (OSError, subprocess.TimeoutExpired):

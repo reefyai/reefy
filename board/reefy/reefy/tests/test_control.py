@@ -862,3 +862,18 @@ class LifecycleDeliveryTests(unittest.TestCase):
         plane._publish_instance_event('a1b2c3d4','health','running')
         self.assertEqual(plane.client.publish.call_args.kwargs.get('qos'),1)
         self.assertFalse(plane.client.publish.call_args.kwargs.get('retain',False))
+
+
+class TailscaleHostnameConfigTests(unittest.TestCase):
+    def test_existing_host_name_is_added_only_to_internal_config(self):
+        control = _load_control_module()
+        plane = object.__new__(control.ControlPlane)
+        for nested in (False, True):
+            host = {'hostname': 'synthetic-device', 'tailscale': {
+                'enabled': True, 'connection_id': 'synthetic-connection'}}
+            state = {'host': host} if nested else host
+            with mock.patch.object(control.shared, 'load_desired_state', return_value=(state, 'synthetic-path')):
+                result = plane._tailscale_config()
+            self.assertEqual(result['hostname'], 'synthetic-device')
+            self.assertNotIn('hostname', host['tailscale'])
+            self.assertEqual(result['connection_id'], 'synthetic-connection')

@@ -120,7 +120,11 @@ class ControlPlane:
         try:
             state, _ = shared.load_desired_state()
             host = state.get('host', state)
-            return host.get('tailscale')
+            config = host.get('tailscale')
+            if not isinstance(config, dict):
+                return None
+            # Internal-only: reuse the existing host hostname contract.
+            return dict(config, hostname=host.get('hostname') or shared.get_default_hostname())
         except (OSError, ValueError):
             return None
 
