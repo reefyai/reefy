@@ -1,0 +1,11 @@
+#!/usr/bin/python3
+"""Guard daemon startup against ephemeral bootstrap storage."""
+import sys
+sys.path.insert(0, '/usr/lib/reefy')
+from reefy.tailscale import prepare_state
+
+try:
+    prepare_state()
+except Exception:
+    print('Tailscale is waiting for persistent Reefy storage.', file=sys.stderr)
+    sys.exit(1)

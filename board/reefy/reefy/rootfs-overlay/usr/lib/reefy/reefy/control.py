@@ -77,6 +77,8 @@ class ControlPlane:
         # All on-disk state work (LUKS/LVM/XFS/volumes/mount/reclaim) lives
         # in reefy.storage.Storage; this process composes it and delegates.
         self._storage = Storage(self._volume_caps)
+        from reefy.tailscale import Tailscale
+        self._tailscale = Tailscale(self._publish_tailscale)
         self._compatibility = self._load_compatibility()
         self._command_results_lock = threading.Lock()
         self._command_results = OrderedDict()
@@ -102,9 +104,41 @@ class ControlPlane:
             return {}
 
     def _with_compatibility(self, payload):
+        if hasattr(self, '_tailscale'):
+            payload['tailscale'] = self._tailscale.status()
         if self._compatibility is not None:
             payload['compatibility'] = self._compatibility
         return payload
+
+    def _publish_tailscale(self, suffix, payload):
+        if self.mode == 'device' and self.client and self.client.is_connected():
+            self.client.publish(
+                f'{self.topic_prefix}/devices/{self.device_uuid}/{suffix}',
+                json.dumps(payload), qos=1, retain=False)
+
+    def _tailscale_config(self):
+        try:
+            state, _ = shared.load_desired_state()
+            host = state.get('host', state)
+            return host.get('tailscale')
+        except (OSError, ValueError):
+            return None
+
+    def _tailscale_enroll(self, payload, cmd_id=None):
+        if self.mode == 'device':
+            self._tailscale.enroll(payload, self._tailscale_config())
+
+    def _start_tailscale_monitor(self):
+        def monitor():
+            while True:
+                try:
+                    if self.mode == 'device' and self.client and self.client.is_connected():
+                        self._tailscale.tick(self._tailscale_config())
+                        self._publish_tailscale('tailscale/result', self._tailscale.status())
+                except Exception:
+                    log('mqtt', 'Tailscale monitor could not complete its check')
+                time.sleep(60)
+        threading.Thread(target=monitor, daemon=True).start()
 
     def wait_for_config(self):
         """Block until MQTT configuration becomes available."""
@@ -845,6 +879,7 @@ class ControlPlane:
         'provision': '_handle_provision',
         # Device mode commands
         'apply_state': '_apply_state_command',
+        'tailscale_enroll': '_tailscale_enroll',
         'apply_config': '_apply_config',
         'run_playbook': '_run_playbook',
         'deploy_mcl': '_deploy_mcl',
@@ -967,6 +1002,10 @@ class ControlPlane:
         Used by server to roll back a failed adoption."""
         print("[mqtt] Reset identity — removing device certs, restarting in bootstrap mode")
         state_dir = '/mnt/reefy-data/state'
+        # A new owner must never inherit the previous owner's tailnet identity.
+        subprocess.run(['systemctl', 'stop', 'tailscaled.service'], capture_output=True)
+        shutil.rmtree(os.path.join(state_dir, 'tailscale'), ignore_errors=True)
+        shutil.rmtree('/var/lib/tailscale', ignore_errors=True)
         for f in ['device-uuid', 'device.crt', 'device.key',
                   'mqtt.conf', 'desired-state.json', 'desired-state-v2.json',
                   'docker-compose.json', 'apps-v2-migrated']:
@@ -1978,6 +2017,7 @@ class ControlPlane:
         # inside the reconnect loop below, which leaked one daemon per
         # iteration (thousands over days).
         self._start_connection_watchdog()
+        self._start_tailscale_monitor()
 
         # Serve the Control Varlink interface so device-side sidecars
         # (reefy-app-api) can publish cloud events through this single

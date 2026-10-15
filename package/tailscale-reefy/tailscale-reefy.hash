@@ -1,6 +1,3 @@
-# Locally computed. The go2.tar.gz is buildroot's golang-package vendored
-# source tarball. Its hash depends on the package name because the
-# top-level directory inside the tarball is tailscale-reefy-<version>/,
-# not tailscale-<version>/, so we can't reuse the upstream tailscale hash.
-sha256  37256f200fb235a63bc11c63f9bf55c3369544b1817ed7e620102a0b544ad556  tailscale-reefy-1.94.2-go2.tar.gz
-sha256  d1ee1c7947d4b2c1963ea214d5324f1d4c89f2f1d0f0224889b4dfb868dad725  LICENSE
+# Buildroot go-post-process: GNU tar 1.35, GNU gzip 1.12, Go 1.27.2.
+sha256  7a28de09a8aebfac8a1b0e57697118455071101127960b511ba3c967c5c9b409  tailscale-reefy-1.104.1-go2.tar.gz
+sha256  a7ca6186a7963a0a60740f6047760eecd7a0234e8c38bd7e1e0bbcb324bda45b  LICENSE

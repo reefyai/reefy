@@ -151,6 +151,10 @@ jobs:
           make O="$BR_OUTPUT" host-gcc-final host-rustc
           python3 ../tools/userspace-debug/check-toolchain.py --output "$BR_OUTPUT"
 
+      - name: Install the exact pinned Go toolchain
+        working-directory: buildroot
+        run: make O="$BR_OUTPUT" host-go-bin-reinstall
+
       - name: Refresh systemd feature configuration
         working-directory: buildroot
         run: python3 ../tools/ci/systemd-config.py "$BR_OUTPUT"
