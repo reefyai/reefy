@@ -1,0 +1,14 @@
+[Unit]
+Description=Best-effort Reefy VG metadata redundancy check
+After=reefy-storage.service
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/usr/lib/reefy
+ExecStart=/usr/bin/python3 -m reefy.pv_redundancy
+RemainAfterExit=yes
+Restart=no
+Nice=10
+# Never interrupt a native metadata write with a generic service deadline.
+TimeoutStartSec=infinity
+TimeoutStopSec=infinity
