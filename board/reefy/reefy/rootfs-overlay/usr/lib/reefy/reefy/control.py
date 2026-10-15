@@ -81,6 +81,7 @@ class ControlPlane:
         self._command_results_lock = threading.Lock()
         self._command_results = OrderedDict()
         self._commands_running = set()
+        self._provision_failure = None
 
     @staticmethod
     def _load_compatibility():
@@ -276,12 +277,14 @@ class ControlPlane:
         state_dir = '/mnt/reefy-data/state'
         key_path = os.path.join(state_dir, 'device.key')
 
-        # Generate RSA-2048 private key
-        subprocess.run([
-            'openssl', 'genrsa', '-out', key_path, '2048'
-        ], check=True, capture_output=True)
-        os.chmod(key_path, 0o600)
-        log('mqtt', f'Generated device key: {key_path}')
+        # Reconnecting a bootstrap session must not replace the key for
+        # the certificate already being signed or delivered by the server.
+        if not os.path.exists(key_path):
+            subprocess.run([
+                'openssl', 'genrsa', '-out', key_path, '2048'
+            ], check=True, capture_output=True)
+            os.chmod(key_path, 0o600)
+            log('mqtt', f'Generated device key: {key_path}')
 
         # Generate CSR with hostname as CN (server will override CN with UUID)
         csr_path = '/tmp/device.csr'
@@ -328,7 +331,7 @@ class ControlPlane:
                 # during reconnect storms.
                 self._subscribe_confirmed.clear()
                 topic = f"{self.topic_prefix}/devices/{self.current_uuid}/commands"
-                result, mid = client.subscribe(topic)
+                result, mid = client.subscribe(topic, qos=1)
                 log('mqtt', f'Subscribe sent: topic={topic}, result={result}, mid={mid}')
 
                 # Publish online status after subscribe is queued. Include
@@ -376,7 +379,7 @@ class ControlPlane:
                 return  # SUBACK received, done
             if not client.is_connected():
                 return  # disconnected, on_connect will re-subscribe
-            result, mid = client.subscribe(topic)
+            result, mid = client.subscribe(topic, qos=1)
             log('mqtt', f'Subscribe retry {attempt}/{max_retries}: result={result}, mid={mid}')
         log('mqtt', f'WARNING: Subscribe not confirmed after {max_retries} retries')
 
@@ -396,11 +399,17 @@ class ControlPlane:
 
         # Subscribe to commands (unified — same topic for bootstrap and device mode)
         cmd_topic = f"{self.topic_prefix}/devices/{self.current_uuid}/commands"
-        result, mid = client.subscribe(cmd_topic)
+        result, mid = client.subscribe(cmd_topic, qos=1)
         log('mqtt', f'Subscribe sent: topic={cmd_topic}, result={result}, mid={mid}')
 
         # Publish registration with CSR
         self._register_device(client)
+        # A failed bootstrap attempt can outlive its MQTT connection. Replay
+        # its result, without retrying storage or retaining a stale broker stage.
+        failure = getattr(self, '_provision_failure', None)
+        if failure and failure[0] == self.current_uuid:
+            topic = f"{self.topic_prefix}/devices/{failure[0]}/stage"
+            client.publish(topic, json.dumps(failure[1]), qos=1)
         print("[mqtt] Waiting for provisioning response...")
 
     def _get_hw_info(self):
@@ -555,18 +564,20 @@ class ControlPlane:
             raise ValueError("Missing uuid or device_cert")
 
         log('mqtt', f'Received provisioning: UUID={uuid}')
+        self._provision_failure = None
 
         def _log_prov(msg):
             log('reconciler', msg)
 
         def _fail(error_msg):
             """Publish error stage so dashboard shows failure instead of spinning."""
+            error_msg = shared.redact_log_message(error_msg)
             log('mqtt', f'Provision failed: {error_msg}')
             _log_prov(f'ERROR: {error_msg}')
+            data = {"stage": "error", "message": error_msg, "timestamp": time.time()}
+            self._provision_failure = (uuid, data)
             topic = f"{self.topic_prefix}/devices/{uuid}/stage"
-            self.client.publish(topic, json.dumps({
-                "stage": "error", "message": error_msg, "timestamp": time.time()
-            }))
+            self.client.publish(topic, json.dumps(data), qos=1)
 
         try:
             return self._do_provision(payload, uuid, certificate, _log_prov)
@@ -1791,7 +1802,7 @@ class ControlPlane:
             "message": message,
             "timestamp": time.time()
         }
-        self.client.publish(topic, json.dumps(data))
+        self.client.publish(topic, json.dumps(data), qos=1)
         log('mqtt', f'Stage: {stage} - {message}')
 
     def _publish_instance_event(self, iuuid, action, status, extra=None):

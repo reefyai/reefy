@@ -749,3 +749,114 @@ class FirmwareUpdateExitCodeTests(unittest.TestCase):
         src = _control_src()
         self.assertIn('[reefy-update] exit code', src)
         self.assertIn('reefy-update failed (exit', src)
+
+
+class ProvisionFailureReplayTests(unittest.TestCase):
+    def test_reconnect_replays_failure_without_retrying_storage(self):
+        control = _load_control_module()
+        plane = object.__new__(control.ControlPlane)
+        plane.client = mock.Mock()
+        plane.client.subscribe.return_value = (0, 1)
+        plane.topic_prefix = 'reefy/synthetic-public'
+        plane.current_uuid = 'synthetic-device'
+        plane._register_device = mock.Mock()
+        plane._do_provision = mock.Mock(side_effect=RuntimeError('Synthetic storage validation failure'))
+        with self.assertRaises(RuntimeError):
+            plane._handle_provision({'uuid':'synthetic-device', 'device_cert':'synthetic-certificate'})
+        plane.client.reset_mock()
+        with mock.patch.object(control.os, 'makedirs'):
+            plane._handle_bootstrap_connect(plane.client)
+        plane._do_provision.assert_called_once()
+        replay = plane.client.publish.call_args
+        self.assertIsNotNone(replay)
+        self.assertEqual(replay.args[0], 'reefy/synthetic-public/devices/synthetic-device/stage')
+        self.assertEqual(json.loads(replay.args[1])['stage'], 'error')
+        self.assertEqual(replay.kwargs['qos'], 1)
+        self.assertFalse(replay.kwargs.get('retain', False))
+
+    def test_new_attempt_clears_previous_failure(self):
+        control = _load_control_module()
+        plane = object.__new__(control.ControlPlane)
+        plane.client = mock.Mock()
+        plane.client.subscribe.return_value = (0, 1)
+        plane.topic_prefix = 'reefy/synthetic-public'
+        plane.current_uuid = 'synthetic-device'
+        plane._register_device = mock.Mock()
+        plane._do_provision = mock.Mock(side_effect=[RuntimeError('Synthetic failure'), None])
+        payload = {'uuid':'synthetic-device', 'device_cert':'synthetic-certificate'}
+        with self.assertRaises(RuntimeError):
+            plane._handle_provision(payload)
+        plane._handle_provision(payload)
+        plane.client.reset_mock()
+        with mock.patch.object(control.os, 'makedirs'):
+            plane._handle_bootstrap_connect(plane.client)
+        plane.client.publish.assert_not_called()
+
+
+class BootstrapKeyReuseTests(unittest.TestCase):
+    def test_reconnect_and_control_restart_preserve_key_and_csr(self):
+        import builtins
+        import os
+        import subprocess
+        import tempfile
+        control = _load_control_module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mapping = {'/mnt/reefy-data/state/device.key':str(root/'key'),
+                       '/tmp/device.csr':str(root/'csr')}
+            def redirected(path):
+                return mapping.get(str(path),path)
+            run,opened,chmod,unlink,exists = subprocess.run,builtins.open,os.chmod,os.unlink,os.path.exists
+            def run_crypto(argv,**kwargs):
+                return run([redirected(a) for a in argv],**kwargs)
+            with mock.patch.object(control.subprocess,'run',side_effect=run_crypto), \
+                    mock.patch('builtins.open',side_effect=lambda path,*a,**k:opened(redirected(path),*a,**k)), \
+                    mock.patch.object(control.os,'chmod',side_effect=lambda path,mode:chmod(redirected(path),mode)), \
+                    mock.patch.object(control.os,'unlink',side_effect=lambda path:unlink(redirected(path))), \
+                    mock.patch.object(control.os.path,'exists',side_effect=lambda path:exists(redirected(path))):
+                plane = object.__new__(control.ControlPlane)
+                plane.hostname = 'synthetic-bootstrap'
+                first = plane._generate_keypair_and_csr()
+                key = (root/'key').read_bytes()
+                second = plane._generate_keypair_and_csr()
+                self.assertEqual(__import__('hashlib').sha256((root/'key').read_bytes()).hexdigest(),__import__('hashlib').sha256(key).hexdigest())
+                self.assertEqual(first,second)
+                restarted = object.__new__(control.ControlPlane)
+                restarted.hostname = plane.hostname
+                self.assertEqual(restarted._generate_keypair_and_csr(),first)
+
+    def test_bootstrap_commands_subscribe_with_acknowledged_delivery(self):
+        control = _load_control_module()
+        plane = object.__new__(control.ControlPlane)
+        plane.topic_prefix = 'reefy/synthetic-public'
+        plane.current_uuid = 'synthetic-device'
+        plane._register_device = mock.Mock()
+        client = mock.Mock()
+        client.subscribe.return_value = (0,1)
+        with mock.patch.object(control.os,'makedirs'):
+            plane._handle_bootstrap_connect(client)
+        client.subscribe.assert_called_once_with('reefy/synthetic-public/devices/synthetic-device/commands',qos=1)
+
+
+class LifecycleDeliveryTests(unittest.TestCase):
+    def test_setup_stage_requests_acknowledged_delivery(self):
+        control = _load_control_module()
+        plane = object.__new__(control.ControlPlane)
+        plane.mode = 'device'
+        plane.device_uuid = 'synthetic-device'
+        plane.topic_prefix = 'reefy/synthetic-public'
+        plane.client = mock.Mock()
+        plane._publish_stage('error','Synthetic setup failure')
+        self.assertEqual(plane.client.publish.call_args.kwargs.get('qos'),1)
+        self.assertFalse(plane.client.publish.call_args.kwargs.get('retain',False))
+
+    def test_app_health_requests_acknowledged_delivery(self):
+        control = _load_control_module()
+        plane = object.__new__(control.ControlPlane)
+        plane.mode = 'device'
+        plane.device_uuid = 'synthetic-device'
+        plane.topic_prefix = 'reefy/synthetic-public'
+        plane.client = mock.Mock()
+        plane._publish_instance_event('a1b2c3d4','health','running')
+        self.assertEqual(plane.client.publish.call_args.kwargs.get('qos'),1)
+        self.assertFalse(plane.client.publish.call_args.kwargs.get('retain',False))
