@@ -14,6 +14,7 @@ on:
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-mount-volumes'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-backup'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/boot-reefy-init.sh'
+      - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-wifi-early'
       - 'board/reefy/reefy/rootfs-overlay/usr/share/varlink/**'
       - 'board/reefy/reefy/tests/**'
       - '.github/workflows/python-tests.yml'
@@ -23,6 +24,7 @@ on:
       - 'board/reefy/reefy/rootfs-overlay/usr/lib/reefy/**'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-backup'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/boot-reefy-init.sh'
+      - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-wifi-early'
       - 'board/reefy/reefy/rootfs-overlay/usr/share/varlink/**'
       - 'board/reefy/reefy/tests/**'
 

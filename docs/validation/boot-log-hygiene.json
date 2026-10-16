@@ -1,0 +1,73 @@
+{
+  "baseline_commit": "bb42d619cd7e8d9f25e7825a51baaae19dd65168",
+  "cases": [
+    {
+      "suite": "test_boot_credentials",
+      "variant": "baseline",
+      "source_sha256": "e417b5f72e4c21949cf25919321b558f5dc237f8337d9256a41c269caa5aef06",
+      "test_source_sha256": "3001edd53cfb4359884e8716f8fdd5eca15fa437d49557bc6bdc12145d36dd95",
+      "tests_run": 1,
+      "passed": [],
+      "failures": [
+        "test_applies_credentials_without_tracing_password_or_hash (test_boot_credentials.BootCredentialTests.test_applies_credentials_without_tracing_password_or_hash) (inherited_tracing=False)",
+        "test_applies_credentials_without_tracing_password_or_hash (test_boot_credentials.BootCredentialTests.test_applies_credentials_without_tracing_password_or_hash) (inherited_tracing=True)"
+      ],
+      "errors": []
+    },
+    {
+      "suite": "test_boot_credentials",
+      "variant": "fixed",
+      "source_sha256": "fd192adb17f46f4dd9176f9c1fa10a463e4f64ffec789f9eb1b45c37bf2bb804",
+      "test_source_sha256": "3001edd53cfb4359884e8716f8fdd5eca15fa437d49557bc6bdc12145d36dd95",
+      "tests_run": 1,
+      "passed": [
+        "test_boot_credentials.BootCredentialTests.test_applies_credentials_without_tracing_password_or_hash"
+      ],
+      "failures": [],
+      "errors": []
+    },
+    {
+      "suite": "test_wifi_early",
+      "variant": "baseline",
+      "source_sha256": "a68f58ec6ea7d333ebd0e72474ab3e1b77ad11ca0bdfd7866316e521847dee7b",
+      "test_source_sha256": "13b39fba2c45476100337a9b238101f658aabb29b241088500c0c3b9aca7192a",
+      "tests_run": 4,
+      "passed": [
+        "test_wifi_early.WifiEarlyTests.test_missing_state_and_no_wifi_skip_without_errors",
+        "test_wifi_early.WifiEarlyTests.test_valid_v1_and_v2_preserve_connection_arguments"
+      ],
+      "failures": [
+        "test_invalid_json_reports_type_without_private_contents (test_wifi_early.WifiEarlyTests.test_invalid_json_reports_type_without_private_contents)",
+        "test_wrong_shape_reports_type_without_private_contents (test_wifi_early.WifiEarlyTests.test_wrong_shape_reports_type_without_private_contents)"
+      ],
+      "errors": []
+    },
+    {
+      "suite": "test_wifi_early",
+      "variant": "fixed",
+      "source_sha256": "1060f7fd3d89723fdee5dc59c2d9a3b670c47e609f47ecd543b490fbd52cfeee",
+      "test_source_sha256": "13b39fba2c45476100337a9b238101f658aabb29b241088500c0c3b9aca7192a",
+      "tests_run": 4,
+      "passed": [
+        "test_wifi_early.WifiEarlyTests.test_invalid_json_reports_type_without_private_contents",
+        "test_wifi_early.WifiEarlyTests.test_missing_state_and_no_wifi_skip_without_errors",
+        "test_wifi_early.WifiEarlyTests.test_valid_v1_and_v2_preserve_connection_arguments",
+        "test_wifi_early.WifiEarlyTests.test_wrong_shape_reports_type_without_private_contents"
+      ],
+      "failures": [],
+      "errors": []
+    }
+  ],
+  "docker": {
+    "config_sha256": "2e28cfe056383e6cd68371eefe2bc17f5bc32af7ab41b785ba0dc5954fc46a93",
+    "preserves_other_settings": true,
+    "defaults": {
+      "log-driver": "json-file",
+      "log-opts": {
+        "max-size": "200m",
+        "max-file": "3"
+      }
+    },
+    "runtime_rotation_tested": false
+  }
+}
