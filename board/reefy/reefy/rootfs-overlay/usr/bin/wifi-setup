@@ -84,6 +84,13 @@ for i in $(seq 1 10); do
     if iw dev "$IFACE" link 2>/dev/null | grep -q "Connected"; then
         echo "Connected to $SSID"
 
+        # Keep interactive traffic responsive, including drivers that override
+        # the kernel's power-save-off default. Unsupported adapters must still
+        # be allowed to connect.
+        if ! iw dev "$IFACE" set power_save off; then
+            echo "Warning: Could not disable WiFi power saving on $IFACE" >&2
+        fi
+
         # Trigger DHCP if systemd-networkd is running
         if systemctl is-active systemd-networkd >/dev/null 2>&1; then
             networkctl reconfigure "$IFACE" 2>/dev/null || true
