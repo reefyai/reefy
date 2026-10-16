@@ -18,9 +18,10 @@ try:
     s = json.load(open('$STATE_FILE'))
     w = (s.get('host', {}) if s.get('schema_version') == 2 else s).get('wifi', {})
     print(w.get('ssid', ''))
-except Exception:
-    pass
-" 2>/dev/null)
+except Exception as exc:
+    # Exception messages can contain private configuration values.
+    print('[wifi-early] Saved WiFi state could not be read: ' + type(exc).__name__, file=sys.stderr)
+")
 
 if [ -z "$SSID" ]; then
     echo "[wifi-early] No WiFi config in desired state, skipping"
@@ -33,9 +34,10 @@ try:
     s = json.load(open('$STATE_FILE'))
     w = (s.get('host', {}) if s.get('schema_version') == 2 else s).get('wifi', {})
     print(w.get('password', ''))
-except Exception:
-    pass
-" 2>/dev/null)
+except Exception as exc:
+    # Exception messages can contain private configuration values.
+    print('[wifi-early] Saved WiFi state could not be read: ' + type(exc).__name__, file=sys.stderr)
+")
 
 echo "[wifi-early] Applying saved WiFi config: $SSID"
 exec wifi-setup "$SSID" "$PASSWORD"

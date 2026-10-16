@@ -1,5 +1,7 @@
 #!/bin/sh
-set -uxo pipefail
+# Disable inherited tracing before handling passwords or password hashes.
+set +x
+set -uo pipefail
 # NOTE: no set -e — errors are logged but don't stop execution.
 
 # Phase 2: Non-critical init — runs in parallel with Docker/MQTT/GPU.
