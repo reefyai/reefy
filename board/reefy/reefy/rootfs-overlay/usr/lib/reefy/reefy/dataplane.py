@@ -3032,18 +3032,25 @@ class DataPlane:
         ssid = wifi.get('ssid', '') if wifi else ''
         old_ssid = old_wifi.get('ssid', '') if old_wifi else ''
 
+        from reefy.wifi_bootstrap import CREDENTIALS
+        bootstrap_pending = CREDENTIALS.exists()
         if ssid:
-            # Connect or change network
-            if ssid != old_ssid:
+            # Transfer radio ownership only after desired state is persisted.
+            if ssid != old_ssid or bootstrap_pending:
                 password = wifi.get('password', '')
                 log('mqtt', f'Configuring WiFi: {ssid}')
                 try:
+                    if bootstrap_pending:
+                        subprocess.run(['systemctl', 'stop', 'reefy-wifi-bootstrap.service'],
+                                       capture_output=True, timeout=25, check=True)
                     result = subprocess.run(
                         ['wifi-setup', ssid, password],
                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                         text=True, timeout=30
                     )
                     if result.returncode == 0:
+                        if bootstrap_pending:
+                            CREDENTIALS.unlink(missing_ok=True)
                         print("[mqtt] WiFi configured successfully")
                     else:
                         log('mqtt',
