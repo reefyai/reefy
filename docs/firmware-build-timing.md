@@ -145,3 +145,35 @@ gh run rerun 39177262190 -R reefyai/reefy
 Or run `python3 tools/ci/benchmark-debug-archives.py` on the cached runner from
 that tool revision. A subsequent run must record its own source/input hashes
 because the shared build cache can contain a newer completed firmware build.
+
+## General-pool provider publication validation
+
+[Workflow 39177430397](https://github.com/reefyai/reefy/actions/runs/39177430397)
+passed at production workflow revision
+`d92b0c35c6e865c9d1474b594e54996d9c574818`. Later review commits add timing
+notes only. All four publisher jobs started together on the existing general
+runner pool, leaving the heavy compilation runner free. The NVIDIA, AMD,
+Intel and synthetic-fixture publications, signatures, attestations, provider
+catalog and release-ready check all succeeded.
+
+| Publication | Elapsed |
+| --- | ---: |
+| NVIDIA | 69s |
+| AMD | 100s |
+| Intel | 56s |
+| Synthetic fixtures | 112s |
+| Combined publication span | **112s** |
+| Build completion to release-ready completion | **126s** |
+
+The reference workflow `39151726143` had a 296-second post-build release tail;
+this validation's tail was 126 seconds, 170 seconds shorter. This is one
+observed pair with different source identities/cache and runner conditions,
+not a controlled whole-build or full-gate speed benchmark. The service review
+branch also releases its host build slot once the main build job succeeds,
+while still requiring complete workflow success before target publication.
+That permits later compilations to overlap this immutable publication tail.
+
+The provider commits must remain reachable when merging their review PRs:
+use merge commits to preserve the exact pinned workflow SHAs, or update and
+revalidate the firmware pins after any history rewrite. All 50 existing
+provider payload tests passed before live workflow validation.
