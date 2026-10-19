@@ -1,0 +1,36 @@
+name: Debug archive concurrency benchmark
+on:
+  workflow_dispatch:
+  push:
+    branches: [firmware-publication-throughput]
+    paths:
+      - tools/ci/benchmark-debug-archives.py
+      - .github/workflows/debug-archive-benchmark.yml
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    runs-on: [self-hosted, large]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: reefyai/reefy-amd
+          ref: 29a1a1de64dfe13e69f14a5bdf98507393cfad7e
+          path: amd-provider
+      - uses: actions/checkout@v4
+        with:
+          repository: reefyai/reefy-artifact-fixtures
+          ref: 85dce99586e9b21f6ff10e7773a058ca2d6793db
+          path: artifact-fixtures
+      - name: Compare sequential and parallel archive creation
+        run: python3 tools/ci/benchmark-debug-archives.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: archive-benchmark-results
+          path: |
+            archive-benchmark-results/summary.json
+            archive-benchmark-results/*/*.log
+          if-no-files-found: error
