@@ -102,3 +102,46 @@ The full suite was 9m10s (14.7%) longer than the preceding 38-scenario green
 run at 62m26s. The scenario set now includes source-level coredump validation;
 firmware publication and cache conditions also differ. The comparison alone
 cannot attribute that increase to debug-symbol collection.
+
+## Bounded kernel/userspace archive concurrency benchmark
+
+[Benchmark run 39177262190](https://github.com/reefyai/reefy/actions/runs/39177262190)
+used archive tools revision `b84162e4910a0056d7202599dd0bf55074b9668c` and one
+unchanged cached firmware build. Its cache-producing build job succeeded in
+run `39177237138`; obsolete queued publications from that superseded review
+commit were cancelled afterward. The benchmark did not mutate the build cache
+or publish firmware. Input os-release SHA256 was
+`20bf58920ed49084cafd0b805bd18f989b26aac5492a14b04dce856f8d8bf5a0`.
+
+Both subprocesses used the same 16-CPU affinity, including when run in parallel.
+Each trial wrote isolated outputs. ABBA order balances a simple warm-cache/time
+trend; this is two samples per mode on a shared host, not a broad performance
+baseline. Kernel/userspace validation stayed enabled. The non-metadata payload
+hash inventories matched in all four trials; metadata embeds each trial's
+isolated source path and is excluded from that comparison.
+
+| Trial | Mode | Kernel creation | Userspace creation | Combined wall time |
+| --- | --- | ---: | ---: | ---: |
+| 1 | Sequential | 91.96s | 155.54s | 247.50s |
+| 2 | Parallel | 99.03s | 151.84s | 151.84s |
+| 3 | Parallel | 94.76s | 147.45s | 147.45s |
+| 4 | Sequential | 88.44s | 135.78s | 224.23s |
+| Mean | Sequential | | | **235.86s** |
+| Mean | Parallel | | | **149.65s** |
+
+Measured archive creation saving: **86.22s (36.55%) per build**. Four fresh
+builds project to approximately **5m45s** saved if this overlap is adopted and
+remains on the critical path. Upload time, workflow queues, benchmark inventory
+comparison and full-suite time are excluded. This is not a measured reduction
+in a complete promotion gate, and production archive scheduling is unchanged.
+
+Machine-readable trial results and per-archive logs are retained in the run's
+`archive-benchmark-results` artifact. Repeat the exact workflow with:
+
+```bash
+gh run rerun 39177262190 -R reefyai/reefy
+```
+
+Or run `python3 tools/ci/benchmark-debug-archives.py` on the cached runner from
+that tool revision. A subsequent run must record its own source/input hashes
+because the shared build cache can contain a newer completed firmware build.
