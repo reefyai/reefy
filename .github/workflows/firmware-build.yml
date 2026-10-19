@@ -512,7 +512,7 @@ jobs:
 
   publish-nvidia-provider:
     needs: build
-    uses: reefyai/reefy-nvidia/.github/workflows/publish.yml@994f8a23f656c726441cd979df65d7f3d1bfb016
+    uses: reefyai/reefy-nvidia/.github/workflows/publish.yml@7fba24d7525ffb83faacf54807305fe4d7e38405
     with:
       input_artifact: reefy-nvidia-inputs
     secrets: inherit
