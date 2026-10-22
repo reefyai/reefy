@@ -31,6 +31,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from io import BytesIO
 
 from reefy import shared
+from reefy.wifi_apply import WifiApply
 from reefy import startup_timing as timing
 from reefy import app_restart
 from reefy.policies import apply_policies
@@ -287,6 +288,7 @@ class DataPlane:
         self._storage = storage
         # Same dict object Storage reads in _ensure_volume_lv / _prepare_app_dirs.
         self._volume_caps = storage._volume_caps
+        self._wifi_apply = WifiApply(lambda wifi, old: self._apply_wifi(wifi, old))
         self._job_condition = threading.Condition()
         # The Varlink server dispatches each request in its own thread, so an
         # app restart can otherwise race the apply worker while both mutate
@@ -1029,10 +1031,11 @@ class DataPlane:
         hostname = state.get('hostname', '') or shared.get_default_hostname()
         shared.set_hostname(hostname)
 
-        # Apply WiFi config (before compose — connectivity may be needed for image pulls)
+        # Radio setup overlaps local work and cached startup. Network failures
+        # can wait for the worker before retrying on a WiFi-only device.
         wifi = state.get('wifi')
         old_wifi = old_state.get('wifi') if old_state else None
-        self._apply_wifi(wifi, old_wifi)
+        self._wifi_apply.submit(wifi, old_wifi)
 
         # Apply storage config (LUKS + LVM encrypted internal storage)
         storage = state.get('storage')
@@ -1752,9 +1755,8 @@ class DataPlane:
             log('reconciler', f'{prefix}: artifact unavailable for this apply')
         return ok or not required
 
-    @staticmethod
     @timing.component('artifact_preparation')
-    def _run_artifact_prepare(ref, kind, prefix):
+    def _run_artifact_prepare(self, ref, kind, prefix, *, wifi_retry=True):
         try:
             result = subprocess.run(
                 ['reefy-artifacts', 'prepare', '--ref', ref,
@@ -1780,6 +1782,18 @@ class DataPlane:
             log('reconciler',
                 f'{prefix}: artifact prepare failed '
                 f'(exit {result.returncode})')
+            # The CLI's final error identifies a network failure. A local
+            # digest/admission/mount/hook failure must never wait for radio
+            # setup or re-run a partially completed activation here.
+            errors = (result.stderr or '').strip().splitlines()
+            network_failure = bool(errors and re.fullmatch(
+                r'(registry request failed(?: with HTTP (?:408|429|5[0-9]{2}))?'
+                r'|anonymous registry token request failed'
+                r'|(?:urllib.error.URLError|TimeoutError|ConnectionResetError|'
+                r'http.client.IncompleteRead): .*)', errors[-1]))
+            if wifi_retry and network_failure and self._wait_for_wifi_uplink():
+                return self._run_artifact_prepare(
+                    ref, kind, prefix, wifi_retry=False)
             return False
         return True
 
@@ -2533,7 +2547,10 @@ class DataPlane:
             return True, '', ''
         last_output = ''
         reason = 'docker compose pull failed'
-        for attempt in range(1, max_retries + 1):
+        attempt = 0
+        wifi_retry = True
+        while attempt < max_retries:
+            attempt += 1
             if self._is_current_app_superseded():
                 return False, '', self.APP_RECONCILE_SUPERSEDED
             remaining = deadline - time.monotonic()
@@ -2561,6 +2578,20 @@ class DataPlane:
             if classification in (
                     'image_missing', 'no_space', 'storage_corruption'):
                 break
+            network_failure = any(marker in output.lower() for marker in (
+                'network is unreachable', 'network is down', 'no route to host',
+                'dial tcp', 'lookup ', 'temporary failure in name resolution',
+                'connection refused', 'connection reset', 'timed out',
+                'timeout', 'unexpected eof', 'net/http:',
+                '502 bad gateway', '503 service unavailable',
+                '504 gateway timeout'))
+            if wifi_retry and network_failure and self._wait_for_wifi_uplink():
+                # Association was still pending, so this first network
+                # failure does not spend the caller's pull-attempt budget.
+                # Optional services intentionally have just one attempt.
+                wifi_retry = False
+                attempt -= 1
+                continue
             if attempt >= max_retries:
                 break
             delay = min(10 * (2 ** (attempt - 1)), 60)
@@ -3040,6 +3071,34 @@ class DataPlane:
                     f'({len(content)} bytes, mode={spec.get("mode", "0600")})')
             except OSError as e:
                 log('mqtt', f'files: failed to write {host_path}: {e}')
+
+    def _wait_for_wifi_uplink(self):
+        """Wait only after network work needs a still-pending sole uplink.
+
+        Cached artifacts and images reach this method only after failure.
+        A usable alternate default route keeps radio failure off the path.
+        Unknown routing evidence waits conservatively, just as before.
+        """
+        worker = getattr(self, '_wifi_apply', None)
+        if worker is None or not worker.busy():
+            return False
+        try:
+            for family in ('-4', '-6'):
+                routes = subprocess.run(
+                    ['ip', '-j', family, 'route', 'show', 'default'],
+                    capture_output=True, text=True, timeout=2, check=True)
+                for route in json.loads(routes.stdout):
+                    interface = route.get('dev')
+                    if not interface or '/' in interface:
+                        continue
+                    with open(f'/sys/class/net/{interface}/operstate') as stream:
+                        if stream.read().strip() == 'up':
+                            return False
+        except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+            pass
+        with timing.scope('dependency_wait', kind='wait'):
+            worker.wait()
+        return True
 
     @timing.component('wifi')
     def _apply_wifi(self, wifi, old_wifi=None):
@@ -3902,6 +3961,7 @@ Environment=MQTT_PORT={self.port}
             new_inst_dir = f'/mnt/reefy-data/apps/{iuuid}'
             os.makedirs(new_inst_dir, mode=0o755, exist_ok=True)
 
+            self._wait_for_wifi_uplink()
             log('mqtt', f'Restoring archive {archive_name} via borg extract')
             try:
                 from reefy import borg_transport
