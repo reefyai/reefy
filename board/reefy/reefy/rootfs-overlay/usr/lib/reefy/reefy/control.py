@@ -27,6 +27,7 @@ from io import BytesIO
 
 # Shared, dependency-free helpers (no paho) used across roles.
 from reefy import shared
+from reefy import startup_timing
 from reefy.compatibility import load_manifest
 from reefy.shared import _part_dev, log
 from reefy.storage import Storage, _boot_gpt_identity
@@ -1862,6 +1863,9 @@ class ControlPlane:
         }
         self.client.publish(topic, json.dumps(data), qos=1)
         log('mqtt', f'Stage: {stage} - {message}')
+        if stage == 'ready' and (message == 'Device ready'
+                                 or message.startswith('Device ready with warnings: ')):
+            startup_timing.seal()
 
     def _publish_instance_event(self, iuuid, action, status, extra=None):
         """Publish a per-instance lifecycle event on the unified
