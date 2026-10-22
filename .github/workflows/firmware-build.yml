@@ -59,7 +59,7 @@ jobs:
         with:
           submodules: recursive
       - run: python3 tools/ci/prepare-buildroot.py
-      - run: apt-get update && apt-get install -y pigz gdb build-essential
+      - run: apt-get update && apt-get install -y pigz gdb build-essential python3-wheel
       - run: python3 -m unittest discover -s tools/kernel-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/userspace-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/ci -p 'test_*.py'
@@ -159,7 +159,7 @@ jobs:
 
       - name: Refresh the small CA package to apply security patches
         working-directory: buildroot
-        run: make O="$BR_OUTPUT" ca-certificates-dirclean host-ca-certificates-dirclean
+        run: make O="$BR_OUTPUT" ca-certificates-dirclean host-ca-certificates-dirclean python-certifi-dirclean host-python-certifi-dirclean python-pip-dirclean host-python-pip-dirclean
 
       - name: Refresh Go consumers after a compiler change
         run: python3 tools/ci/go-cache.py "$BR_OUTPUT"
@@ -433,6 +433,14 @@ jobs:
           path: |
             ${{ env.BR_OUTPUT }}/reefy-go-binaries.json
             ${{ env.BR_OUTPUT }}/reefy-go-loader-results.json
+          if-no-files-found: ignore
+
+      - name: Upload Python CA data provenance
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: firmware-python-ca-provenance
+          path: ${{ env.BR_OUTPUT }}/reefy-python-ca-provenance.json
           if-no-files-found: ignore
 
       - name: Mark verified package caches current

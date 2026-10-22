@@ -4,3 +4,7 @@ board/reefy/reefy/rootfs-overlay/usr/lib/firmware/ filter=lfs diff=lfs merge=lfs
 board/reefy/reefy/patches/ca-certificates/0002-remove-eMudhra-parents.patch whitespace=-blank-at-eol
 
 support/buildroot/*.patch whitespace=-blank-at-eol
+
+board/reefy/reefy/patches/python-certifi/*.patch whitespace=-blank-at-eol
+
+board/reefy/reefy/patches/python-pip/*.patch whitespace=-blank-at-eol

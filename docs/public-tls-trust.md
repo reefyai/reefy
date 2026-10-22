@@ -9,6 +9,9 @@ It is independent of the host public HTTPS trust store.
 Host curl loads `/etc/ssl/certs/ca-certificates.crt` and `/etc/ssl/certs`.
 Python's default context uses its OpenSSL default paths, including the hashed
 certificate directory. Docker and other Go host clients use system roots.
+Requests uses certifi's separate `certifi/cacert.pem` under Python's
+site-packages directory. Its CA data needs a separate backport; changing the
+OpenSSL bundle alone does not change Requests' default trust store.
 Containers have their own filesystem and trust stores unless explicitly
 mounted from the host. Updating host firmware does not update their bundles.
 
@@ -61,6 +64,59 @@ Tailscale. It records reuse only after a successful build and checks the Go
 build metadata of every Go binary in the final target tree. Compiler changes,
 interrupted refreshes and stale binaries are covered by unit tests. This
 preserves ordinary warm-cache reuse after a verified successful build.
+
+## Bundled Python CA data
+
+The stable pin includes certifi 2026.4.22, whose independent bundle still
+trusts emSign ECC Root CA - G3. Backport only `certifi/cacert.pem` from the
+official certifi commits `5cb238caeeb6c30ec1a7309ad3e16a5aa7b10ce8` and
+`662df63d7906df66f1f07c0751a3dfe9da14d914`. The first removes emSign roots;
+the second restores the three unaffected roots. These upstream data hunks
+apply without fuzz to the pinned package. Their net effect removes one root
+and preserves all 119 other certificate bodies byte-for-byte. The Python
+code and package version remain unchanged. Refresh target and host certifi
+packages so cached patch/install stamps cannot bypass the backport.
+
+The companion source-package regression verifies the original certifi tarball
+SHA-256 `8d455352a37b71bf76a79caa83a3d6c25afee4a385d632127b6afb3963f1c580`.
+With a fixed OS store but the old certifi bundle, six of 12 certifi refusal
+checks fail (30/36 total refusals). After both upstream patches, all 36 checks
+pass, including the OS bundle, hashed directory and certifi bundle. Preserve
+positive-chain, wrong-hostname, modified-signature and private-CA controls.
+The QEMU scenario resolves the actual Requests/certifi default bundle and
+requires all three stores to be checked. JSON reports and patch logs are
+retained in the existing service E2E results directory and CI artifacts.
+
+Pip 26.1 has another vendored certifi bundle. Apply the same upstream data
+hunks with only paths adapted to `src/pip/_vendor/certifi/cacert.pem`.
+Its 137 original roots become 136; all other certificate bytes remain intact.
+Python 3.14.8 additionally ships pip 26.2.1 inside an ensurepip wheel. That
+wheel is byte-identical to the official PyPI wheel (SHA-256
+`71138adf1f4ca900cdb7d289c21b7494329f2332b6d85f0e1c42108c0384ed3e`).
+
+`patch-ensurepip-ca.py` uses the standard wheel unpack/pack commands to verify
+original RECORD hashes, apply those same upstream data hunks, and regenerate
+RECORD. It preserves the version and every other wheel file's payload bytes.
+The CA data changes from 118 roots to 117. Repeated finalization reuses the
+already-fixed wheel; corrupt input hashes stop without overwriting it.
+A final inventory rejects any remaining installed Python cacert.pem containing
+the affected root. CI retains the wheel and bundle hashes in
+`firmware-python-ca-provenance`.
+
+The package runner separately reproduces six accepted chains with each old
+Requests, pip and bootstrap bundle, then requires all 12 to be refused by each
+fixed bundle. The firmware scenario also seeds an offline virtual environment
+and verifies its actual pip bundle. It requires at least 72 refusal checks
+across system bundle, hashed directory, Requests, pip, bootstrap and seeded pip.
+Positive and negative controls and private MQTT CA preservation stay enabled.
+No Python or pip version changes are introduced by these data backports.
+
+Retire these external patches when adopting an upstream package that includes
+the fixed certifi CA data. Keep the regression to verify future package updates.
+
+Sources:
+- https://github.com/certifi/python-certifi/commit/5cb238caeeb6c30ec1a7309ad3e16a5aa7b10ce8
+- https://github.com/certifi/python-certifi/commit/662df63d7906df66f1f07c0751a3dfe9da14d914
 
 ## Go generator compatibility
 
