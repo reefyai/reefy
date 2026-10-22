@@ -1730,7 +1730,7 @@ class DataPlane:
         self._publish_health_status(
             app.get('instance_uuid') or '', 'starting', phase='artifact')
         preparation = getattr(self._preparation_local, 'value', None)
-        with timing.scope('artifact_preparation', kind='wait'), ThreadPoolExecutor(max_workers=min(2, len(artifacts))) as pool:
+        with timing.scope('artifact_preparation', kind='wait'), ThreadPoolExecutor(max_workers=min(3, len(artifacts))) as pool:
             futures = [
                 timing.submit(pool, self._prepare_one_app_artifact, app, artifact,
                             preparation=preparation)

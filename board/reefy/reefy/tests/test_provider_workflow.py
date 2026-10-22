@@ -84,11 +84,11 @@ class ProviderWorkflowTests(unittest.TestCase):
         workflow = WORKFLOW.read_text()
         expected = {
             'reefyai/reefy-nvidia':
-                '7fba24d7525ffb83faacf54807305fe4d7e38405',
+                'ca39fde3967729bcdd8bd5985f5743ad4feb2e8a',
             'reefyai/reefy-intel':
-                '776995f7558fbb23567cd831dfff52b7fd7e7022',
+                'f75938889aac291c478b541fc635d8b2d27ae8ae',
             'reefyai/reefy-amd':
-                '25f534b1ebb86cfc98873cfbcf666163acb8c3cf',
+                'ba626ce6b10aaeefc7b14f4855aba2832a0bd864',
             'reefyai/reefy-artifact-fixtures':
                 '6ade769d7d6b9dbf51e476bc7fa5515150233bc9',
         }
