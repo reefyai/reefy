@@ -1,1 +1,6 @@
 board/reefy/reefy/rootfs-overlay/usr/lib/firmware/ filter=lfs diff=lfs merge=lfs -text
+
+# Preserve upstream patch context prefixes on otherwise blank lines.
+board/reefy/reefy/patches/ca-certificates/0002-remove-eMudhra-parents.patch whitespace=-blank-at-eol
+
+support/buildroot/*.patch whitespace=-blank-at-eol

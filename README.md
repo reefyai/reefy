@@ -311,7 +311,9 @@ To reproduce or modify the firmware locally, use Ubuntu 24.04, install the
 
 ```bash
 git clone --recurse-submodules https://github.com/reefyai/reefy.git
-cd reefy/buildroot
+cd reefy
+python3 tools/ci/prepare-buildroot.py
+cd buildroot
 make BR2_EXTERNAL=.. reefy_defconfig
 make -j"$(nproc)"
 ```

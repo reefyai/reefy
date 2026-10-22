@@ -5,6 +5,9 @@
 ################################################################################
 
 MGMT_VERSION = 1.0.2
+# v0.50.0 first supports Go 1.27.2+ export data V5 used by funcgen.
+# https://github.com/golang/tools/commit/89ed5c340cb6d4a9437f801cfc718ac5980c938d
+MGMT_X_TOOLS_VERSION = v0.50.0
 # Pin host generators: @latest can raise its Go requirement independently
 # of the Buildroot host toolchain and break unchanged firmware sources.
 MGMT_NEX_VERSION = v0.0.0-20210330102341-1a3320dab988
@@ -43,6 +46,8 @@ MGMT_DOWNLOAD_POST_PROCESS =
 
 define MGMT_VENDOR
 	cd $(@D) && \
+	$(HOST_GO_COMMON_ENV) GOFLAGS= $(GO_BIN) mod edit \
+		-require=golang.org/x/tools@$(MGMT_X_TOOLS_VERSION) && \
 	$(HOST_GO_COMMON_ENV) \
 	GOPROXY=direct \
 	GONOSUMCHECK='*' \
