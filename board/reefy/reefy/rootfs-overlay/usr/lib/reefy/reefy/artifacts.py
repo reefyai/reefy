@@ -21,6 +21,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from reefy import startup_timing as timing
+
 
 DEFAULT_STORE = '/mnt/reefy-data/artifacts'
 DEFAULT_RUN_DIR = '/run/reefy-artifacts'
@@ -175,7 +177,11 @@ class OciSource:
                         f'/v2/{self.repository}/blobs/{digest}')
                 with response, open(destination, 'wb') as output:
                     while True:
-                        chunk = response.read(1024 * 1024)
+                        if self.local_root:
+                            chunk = response.read(1024 * 1024)
+                        else:
+                            with timing.scope('artifact_download', kind='download'):
+                                chunk = response.read(1024 * 1024)
                         if not chunk:
                             break
                         count += len(chunk)
@@ -230,7 +236,8 @@ class OciSource:
 
     def _request_bytes(self, path, limit, accept=None):
         with self._request(path, accept=accept) as response:
-            value = response.read(limit + 1)
+            with timing.scope('artifact_download', kind='download'):
+                value = response.read(limit + 1)
         if len(value) > limit:
             raise ArtifactError('OCI metadata exceeds size policy')
         return value
@@ -244,7 +251,8 @@ class OciSource:
         request = urllib.request.Request(
             f'https://{self.registry}{path}', headers=headers)
         try:
-            return urllib.request.urlopen(request, timeout=60)
+            with timing.scope('artifact_download', kind='download'):
+                return urllib.request.urlopen(request, timeout=60)
         except urllib.error.HTTPError as exception:
             if exception.code != 401 or self.token:
                 raise ArtifactError(
@@ -349,6 +357,7 @@ class ArtifactManager:
         finally:
             os.close(descriptor)
 
+    @timing.component('artifact_verification')
     def _admit(self, source, kind):
         manifest_bytes = source.manifest()
         if _digest_bytes(manifest_bytes) != source.digest:
@@ -422,6 +431,7 @@ class ArtifactManager:
         if not source.local_root and config.get('publisher') != 'reefyai':
             raise ArtifactError('host-extension publisher mismatch')
 
+    @timing.component('artifact_mount')
     def _mount(self, admitted):
         digest_hex = _split_digest(admitted['digest'])
         root = os.path.join(self.run_dir, 'mounts', digest_hex)
@@ -443,6 +453,7 @@ class ArtifactManager:
             mounts.append(target)
         return mounts
 
+    @timing.component('provider_activation')
     def _activate(self, admitted, mounts):
         config = admitted['config']
         name = config['name']
@@ -745,14 +756,17 @@ def main(argv=None):
     arguments = parser.parse_args(argv)
     manager = ArtifactManager()
     try:
-        if arguments.command == 'prepare':
-            result = manager.prepare(arguments.ref, arguments.kind)
-        elif arguments.command == 'activate-cached':
-            result = manager.activate_cached_state(arguments.state)
-        elif arguments.command == 'status':
-            result = manager.status()
-        else:
-            result = manager.gc(arguments.state)
+        component = ('cached_providers' if arguments.command == 'activate-cached'
+                     else 'artifact_preparation')
+        with timing.scope(component, parent=timing.inherited_parent(), root=True):
+            if arguments.command == 'prepare':
+                result = manager.prepare(arguments.ref, arguments.kind)
+            elif arguments.command == 'activate-cached':
+                result = manager.activate_cached_state(arguments.state)
+            elif arguments.command == 'status':
+                result = manager.status()
+            else:
+                result = manager.gc(arguments.state)
         print(json.dumps(result, sort_keys=True))
         return 0
     except ArtifactError as exception:

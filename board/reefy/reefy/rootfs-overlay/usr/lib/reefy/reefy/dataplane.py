@@ -31,6 +31,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from io import BytesIO
 
 from reefy import shared
+from reefy import startup_timing as timing
 from reefy import app_restart
 from reefy.policies import apply_policies
 from reefy.apply_results import ApplyResultStore, TERMINAL_STATUSES, apply_warning
@@ -217,7 +218,8 @@ class _SharedPreparation:
                 future.set_result(prepare())
             except BaseException as exception:
                 future.set_exception(exception)
-        return future.result()
+        with timing.scope('dependency_wait', kind='wait'):
+            return future.result()
 
 
 def _desired_state_log_summary(state):
@@ -420,33 +422,36 @@ class DataPlane:
             applied = False
             error = ''
             persistent_error = ''
-            try:
-                if job['kind'] == 'apply':
-                    applied = True
-                    ok = self._apply_state({'state': job['state']})
-                else:
-                    applied = os.path.exists(self._active_state_path())
-                    ok = self._apply_desired_state(
-                        force_retry=job.get('force_retry'))
-                warnings = list(self._last_apply_warnings)
-                if ok is False:
+            with timing.scope('reconciliation', root=True) as timing_span:
+                try:
+                    if job['kind'] == 'apply':
+                        applied = True
+                        ok = self._apply_state({'state': job['state']})
+                    else:
+                        applied = os.path.exists(self._active_state_path())
+                        ok = self._apply_desired_state(
+                            force_retry=job.get('force_retry'))
+                    warnings = list(self._last_apply_warnings)
+                    if ok is False:
+                        status = 'failed'
+                        error = 'desired-state apply failed'
+                        persistent_error = error
+                    elif warnings:
+                        status = 'succeeded_with_warnings'
+                    else:
+                        status = 'succeeded'
+                except Exception as exception:
                     status = 'failed'
-                    error = 'desired-state apply failed'
-                    persistent_error = error
-                elif warnings:
-                    status = 'succeeded_with_warnings'
-                else:
-                    status = 'succeeded'
-            except Exception as exception:
-                status = 'failed'
-                warnings = list(self._last_apply_warnings)
-                error = shared.redact_log_message(exception)[:500]
-                persistent_error = (
-                    f'desired-state apply failed '
-                    f'({type(exception).__name__})')
-                log('mqtt',
-                    f'[data-plane] apply job failed '
-                    f'({type(exception).__name__}): {error}')
+                    warnings = list(self._last_apply_warnings)
+                    error = shared.redact_log_message(exception)[:500]
+                    persistent_error = (
+                        f'desired-state apply failed '
+                        f'({type(exception).__name__})')
+                    log('mqtt',
+                        f'[data-plane] apply job failed '
+                        f'({type(exception).__name__}): {error}')
+                if status == 'failed':
+                    timing_span.close(False)
             self._remember_runtime_error(request_id, error)
             self._apply_results.update(
                 request_id,
@@ -1256,7 +1261,7 @@ class DataPlane:
                 return warnings
 
             if apps:
-                with ThreadPoolExecutor(max_workers=len(apps)) as pool:
+                with timing.scope('applications', kind='wait'), ThreadPoolExecutor(max_workers=len(apps)) as pool:
                     futures = {}
                     for app in apps:
                         restore_failed = (
@@ -1264,12 +1269,12 @@ class DataPlane:
                         if (force_retry
                                 and force_retry.get('project_name')
                                 == app.get('project_name')):
-                            future = pool.submit(
+                            future = timing.submit(pool,
                                 self._in_preparation_pass, preparation,
                                 self._prepare_v2_app, app, restore_failed,
                                 force_retry=force_retry)
                         else:
-                            future = pool.submit(
+                            future = timing.submit(pool,
                                 self._in_preparation_pass, preparation,
                                 self._prepare_v2_app, app, restore_failed)
                         futures[future] = app
@@ -1337,9 +1342,9 @@ class DataPlane:
         self._remove_absent_v2_projects(desired_projects)
 
         if apps:
-            with ThreadPoolExecutor(max_workers=len(apps)) as pool:
+            with timing.scope('applications', kind='wait'), ThreadPoolExecutor(max_workers=len(apps)) as pool:
                 futures = {
-                    pool.submit(
+                    timing.submit(pool,
                         self._in_preparation_pass, preparation,
                         self._reconcile_v2_app, app, migration,
                         app.get('instance_uuid') in failed_restores,
@@ -1722,9 +1727,9 @@ class DataPlane:
         self._publish_health_status(
             app.get('instance_uuid') or '', 'starting', phase='artifact')
         preparation = getattr(self._preparation_local, 'value', None)
-        with ThreadPoolExecutor(max_workers=min(2, len(artifacts))) as pool:
+        with timing.scope('artifact_preparation', kind='wait'), ThreadPoolExecutor(max_workers=min(2, len(artifacts))) as pool:
             futures = [
-                pool.submit(self._prepare_one_app_artifact, app, artifact,
+                timing.submit(pool, self._prepare_one_app_artifact, app, artifact,
                             preparation=preparation)
                 for artifact in artifacts
             ]
@@ -1748,12 +1753,14 @@ class DataPlane:
         return ok or not required
 
     @staticmethod
+    @timing.component('artifact_preparation')
     def _run_artifact_prepare(ref, kind, prefix):
         try:
             result = subprocess.run(
                 ['reefy-artifacts', 'prepare', '--ref', ref,
                  '--kind', kind],
-                capture_output=True, text=True, timeout=3600)
+                capture_output=True, text=True, timeout=3600,
+                env=timing.subprocess_env())
         except (OSError, subprocess.TimeoutExpired) as exception:
             log('reconciler',
                 f'{prefix}: artifact prepare failed '
@@ -2516,6 +2523,7 @@ class DataPlane:
                     message=self._bounded_output_tail(output, reason))
             return False
 
+    @timing.component('image_pull')
     def _pull_project_images(
             self, compose_path, project_name, services, deadline,
             max_retries=5):
@@ -2564,6 +2572,7 @@ class DataPlane:
                 return False, last_output, self.APP_RECONCILE_SUPERSEDED
         return False, last_output, reason
 
+    @timing.component('container_start')
     def _start_project_services(
             self, compose_path, project_name, services,
             remove_orphans=True, max_retries=5):
@@ -2628,6 +2637,7 @@ class DataPlane:
             'docker', 'compose', '-f', compose_path, '-p', project_name,
             *args,
         ]
+        downloads = timing.ImageDownloads()
         tail = deque(maxlen=self.COMPOSE_OUTPUT_TAIL_LINES)
         classification_signals = {}
         proc = None
@@ -2662,6 +2672,7 @@ class DataPlane:
             return min(candidates) if candidates else -1
 
         def remember(line):
+            downloads.feed(line)
             safe = shared.redact_log_message(line.rstrip('\r\n'))
             if len(safe) > self.COMPOSE_OUTPUT_LINE_CHARS:
                 safe = safe[:self.COMPOSE_OUTPUT_LINE_CHARS] + ' [truncated]'
@@ -2733,7 +2744,8 @@ class DataPlane:
         try:
             proc = subprocess.Popen(
                 command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                bufsize=0, start_new_session=True)
+                bufsize=0, start_new_session=True,
+                env={**os.environ, 'COMPOSE_PROGRESS': 'plain'})
             output_fd = proc.stdout.fileno()
             os.set_blocking(output_fd, False)
             selector = selectors.DefaultSelector()
@@ -2791,6 +2803,7 @@ class DataPlane:
                     f'docker compose {args[0]} timed out after '
                     f'{max(1, int(timeout))} seconds')
                 return False, rendered_output()
+            downloads.close(returncode == 0)
             return returncode == 0, rendered_output()
         except OSError as exception:
             if proc is not None:
@@ -2973,6 +2986,7 @@ class DataPlane:
         except FileNotFoundError:
             pass
 
+    @timing.component('files')
     def _apply_files(self, files):
         """Apply the generic `files` directive from desired-state.
 
@@ -3027,6 +3041,7 @@ class DataPlane:
             except OSError as e:
                 log('mqtt', f'files: failed to write {host_path}: {e}')
 
+    @timing.component('wifi')
     def _apply_wifi(self, wifi, old_wifi=None):
         """Configure or disconnect WiFi based on desired state diff."""
         ssid = wifi.get('ssid', '') if wifi else ''
@@ -3078,6 +3093,7 @@ class DataPlane:
             except Exception as e:
                 log('mqtt', f'WiFi disconnect error: {e}')
 
+    @timing.component('network')
     def _apply_network(self, network, old_network=None):
         """Configure secondary static IP addresses on network interfaces.
 
@@ -3351,6 +3367,7 @@ class DataPlane:
             log('mqtt', f'[data-plane] RestartInstance failed: {error}')
             return {'ok': False, 'error': error}
 
+    @timing.component('users')
     def _apply_user_ssh_keys(self, keys):
         """Rewrite /etc/ssh/authorized_keys.d/reefy atomically.
 
@@ -3510,6 +3527,7 @@ class DataPlane:
         except Exception as e:
             log('mqtt', f'_sync_app_users non-fatal error: {e}')
 
+    @timing.component('storage')
     def _apply_storage(self, storage):
         """Set up LUKS-encrypted internal storage with LVM, mounted at /mnt/reefy-data.
 
@@ -3686,6 +3704,7 @@ class DataPlane:
                            capture_output=True, timeout=10)
             raise RuntimeError(f'Mount failed: {result.stderr}')
 
+    @timing.component('backup')
     def _apply_backup_config(self, backup):
         """Write backup SSH keys, config JSON, and install/update systemd timer.
 
