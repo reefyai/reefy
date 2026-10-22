@@ -577,3 +577,70 @@ def test_gc_retains_three_versions_per_logical_identity():
     } == {'1', '2', '3'}
     assert len(os.listdir(os.path.join(
         manager.store, 'blobs', 'sha256'))) == 3
+
+
+def test_unreviewed_hook_excludes_parallel_hooks_and_failure_stays_inactive():
+    manager = _manager()
+    entered = {name: threading.Event() for name in ('known', 'legacy')}
+    release = {name: threading.Event() for name in ('known', 'legacy')}
+    errors = []
+
+    def run_hook(command, **_kwargs):
+        name = command[0].split('/')[1]
+        entered[name].set()
+        assert release[name].wait(5)
+        return mock.Mock(returncode=1 if name == 'legacy' else 0)
+
+    def activate(name, marker):
+        try:
+            manager._activate({
+                'digest': 'sha256:' + marker * 64,
+                'config': {'name': name, 'version': 'synthetic'},
+            }, [f'/{name}'])
+        except artifacts.ArtifactError:
+            errors.append(name)
+
+    with mock.patch.object(artifacts.os.path, 'isfile', return_value=True), \
+            mock.patch.object(artifacts.os, 'access', return_value=True), \
+            mock.patch.object(manager, '_parallel_activation_hook', side_effect=lambda name, _: name == 'known'), \
+            mock.patch.object(artifacts.subprocess, 'run', side_effect=run_hook):
+        known = threading.Thread(target=activate, args=('known', 'a'))
+        legacy = threading.Thread(target=activate, args=('legacy', 'b'))
+        known.start()
+        try:
+            assert entered['known'].wait(2)
+            legacy.start()
+            assert not entered['legacy'].wait(0.1)
+            release['known'].set()
+            assert entered['legacy'].wait(2)
+            assert not os.path.exists(os.path.join(manager.run_dir, 'active', 'legacy.json'))
+        finally:
+            for event in release.values():
+                event.set()
+            known.join(5)
+            if legacy.ident is not None:
+                legacy.join(5)
+    assert errors == ['legacy']
+    assert not os.path.exists(os.path.join(manager.run_dir, 'active', 'legacy.json'))
+    assert os.path.exists(os.path.join(manager.run_dir, 'active', 'known.json'))
+
+
+def test_cached_activation_joins_all_parallel_requests_and_deduplicates():
+    manager = _manager()
+    path = os.path.join(manager.store, 'state.json')
+    os.makedirs(manager.store, exist_ok=True)
+    requests = [{'ref': name, 'kind': 'host-extension'} for name in ('synthetic-a', 'synthetic-b', 'synthetic-c')]
+    with open(path, 'w') as stream:
+        json.dump({'apps': [{'artifacts': requests}, {'artifacts': requests}]}, stream)
+    entered = threading.Barrier(3)
+    calls = []
+    def prepare(ref, kind, cached_only):
+        assert cached_only and kind == 'host-extension'
+        calls.append(ref)
+        entered.wait(3)
+        if ref == 'synthetic-b':
+            raise artifacts.ArtifactError('synthetic cache miss')
+        return ref
+    with mock.patch.object(manager, 'prepare', side_effect=prepare):
+        assert manager.activate_cached_state(path) == ['synthetic-a', 'synthetic-c']
+    assert sorted(calls) == ['synthetic-a', 'synthetic-b', 'synthetic-c']

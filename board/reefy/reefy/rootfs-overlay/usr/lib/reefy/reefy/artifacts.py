@@ -7,6 +7,7 @@ their digest-verified, read-only payload.
 
 import argparse
 import contextlib
+from concurrent.futures import ThreadPoolExecutor
 import fcntl
 import hashlib
 import json
@@ -44,6 +45,17 @@ HOST_EXTENSION_NAMES = {
     'e2e-host-extension',
 }
 HOST_ACTIVATION_HOOK = 'usr/lib/reefy/activate'
+# Exact reviewed hook bytes, not a manifest capability or a hook claim.
+# Unrecognized versions keep the conservative whole-hook lock.
+PARALLEL_ACTIVATION_HOOKS = {
+    'nvidia-driver':
+        'fc0f1316a8ab13274cab597dbbc2e10d19a6adb349bd5f06c29f2ba362945433',
+    'intel-accelerator':
+        '47fc35494fd40aea289dbf968d3365152e46fac8a25b5d68ff5a9cd91e81ec28',
+    'amd-driver':
+        '8c82198a19b6f0ee7e76f0760e1cba0800277c8d50753389ad88abfc9d537092',
+}
+
 MANIFEST_ACCEPT = ', '.join((
     'application/vnd.oci.image.manifest.v1+json',
     'application/vnd.oci.artifact.manifest.v1+json',
@@ -486,19 +498,15 @@ class ArtifactManager:
                 'REEFY_ARTIFACT_CONFIG': json.dumps(config, sort_keys=True),
                 'REEFY_ARTIFACT_MOUNTS': ':'.join(mounts),
             }
-            # Downloads and mounts remain parallel, but host activation is
-            # global. Provider hooks may both run depmod, load modules, and
-            # publish CDI specifications. Running different vendors' hooks
-            # concurrently can corrupt the shared module dependency update or
-            # make modprobe observe an incomplete index.
+            # Known hooks share this outer lock and serialize their own
+            # module phase. Unknown/older hooks retain the exclusive outer
+            # lock, including against known hooks and older firmware clients.
             activation_lock = os.path.join(
                 self.run_dir, 'locks', 'host-activation')
             try:
-                with _flock(activation_lock):
-                    # Inherit reefy-artifacts stdout and stderr. The
-                    # reconciler forwards both streams through the normal
-                    # Reefy log, while the boot-time one-shot service writes
-                    # them to journald.
+                operation = (fcntl.LOCK_SH if self._parallel_activation_hook(
+                    name, activator) else fcntl.LOCK_EX)
+                with _flock(activation_lock, operation):
                     result = subprocess.run(
                         [activator], env=environment, timeout=300,
                         close_fds=True)
@@ -515,6 +523,17 @@ class ArtifactManager:
                 'digest': admitted['digest'], 'mounts': mounts,
                 'activated_at': int(time.time()),
             })
+
+    @staticmethod
+    def _parallel_activation_hook(name, activator):
+        expected = PARALLEL_ACTIVATION_HOOKS.get(name)
+        if expected is None:
+            return False
+        try:
+            with open(activator, 'rb') as stream:
+                return hashlib.file_digest(stream, 'sha256').hexdigest() == expected
+        except OSError:
+            return False
 
     @staticmethod
     def _same_payload(left, right):
@@ -543,21 +562,28 @@ class ArtifactManager:
 
     def activate_cached_state(self, state_path):
         state = _read_json(state_path)
-        results = []
         attempted = set()
+        requests = []
         for app in state.get('apps') or []:
             for artifact in app.get('artifacts') or []:
                 key = (artifact['ref'], artifact.get('kind') or 'app')
-                if key in attempted:
-                    continue
-                attempted.add(key)
-                try:
-                    results.append(self.prepare(
-                        artifact['ref'], artifact.get('kind') or 'app',
-                        cached_only=True))
-                except ArtifactError as exception:
-                    print(f'[artifacts] cached activation skipped: {exception}')
-        return results
+                if key not in attempted:
+                    attempted.add(key)
+                    requests.append(key)
+        if not requests:
+            return []
+
+        def prepare(request):
+            try:
+                return self.prepare(*request, cached_only=True)
+            except ArtifactError as exception:
+                print(f'[artifacts] cached activation skipped: {exception}')
+                return None
+
+        with ThreadPoolExecutor(max_workers=min(3, len(requests))) as pool:
+            futures = [timing.submit(pool, prepare, request) for request in requests]
+            results = [future.result() for future in futures]
+        return [result for result in results if result is not None]
 
     def status(self):
         manifests = []
