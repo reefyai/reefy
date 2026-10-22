@@ -1,43 +1,58 @@
-"""Pinned Go must not execute a different cached distribution."""
-import os
+"""The exact upstream patch applies to stable, repeats safely and rejects drift."""
+import importlib.util
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
+
+spec = importlib.util.spec_from_file_location('prepare_buildroot', Path(__file__).with_name('prepare-buildroot.py'))
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+ROOT = Path(__file__).resolve().parents[2]
+PATCH = ROOT / 'support/buildroot/0001-go-security-1.27.3.patch'
 
 
 class GoToolchainTests(unittest.TestCase):
-    def test_versioned_root_uses_its_own_compiler_and_preserves_legacy_cache(self):
-        override = Path(os.environ.get('REEFY_GO_OVERRIDES',
-            Path(__file__).resolve().parents[2] / 'board/reefy/reefy/package-overrides.mk'))
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            host = root / 'host'
-            legacy = host / 'lib/go/src'
-            legacy.mkdir(parents=True)
-            sentinel = legacy / 'synthetic-stale-file.go'
-            sentinel.write_text('synthetic legacy source')
-            for relative, body in [
-                ('bin/go', '#!/bin/sh\nexit 99\n'),
-                ('lib/go-1.27.2/bin/go', '#!/bin/sh\nprintf "go1.27.2\\n"\n'),
-            ]:
-                path = host / relative
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(body)
-                path.chmod(0o755)
-            makefile = root / 'Makefile'
-            makefile.write_text(
-                f'HOST_DIR = {host}\ninclude {override}\n'
-                'GO_VERSION = 1.26.6\n'
-                'HOST_GO_ROOT = $(HOST_DIR)/lib/go\n'
-                'GO_BIN = $(HOST_DIR)/bin/go\n'
-                'check:\n\t@$(GO_BIN) version\n'
-                '\t@test "$(HOST_GO_ROOT)" = "$(HOST_DIR)/lib/go-1.27.2"\n')
-            result = subprocess.run(['make', '-f', str(makefile), 'check'],
-                                    capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout.strip(), 'go1.27.2')
-            self.assertEqual(sentinel.read_text(), 'synthetic legacy source')
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.tree = Path(self.tmp.name)
+        subprocess.run(['git', 'init', '-q', str(self.tree)], check=True)
+        for name in ('go.mk', 'go.hash'):
+            path = self.tree / 'package/go' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(subprocess.check_output(
+                ['git', 'show', f'{module.REVISION}:package/go/{name}'], cwd=ROOT / 'buildroot'))
+
+    def test_unmodified_stable_has_old_go_then_verbatim_backport_is_idempotent(self):
+        recipe = self.tree / 'package/go/go.mk'
+        self.assertIn('GO_VERSION = 1.27.2', recipe.read_text())
+        module.apply_backport(self.tree, PATCH)
+        self.assertIn('GO_VERSION = 1.27.3', recipe.read_text())
+        self.assertNotIn('go1.27.2.', (self.tree / 'package/go/go.hash').read_text())
+        before = {p: p.read_bytes() for p in (recipe, self.tree / 'package/go/go.hash')}
+        module.apply_backport(self.tree, PATCH)
+        self.assertEqual(before, {p: p.read_bytes() for p in before})
+
+    def test_conflict_fails_without_partial_changes(self):
+        recipe = self.tree / 'package/go/go.mk'
+        recipe.write_text(recipe.read_text().replace('1.27.2', '1.25.0'))
+        before = (self.tree / 'package/go/go.hash').read_bytes()
+        with self.assertRaisesRegex(RuntimeError, 'neither applies'):
+            module.apply_backport(self.tree, PATCH)
+        self.assertEqual(before, (self.tree / 'package/go/go.hash').read_bytes())
+
+    def test_modified_patch_is_rejected(self):
+        patch = self.tree / 'tampered.patch'
+        patch.write_bytes(PATCH.read_bytes() + b'\n')
+        with self.assertRaisesRegex(RuntimeError, 'checksum'):
+            module.apply_backport(self.tree, patch)
+
+    def test_rejects_wrong_submodule_revision(self):
+        with patch.object(module.subprocess, 'check_output', return_value='wrong\n'):
+            with self.assertRaisesRegex(RuntimeError, 'revision mismatch'):
+                module.prepare(ROOT)
 
 
 if __name__ == '__main__':

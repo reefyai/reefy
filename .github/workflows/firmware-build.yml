@@ -56,7 +56,10 @@ jobs:
     runs-on: [self-hosted, Linux, X64, big-bird]
     steps:
       - uses: actions/checkout@v4
-      - run: apt-get update && apt-get install -y pigz gdb build-essential
+        with:
+          submodules: recursive
+      - run: python3 tools/ci/prepare-buildroot.py
+      - run: apt-get update && apt-get install -y pigz gdb build-essential python3-wheel
       - run: python3 -m unittest discover -s tools/kernel-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/userspace-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/ci -p 'test_*.py'
@@ -79,7 +82,7 @@ jobs:
       BR2_DL_DIR: /buildroot-cache/dl
       BR2_CCACHE_DIR: /buildroot-cache/ccache
       # Do not reuse an older release's host tools, target files or stamps.
-      BR_OUTPUT: /buildroot-cache/output-buildroot-2026.08
+      BR_OUTPUT: /buildroot-cache/output-buildroot-d6061d65-go1.27.3
       # Keep the image sequence continuous when switching output directories.
       REEFY_VERSION_COUNTER_FILES: /buildroot-cache/output/build/.reefy-last-version:/buildroot-cache/.reefy-last-version
       REEFY_E2E_BUILD_IDENTITY_SALT: ${{ inputs.e2e_build_identity_salt || '' }}
@@ -128,6 +131,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 tools/ci/preserve-version.py --output "$BR_OUTPUT"
 
+      - name: Apply upstream Buildroot security backports
+        run: python3 tools/ci/prepare-buildroot.py
+
       - name: Configure
         working-directory: buildroot
         run: |
@@ -151,9 +157,22 @@ jobs:
           make O="$BR_OUTPUT" host-gcc-final host-rustc
           python3 ../tools/userspace-debug/check-toolchain.py --output "$BR_OUTPUT"
 
+      - name: Refresh the small CA package to apply security patches
+        working-directory: buildroot
+        run: make O="$BR_OUTPUT" ca-certificates-dirclean host-ca-certificates-dirclean python-certifi-dirclean host-python-certifi-dirclean python-pip-dirclean host-python-pip-dirclean
+
+      - name: Refresh Go consumers after a compiler change
+        run: python3 tools/ci/go-cache.py "$BR_OUTPUT"
+
       - name: Install the exact pinned Go toolchain
         working-directory: buildroot
         run: make O="$BR_OUTPUT" host-go-bin-reinstall
+
+      - name: Verify Go generator export-format compatibility
+        env:
+          REEFY_TEST_GO: ${{ env.BR_OUTPUT }}/host/bin/go
+          REEFY_TEST_GO_RESULTS: ${{ env.BR_OUTPUT }}/reefy-go-loader-results.json
+        run: python3 -m unittest discover -s tools/ci -p 'test_go_loader.py'
 
       - name: Refresh systemd feature configuration
         working-directory: buildroot
@@ -402,6 +421,27 @@ jobs:
           path: ${{ env.BR_OUTPUT }}/images/reefy-userspace-debug.json
           if-no-files-found: error
           retention-days: ${{ github.ref == 'refs/heads/main' && 90 || 14 }}
+
+      - name: Verify target Go compiler provenance
+        run: python3 tools/ci/go-cache.py "$BR_OUTPUT" --commit
+
+      - name: Upload target Go compiler provenance
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: firmware-go-provenance
+          path: |
+            ${{ env.BR_OUTPUT }}/reefy-go-binaries.json
+            ${{ env.BR_OUTPUT }}/reefy-go-loader-results.json
+          if-no-files-found: ignore
+
+      - name: Upload Python CA data provenance
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: firmware-python-ca-provenance
+          path: ${{ env.BR_OUTPUT }}/reefy-python-ca-provenance.json
+          if-no-files-found: ignore
 
       - name: Mark verified package caches current
         run: python3 tools/ci/package-cache.py "$BR_OUTPUT" --commit

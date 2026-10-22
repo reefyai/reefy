@@ -1,0 +1,11 @@
+diff -Nru ca-certificates/mozilla/blacklist.txt patched/mozilla/blacklist.txt
+--- ca-certificates/mozilla/blacklist.txt	2026-02-23 16:32:21.000000000 +0100
++++ patched/mozilla/blacklist.txt	2026-10-20 16:21:52.412423854 +0200
+@@ -2,5 +2,7 @@
+ 
+ # Blacklist explicitly distrusted certificates to explicitly ignore them and prevent build errors
+ "Explicitly Distrust DigiNotar Root CA"
++"emSign ECC Root CA - G3"
++"Comodo AAA Services root"
+ 
+ # Expired CAs
