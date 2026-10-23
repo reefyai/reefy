@@ -2034,14 +2034,29 @@ class Storage:
             raise RuntimeError(
                 f'Cannot inspect VG {self.STORAGE_VG} storage devices: '
                 f'{self._process_error(result)}')
-        # Parse PV names like "/dev/mapper/reefy-sda" -> "sda".
-        current_devs = set()
-        for line in result.stdout.strip().splitlines():
-            pv = line.strip()
-            prefix = '/dev/mapper/reefy-'
-            if pv.startswith(prefix):
-                current_devs.add(pv[len(prefix):])
-        return [d for d in desired_devices if d not in current_devs]
+        pvs = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+        if not pvs:
+            raise RuntimeError(
+                'Existing mounted Reefy VG reported no PVs; refusing expansion')
+        # The desired list contains selected internal disks, not the optional
+        # USB data PV. Kernel names can change after delayed discovery. Native
+        # membership already satisfying the selection is never a growth request.
+        internal_pvs = pvs - {'/dev/mapper/reefy-data'}
+        selected = list(dict.fromkeys(desired_devices))
+        prefix = '/dev/mapper/reefy-'
+        current_devs = {pv[len(prefix):] for pv in internal_pvs
+                        if pv.startswith(prefix)}
+        if len(selected) <= len(internal_pvs):
+            if set(selected) != current_devs:
+                log('reconciler',
+                    'Existing VG satisfies storage selection; ignoring renamed disk paths')
+            return []
+        # A genuine addition must retain every known member. If path identities
+        # are unresolved or changed, refusing is safer than formatting a spare.
+        if (len(current_devs) != len(internal_pvs)
+                or not current_devs.issubset(selected)):
+            raise RuntimeError('Storage disk names changed; refusing ambiguous expansion')
+        return [device for device in selected if device not in current_devs]
 
     def _vg_mapper_sector_size(self):
         result = subprocess.run(

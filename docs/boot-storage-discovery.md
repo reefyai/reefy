@@ -37,3 +37,13 @@ firmware while proving on-disk preservation. The same cases must pass on the
 candidate, alongside staggered multi-member arrival, actual 900-second timeout,
 reset/re-adoption, A/B behavior and unselected-disk preservation. Retain exact
 artifact provenance and machine-readable results in PR validation notes.
+
+## Reconciliation after kernel disk renaming
+
+Late arrival can change Linux disk names while native LVM membership remains
+correct. A saved desired selection must not cause an already-complete pool to
+consume an unselected disk that inherited an old name. Existing internal PV
+count satisfies an equal or smaller selected set. USB data PVs are excluded
+from this internal count, preserving USB-to-internal expansion. Genuine growth
+still requires an unambiguous superset of existing members; unresolved or
+renamed identities refuse expansion before any formatting.
