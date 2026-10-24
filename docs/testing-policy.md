@@ -34,3 +34,14 @@ before tmpfiles without the legacy `/var/lock` symlink. The upstream monitoring
 and shutdown commands remain responsible for
 registering and unregistering pools. Preserve the lifecycle's clean-poweroff
 assertion.
+
+
+## Console readability
+
+The regular dev firmware uses the native kernel `loglevel=5` setting so routine
+notices and informational records cannot scroll away the login status. Warnings
+and errors remain visible; records stay in the kernel log. Production retains
+its existing quiet policy and the explicit debug-shell flavor remains verbose.
+The service E2E console-banner and adopted golden-path checks inject synthetic
+notice traffic, require the status to remain readable without a forced redraw,
+and verify that kernel records and visible errors are preserved.
