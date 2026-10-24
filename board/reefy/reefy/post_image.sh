@@ -19,11 +19,13 @@ DEBUG_SHELL_CMDLINE="console=tty0 panic=10 oops=panic intel_iommu=on module_blac
 
 # prod: `quiet` for a silent boot - kernel log messages stay off the
 #   monitor; the device-state banner still shows at the login prompt via
-#   /etc/issue (agetty), which `quiet` does not affect. dev: verbose (no
-#   quiet) for full boot logs on the VGA console, plus reefy.dev_shell=1.
+#   /etc/issue (agetty), which `quiet` does not affect. dev: warnings/errors
+#   remain visible, but routine notices (including kernel audit traffic) must
+#   not scroll away the login banner. All records remain in the kernel log;
+#   the explicit debug-shell flavor keeps verbose console diagnostics.
 declare -A FLAVORS=(
     [prod]="${COMMON_CMDLINE} quiet"
-    [dev]="${COMMON_CMDLINE} reefy.dev_shell=1"
+    [dev]="${COMMON_CMDLINE} loglevel=5 reefy.dev_shell=1"
     [debug-shell]="${DEBUG_SHELL_CMDLINE} systemd.show_status=1 systemd.log_level=debug systemd.log_target=console udev.log_level=debug loglevel=7 reefy.dev_shell=1 reefy.initramfs_shell=1"
 )
 
