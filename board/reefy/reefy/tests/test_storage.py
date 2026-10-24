@@ -2007,6 +2007,48 @@ class ExtendStorageSectorTests(unittest.TestCase):
 
         run.assert_not_called()
 
+    def test_complete_pool_does_not_grow_when_kernel_names_change(self):
+        with mock.patch.object(storage.subprocess, 'run', return_value=self._result(
+                stdout='/dev/mapper/reefy-sdb\n/dev/mapper/reefy-sdc\n')):
+            self.assertEqual(self.s._find_new_storage_disks(['sda', 'sdb']), [])
+
+    def test_genuine_superset_adds_only_new_disk(self):
+        with mock.patch.object(storage.subprocess, 'run', return_value=self._result(
+                stdout='/dev/mapper/reefy-sdb\n/dev/mapper/reefy-sdc\n')):
+            self.assertEqual(self.s._find_new_storage_disks(['sdb', 'sdc', 'sdd']), ['sdd'])
+
+    def test_ambiguous_growth_refuses_all_candidates(self):
+        with mock.patch.object(storage.subprocess, 'run', return_value=self._result(
+                stdout='/dev/mapper/reefy-sdb\n/dev/mapper/reefy-sdc\n')):
+            with self.assertRaisesRegex(RuntimeError, 'ambiguous expansion'):
+                self.s._find_new_storage_disks(['sda', 'sdb', 'sdd'])
+
+    def test_usb_pool_can_add_first_internal_disk(self):
+        with mock.patch.object(storage.subprocess, 'run', return_value=self._result(
+                stdout='/dev/mapper/reefy-data\n')):
+            self.assertEqual(self.s._find_new_storage_disks(['sda']), ['sda'])
+
+    def test_duplicate_stale_names_cannot_request_growth(self):
+        with mock.patch.object(storage.subprocess, 'run', return_value=self._result(
+                stdout='/dev/mapper/reefy-sdb\n/dev/mapper/reefy-sdc\n')):
+            self.assertEqual(self.s._find_new_storage_disks(['sda', 'sdb', 'sda']), [])
+
+    def test_complete_pool_with_noncanonical_pv_path_is_preserved(self):
+        with mock.patch.object(storage.subprocess, 'run', return_value=self._result(
+                stdout='/dev/dm-0\n')):
+            self.assertEqual(self.s._find_new_storage_disks(['sda']), [])
+
+    def test_growth_with_unresolved_existing_pv_refuses_formatting(self):
+        with mock.patch.object(storage.subprocess, 'run', return_value=self._result(
+                stdout='/dev/dm-0\n')):
+            with self.assertRaisesRegex(RuntimeError, 'ambiguous expansion'):
+                self.s._find_new_storage_disks(['sda', 'sdb'])
+
+    def test_empty_pv_report_cannot_authorize_growth(self):
+        with mock.patch.object(storage.subprocess, 'run', return_value=self._result(stdout='')):
+            with self.assertRaisesRegex(RuntimeError, 'no PVs'):
+                self.s._find_new_storage_disks(['sda'])
+
     def test_new_disk_discovery_failure_is_fatal(self):
         with mock.patch.object(
                 storage.subprocess, 'run',

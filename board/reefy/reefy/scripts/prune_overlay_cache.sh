@@ -12,6 +12,7 @@ test "$target" != /
 test "$target" != "$overlay"
 
 for relative in \
+    etc/systemd/system/lvm2-monitor.service.d/lock-directory.conf \
     etc/systemd/system/docker.service.d/storage-guard.conf \
     usr/lib/systemd/system/reefy-storage-activate.service \
     usr/lib/systemd/system/reefy-storage-drain.service \
