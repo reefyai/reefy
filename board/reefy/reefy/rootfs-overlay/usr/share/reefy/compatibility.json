@@ -24,6 +24,9 @@
     "events": {
       "instance_health": 2,
       "restore_status": 1
+    },
+    "rpc": {
+      "version": 1
     }
   }
 }

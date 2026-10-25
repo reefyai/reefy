@@ -83,7 +83,9 @@ class ControlPlane:
         self._compatibility = self._load_compatibility()
         self._command_results_lock = threading.Lock()
         from reefy.catalog_rpc import CatalogRPC
-        self._catalog_rpc = CatalogRPC(self._publish_catalog_message)
+        from reefy.rpc import DeviceRPC
+        self._rpc = DeviceRPC(self._publish_rpc_message, send_legacy=self._publish_catalog_message)
+        self._catalog_rpc = CatalogRPC(self._rpc)
         self._command_results = OrderedDict()
         self._commands_running = set()
         self._provision_failure = None
@@ -371,7 +373,8 @@ class ControlPlane:
                 # avoiding interference from QoS 1 PUBLISH/PUBACK flows
                 # during reconnect storms.
                 self._subscribe_confirmed.clear()
-                topic = f"{self.topic_prefix}/devices/{self.current_uuid}/commands"
+                topic = [(f"{self.topic_prefix}/devices/{self.current_uuid}/commands", 1),
+                         (self._rpc_topic('reply'), 1)]
                 result, mid = client.subscribe(topic, qos=1)
                 log('mqtt', f'Subscribe sent: topic={topic}, result={result}, mid={mid}')
 
@@ -588,6 +591,9 @@ class ControlPlane:
 
     def on_message(self, client, userdata, msg):
         try:
+            if self.mode == 'device' and msg.topic == self._rpc_topic('reply'):
+                self._rpc.receive(msg.payload, retained=bool(msg.retain))
+                return
             payload = json.loads(msg.payload.decode())
             action = payload.get('action', 'unknown')
             log('mqtt', f'Received command: {action} on {msg.topic}')
@@ -1772,10 +1778,20 @@ class ControlPlane:
 
         @service.interface('io.reefy.Control')
         class _Control:
+            def RPCRequest(self, payload, _more=False):
+                from reefy import rpc_codec
+                from reefy.rpc import failure
+                try:
+                    result = ctl._rpc.request(rpc_codec.decode(payload.encode('utf-8')))
+                except (ValueError, TypeError, UnicodeError):
+                    result = failure('invalid_request')
+                return {'result': json.dumps(result)}
+
             def CatalogRequest(self, payload, _more=False):
                 try:
-                    result = ctl._catalog_rpc.request(json.loads(payload))
-                except (ValueError, TypeError):
+                    from reefy import rpc_codec
+                    result = ctl._catalog_rpc.request(rpc_codec.decode(payload.encode('utf-8')))
+                except (ValueError, TypeError, UnicodeError):
                     result = {"error":"invalid_request","message":"Invalid catalog request"}
                 return {"result":json.dumps(result)}
 
@@ -1810,9 +1826,23 @@ class ControlPlane:
             log('mqtt', f'Control Varlink server died: {e}')
 
     def _publish_catalog_message(self, payload):
+        # Keep the established catalog wire usable before RPC cutover and on
+        # backend rollback. Correlation and limits still belong to one client.
         if self.mode != 'device' or not self.device_uuid or not self.client or not self.client.is_connected():
             raise RuntimeError('catalog transport unavailable')
-        topic = f"{self.topic_prefix}/devices/{self.device_uuid}/catalog/request"
+        topic = f'{self.topic_prefix}/devices/{self.device_uuid}/catalog/request'
+        info = self.client.publish(topic, json.dumps(payload), qos=1, retain=False)
+        if getattr(info, 'rc', 0) != 0:
+            raise RuntimeError('catalog publication unavailable')
+
+    def _rpc_topic(self, direction):
+        public_id = self.topic_prefix.split('/', 1)[1]
+        return f'reefy-rpc/v1/{public_id}/{self.device_uuid}/{direction}'
+
+    def _publish_rpc_message(self, payload):
+        if self.mode != 'device' or not self.device_uuid or not self.client or not self.client.is_connected():
+            raise RuntimeError('catalog transport unavailable')
+        topic = self._rpc_topic('request')
         info = self.client.publish(topic, json.dumps(payload), qos=1)
         # Do not wait for a send acknowledgement: only a correlated backend reply
         # can resolve the request, and the RPC owns the entire timeout budget.
@@ -1820,7 +1850,7 @@ class ControlPlane:
             raise RuntimeError('catalog publication unavailable')
 
     def _app_catalog_result(self, payload, cmd_id=None):
-        self._catalog_rpc.receive(payload)
+        return self._rpc.receive_legacy(payload)
 
     def _ctl_publish_event(self, suffix, payload):
         """Publish a sidecar event to the cloud via control's persistent
