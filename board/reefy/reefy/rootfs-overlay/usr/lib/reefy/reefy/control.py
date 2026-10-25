@@ -81,6 +81,8 @@ class ControlPlane:
         self._tailscale = Tailscale(self._publish_tailscale)
         self._compatibility = self._load_compatibility()
         self._command_results_lock = threading.Lock()
+        from reefy.catalog_rpc import CatalogRPC
+        self._catalog_rpc = CatalogRPC(self._publish_catalog_message)
         self._command_results = OrderedDict()
         self._commands_running = set()
         self._provision_failure = None
@@ -883,6 +885,7 @@ class ControlPlane:
         'provision': '_handle_provision',
         # Device mode commands
         'apply_state': '_apply_state_command',
+        'app_catalog_result': '_app_catalog_result',
         'tailscale_enroll': '_tailscale_enroll',
         'apply_config': '_apply_config',
         'run_playbook': '_run_playbook',
@@ -1753,6 +1756,13 @@ class ControlPlane:
 
         @service.interface('io.reefy.Control')
         class _Control:
+            def CatalogRequest(self, payload, _more=False):
+                try:
+                    result = ctl._catalog_rpc.request(json.loads(payload))
+                except (ValueError, TypeError):
+                    result = {"error":"invalid_request","message":"Invalid catalog request"}
+                return {"result":json.dumps(result)}
+
             def PublishEvent(self, suffix, payload, _more=False):
                 return ctl._ctl_publish_event(suffix, payload)
 
@@ -1782,6 +1792,19 @@ class ControlPlane:
                 server.serve_forever()
         except Exception as e:
             log('mqtt', f'Control Varlink server died: {e}')
+
+    def _publish_catalog_message(self, payload):
+        if self.mode != 'device' or not self.device_uuid or not self.client or not self.client.is_connected():
+            raise RuntimeError('catalog transport unavailable')
+        topic = f"{self.topic_prefix}/devices/{self.device_uuid}/catalog/request"
+        info = self.client.publish(topic, json.dumps(payload), qos=1)
+        # Do not wait for a send acknowledgement: only a correlated backend reply
+        # can resolve the request, and the RPC owns the entire timeout budget.
+        if getattr(info, 'rc', 0) != 0:
+            raise RuntimeError('catalog publication unavailable')
+
+    def _app_catalog_result(self, payload, cmd_id=None):
+        self._catalog_rpc.receive(payload)
 
     def _ctl_publish_event(self, suffix, payload):
         """Publish a sidecar event to the cloud via control's persistent

@@ -6,3 +6,6 @@
 interface io.reefy.Control
 
 method PublishEvent(suffix: string, payload: string) -> (ok: bool, error: string)
+
+# Returns an authoritative backend catalog outcome, or a bounded failure.
+method CatalogRequest(payload: string) -> (result: string)
