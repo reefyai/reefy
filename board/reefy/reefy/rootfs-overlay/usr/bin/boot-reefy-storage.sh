@@ -168,7 +168,7 @@ setup_data_partition() {
             # see docs/storage-chunk-size-study.md). --persistent stores
             # it in the header, so existing devices pick it up on this
             # first boot after the update and keep it thereafter.
-            if cryptsetup luksOpen "${DATA_PART}" "${LUKS_NAME}" \
+            if [ -e "/dev/mapper/${LUKS_NAME}" ] || cryptsetup luksOpen "${DATA_PART}" "${LUKS_NAME}" \
                 --allow-discards --perf-submit_from_crypt_cpus --persistent \
                 --key-file "${KEY_PART}" --keyfile-size "${LUKS_KEY_SIZE}" 2>/dev/null; then
                 FS_TYPE=$(blkid -o value -s TYPE "/dev/mapper/${LUKS_NAME}" 2>/dev/null)
@@ -413,7 +413,7 @@ setup_internal_storage() {
 
     PARENT_NAME=$(lsblk -no PKNAME "${REEFY_DEV}" 2>/dev/null)
     [ -z "${PARENT_NAME}" ] && return 0
-    KEY_PART="/dev/${PARENT_NAME}3"
+    KEY_PART="$(part_dev "/dev/${PARENT_NAME}" 3)"
     [ ! -b "${KEY_PART}" ] && return 0
 
     modprobe dm_crypt 2>/dev/null || true
@@ -518,8 +518,13 @@ setup_internal_storage() {
 # The supervisor re-enters only the recovery stage, after ESP discovery.
 if [ "${1:-}" = --recover ]; then
     REEFY_DEV=$(findmnt -rn -o SOURCE "${REEFY_MNT}")
+    # Observable first scan for the real delayed-disk E2E fixture. Discovery
+    # then waits for matching encrypted storage and complete LVM membership.
+    lsblk -dpno NAME >/dev/null
+    PYTHONPATH=/usr/lib/reefy python3 -m reefy.storage_discovery "${REEFY_DEV}"
     setup_internal_storage
     setup_data_partition
+    PYTHONPATH=/usr/lib/reefy python3 -m reefy.storage_discovery --mounted "${REEFY_DEV}"
     exit 0
 fi
 mount_reefy_usb

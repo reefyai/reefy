@@ -27,6 +27,7 @@ from io import BytesIO
 
 # Shared, dependency-free helpers (no paho) used across roles.
 from reefy import shared
+from reefy import startup_timing
 from reefy.compatibility import load_manifest
 from reefy.shared import _part_dev, log
 from reefy.storage import Storage, _boot_gpt_identity
@@ -879,6 +880,7 @@ class ControlPlane:
         # Works in both bootstrap and device mode
         'wifi_scan': '_handle_wifi_scan',
         'wifi_status': '_handle_wifi_status',
+        'wifi_bootstrap_credentials': '_handle_wifi_bootstrap_credentials',
         'update_firmware': '_update_firmware',
         'reboot': '_reboot',
         # Bootstrap → device transition
@@ -897,6 +899,15 @@ class ControlPlane:
         'restart_instance': '_restart_instance',
         'rotate_device_password': '_rotate_device_password',
     }
+
+    def _handle_wifi_bootstrap_credentials(self, payload, cmd_id=None):
+        if cmd_id is None:
+            return
+        from reefy.wifi_bootstrap import read_credentials
+        response = {'id': cmd_id, 'status': 'success',
+                    'wifi': read_credentials() if self.mode == 'bootstrap' else None}
+        topic = f"{self.topic_prefix}/devices/{self.current_uuid}/commands/response"
+        self.client.publish(topic, json.dumps(response), qos=1, retain=False)
 
     def _send_command_response(self, cmd_id, status='success', message=None, error=None):
         """Send response to a command back to the server."""
@@ -956,6 +967,11 @@ class ControlPlane:
         if not handler_name:
             log('mqtt', f'Unknown action: {action}')
             self._send_command_response(cmd_id, status='error', error=f'Unknown action: {action}')
+            return
+
+        if action == 'wifi_bootstrap_credentials':
+            # Secret responses must bypass the generic replay cache.
+            self._handle_wifi_bootstrap_credentials(payload, cmd_id)
             return
 
         duplicate = self._claim_command(cmd_id)
@@ -1870,6 +1886,9 @@ class ControlPlane:
         }
         self.client.publish(topic, json.dumps(data), qos=1)
         log('mqtt', f'Stage: {stage} - {message}')
+        if stage == 'ready' and (message == 'Device ready'
+                                 or message.startswith('Device ready with warnings: ')):
+            startup_timing.seal()
 
     def _publish_instance_event(self, iuuid, action, status, extra=None):
         """Publish a per-instance lifecycle event on the unified

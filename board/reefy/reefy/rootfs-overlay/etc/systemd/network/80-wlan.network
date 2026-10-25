@@ -3,6 +3,9 @@ Type=wlan
 
 [Network]
 DHCP=yes
+# Association can overlap reconciler address updates. Keep static addresses;
+# the reconciler removes only the addresses it owns.
+KeepConfiguration=static
 IgnoreCarrierLoss=3s
 # Fallback DNS alongside DHCP-provided DNS
 DNS=1.1.1.1

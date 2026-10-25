@@ -63,13 +63,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y parted gdisk
-          pip install varlink==31.0.0
+          pip install varlink==31.0.0 pytest
           python -m unittest discover -s board/reefy/reefy/tests -v
 
       - name: Artifact and startup concurrency regressions
         run: |
           pip install pytest
-          python -m pytest -q board/reefy/reefy/tests/test_artifacts.py board/reefy/reefy/tests/test_startup_readiness.py
+          python -m pytest -q board/reefy/reefy/tests/test_artifacts.py board/reefy/reefy/tests/test_startup_readiness.py board/reefy/reefy/tests/test_startup_timing.py
 
       - name: MQTT socket ownership with real Paho
         # Run after the dependency-free import checks above.

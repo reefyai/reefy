@@ -7,6 +7,7 @@ their digest-verified, read-only payload.
 
 import argparse
 import contextlib
+from concurrent.futures import ThreadPoolExecutor
 import fcntl
 import hashlib
 import json
@@ -20,6 +21,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+from reefy import startup_timing as timing
 
 
 DEFAULT_STORE = '/mnt/reefy-data/artifacts'
@@ -42,6 +45,17 @@ HOST_EXTENSION_NAMES = {
     'e2e-host-extension',
 }
 HOST_ACTIVATION_HOOK = 'usr/lib/reefy/activate'
+# Exact reviewed hook bytes, not a manifest capability or a hook claim.
+# Unrecognized versions keep the conservative whole-hook lock.
+PARALLEL_ACTIVATION_HOOKS = {
+    'nvidia-driver':
+        'fc0f1316a8ab13274cab597dbbc2e10d19a6adb349bd5f06c29f2ba362945433',
+    'intel-accelerator':
+        '47fc35494fd40aea289dbf968d3365152e46fac8a25b5d68ff5a9cd91e81ec28',
+    'amd-driver':
+        '8c82198a19b6f0ee7e76f0760e1cba0800277c8d50753389ad88abfc9d537092',
+}
+
 MANIFEST_ACCEPT = ', '.join((
     'application/vnd.oci.image.manifest.v1+json',
     'application/vnd.oci.artifact.manifest.v1+json',
@@ -175,7 +189,11 @@ class OciSource:
                         f'/v2/{self.repository}/blobs/{digest}')
                 with response, open(destination, 'wb') as output:
                     while True:
-                        chunk = response.read(1024 * 1024)
+                        if self.local_root:
+                            chunk = response.read(1024 * 1024)
+                        else:
+                            with timing.scope('artifact_download', kind='download'):
+                                chunk = response.read(1024 * 1024)
                         if not chunk:
                             break
                         count += len(chunk)
@@ -230,7 +248,8 @@ class OciSource:
 
     def _request_bytes(self, path, limit, accept=None):
         with self._request(path, accept=accept) as response:
-            value = response.read(limit + 1)
+            with timing.scope('artifact_download', kind='download'):
+                value = response.read(limit + 1)
         if len(value) > limit:
             raise ArtifactError('OCI metadata exceeds size policy')
         return value
@@ -244,7 +263,8 @@ class OciSource:
         request = urllib.request.Request(
             f'https://{self.registry}{path}', headers=headers)
         try:
-            return urllib.request.urlopen(request, timeout=60)
+            with timing.scope('artifact_download', kind='download'):
+                return urllib.request.urlopen(request, timeout=60)
         except urllib.error.HTTPError as exception:
             if exception.code != 401 or self.token:
                 raise ArtifactError(
@@ -349,6 +369,7 @@ class ArtifactManager:
         finally:
             os.close(descriptor)
 
+    @timing.component('artifact_verification')
     def _admit(self, source, kind):
         manifest_bytes = source.manifest()
         if _digest_bytes(manifest_bytes) != source.digest:
@@ -422,6 +443,7 @@ class ArtifactManager:
         if not source.local_root and config.get('publisher') != 'reefyai':
             raise ArtifactError('host-extension publisher mismatch')
 
+    @timing.component('artifact_mount')
     def _mount(self, admitted):
         digest_hex = _split_digest(admitted['digest'])
         root = os.path.join(self.run_dir, 'mounts', digest_hex)
@@ -443,6 +465,7 @@ class ArtifactManager:
             mounts.append(target)
         return mounts
 
+    @timing.component('provider_activation')
     def _activate(self, admitted, mounts):
         config = admitted['config']
         name = config['name']
@@ -475,19 +498,15 @@ class ArtifactManager:
                 'REEFY_ARTIFACT_CONFIG': json.dumps(config, sort_keys=True),
                 'REEFY_ARTIFACT_MOUNTS': ':'.join(mounts),
             }
-            # Downloads and mounts remain parallel, but host activation is
-            # global. Provider hooks may both run depmod, load modules, and
-            # publish CDI specifications. Running different vendors' hooks
-            # concurrently can corrupt the shared module dependency update or
-            # make modprobe observe an incomplete index.
+            # Known hooks share this outer lock and serialize their own
+            # module phase. Unknown/older hooks retain the exclusive outer
+            # lock, including against known hooks and older firmware clients.
             activation_lock = os.path.join(
                 self.run_dir, 'locks', 'host-activation')
             try:
-                with _flock(activation_lock):
-                    # Inherit reefy-artifacts stdout and stderr. The
-                    # reconciler forwards both streams through the normal
-                    # Reefy log, while the boot-time one-shot service writes
-                    # them to journald.
+                operation = (fcntl.LOCK_SH if self._parallel_activation_hook(
+                    name, activator) else fcntl.LOCK_EX)
+                with _flock(activation_lock, operation):
                     result = subprocess.run(
                         [activator], env=environment, timeout=300,
                         close_fds=True)
@@ -504,6 +523,17 @@ class ArtifactManager:
                 'digest': admitted['digest'], 'mounts': mounts,
                 'activated_at': int(time.time()),
             })
+
+    @staticmethod
+    def _parallel_activation_hook(name, activator):
+        expected = PARALLEL_ACTIVATION_HOOKS.get(name)
+        if expected is None:
+            return False
+        try:
+            with open(activator, 'rb') as stream:
+                return hashlib.file_digest(stream, 'sha256').hexdigest() == expected
+        except OSError:
+            return False
 
     @staticmethod
     def _same_payload(left, right):
@@ -532,21 +562,28 @@ class ArtifactManager:
 
     def activate_cached_state(self, state_path):
         state = _read_json(state_path)
-        results = []
         attempted = set()
+        requests = []
         for app in state.get('apps') or []:
             for artifact in app.get('artifacts') or []:
                 key = (artifact['ref'], artifact.get('kind') or 'app')
-                if key in attempted:
-                    continue
-                attempted.add(key)
-                try:
-                    results.append(self.prepare(
-                        artifact['ref'], artifact.get('kind') or 'app',
-                        cached_only=True))
-                except ArtifactError as exception:
-                    print(f'[artifacts] cached activation skipped: {exception}')
-        return results
+                if key not in attempted:
+                    attempted.add(key)
+                    requests.append(key)
+        if not requests:
+            return []
+
+        def prepare(request):
+            try:
+                return self.prepare(*request, cached_only=True)
+            except ArtifactError as exception:
+                print(f'[artifacts] cached activation skipped: {exception}')
+                return None
+
+        with ThreadPoolExecutor(max_workers=min(3, len(requests))) as pool:
+            futures = [timing.submit(pool, prepare, request) for request in requests]
+            results = [future.result() for future in futures]
+        return [result for result in results if result is not None]
 
     def status(self):
         manifests = []
@@ -745,14 +782,17 @@ def main(argv=None):
     arguments = parser.parse_args(argv)
     manager = ArtifactManager()
     try:
-        if arguments.command == 'prepare':
-            result = manager.prepare(arguments.ref, arguments.kind)
-        elif arguments.command == 'activate-cached':
-            result = manager.activate_cached_state(arguments.state)
-        elif arguments.command == 'status':
-            result = manager.status()
-        else:
-            result = manager.gc(arguments.state)
+        component = ('cached_providers' if arguments.command == 'activate-cached'
+                     else 'artifact_preparation')
+        with timing.scope(component, parent=timing.inherited_parent(), root=True):
+            if arguments.command == 'prepare':
+                result = manager.prepare(arguments.ref, arguments.kind)
+            elif arguments.command == 'activate-cached':
+                result = manager.activate_cached_state(arguments.state)
+            elif arguments.command == 'status':
+                result = manager.status()
+            else:
+                result = manager.gc(arguments.state)
         print(json.dumps(result, sort_keys=True))
         return 0
     except ArtifactError as exception:

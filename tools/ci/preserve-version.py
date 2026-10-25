@@ -57,6 +57,7 @@ def preserve(output, token=None):
             values.append(floor)
     if values:
         value = max(values, key=order)
+        output.mkdir(parents=True, exist_ok=True)
         paths[0].write_text(value + '\n')
         print('Firmware sequence floor preserved')
 

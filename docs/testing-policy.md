@@ -24,3 +24,24 @@ Preserve default parallel execution of full suites, ordinary shared firmware
 reuse, fresh A/B and rollback builds, failure evidence and hardware readiness
 assertions. Do not weaken assertions to make a run pass. Never commit real
 fleet/customer data, credentials or incident-specific identifiers as fixtures.
+
+The storage recovery lifecycle also requires clean guest poweroff between A/B
+boots. A failed early `lvm2-monitor.service` can leave late-unlocked thin pools
+registered with dmeventd and stall shutdown. The firmware explicitly sets
+`global/locking_dir = "/run/lock/lvm"` through an overlay `lvmlocal.conf`, leaving
+the package's `lvm.conf` untouched. This lets LVM create its runtime directory
+before tmpfiles without the legacy `/var/lock` symlink. The upstream monitoring
+and shutdown commands remain responsible for
+registering and unregistering pools. Preserve the lifecycle's clean-poweroff
+assertion.
+
+
+## Console readability
+
+The regular dev firmware uses the native kernel `loglevel=5` setting so routine
+notices and informational records cannot scroll away the login status. Warnings
+and errors remain visible; records stay in the kernel log. Production retains
+its existing quiet policy and the explicit debug-shell flavor remains verbose.
+The service E2E console-banner and adopted golden-path checks inject synthetic
+notice traffic, require the status to remain readable without a forced redraw,
+and verify that kernel records and visible errors are preserved.

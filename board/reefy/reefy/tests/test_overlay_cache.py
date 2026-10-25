@@ -16,10 +16,11 @@ class OverlayCacheTests(unittest.TestCase):
                 (root / 'usr/lib/reefy').mkdir(parents=True)
             obsolete = 'usr/lib/systemd/system/reefy-storage-watchdog.service'
             dropin = 'etc/systemd/system/docker.service.d/storage-guard.conf'
+            lvm_dropin = 'etc/systemd/system/lvm2-monitor.service.d/lock-directory.conf'
             retained = 'usr/lib/systemd/system/reefy-storage-guard.service'
             current = 'usr/lib/systemd/system/reefy-storage.service'
             package = 'usr/lib/systemd/system/reefy-cmds.service'
-            for name in (obsolete, dropin, retained, current, package):
+            for name in (obsolete, dropin, lvm_dropin, retained, current, package):
                 path = target / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text('synthetic unit\n')
@@ -36,6 +37,7 @@ class OverlayCacheTests(unittest.TestCase):
                 subprocess.run(['bash', str(script), str(overlay), str(target)], check=True)
                 self.assertFalse((target / obsolete).exists())
                 self.assertFalse((target / dropin).exists())
+                self.assertFalse((target / lvm_dropin).exists())
                 self.assertFalse(stale_link.is_symlink())
                 self.assertTrue(current_link.is_symlink())
                 for name in (retained, current, package):

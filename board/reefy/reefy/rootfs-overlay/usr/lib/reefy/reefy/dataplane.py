@@ -31,6 +31,8 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from io import BytesIO
 
 from reefy import shared
+from reefy.wifi_apply import WifiApply
+from reefy import startup_timing as timing
 from reefy import app_restart
 from reefy.policies import apply_policies
 from reefy.apply_results import ApplyResultStore, TERMINAL_STATUSES, apply_warning
@@ -217,7 +219,8 @@ class _SharedPreparation:
                 future.set_result(prepare())
             except BaseException as exception:
                 future.set_exception(exception)
-        return future.result()
+        with timing.scope('dependency_wait', kind='wait'):
+            return future.result()
 
 
 def _desired_state_log_summary(state):
@@ -285,6 +288,7 @@ class DataPlane:
         self._storage = storage
         # Same dict object Storage reads in _ensure_volume_lv / _prepare_app_dirs.
         self._volume_caps = storage._volume_caps
+        self._wifi_apply = WifiApply(lambda wifi, old: self._apply_wifi(wifi, old))
         self._job_condition = threading.Condition()
         # The Varlink server dispatches each request in its own thread, so an
         # app restart can otherwise race the apply worker while both mutate
@@ -420,33 +424,36 @@ class DataPlane:
             applied = False
             error = ''
             persistent_error = ''
-            try:
-                if job['kind'] == 'apply':
-                    applied = True
-                    ok = self._apply_state({'state': job['state']})
-                else:
-                    applied = os.path.exists(self._active_state_path())
-                    ok = self._apply_desired_state(
-                        force_retry=job.get('force_retry'))
-                warnings = list(self._last_apply_warnings)
-                if ok is False:
+            with timing.scope('reconciliation', root=True) as timing_span:
+                try:
+                    if job['kind'] == 'apply':
+                        applied = True
+                        ok = self._apply_state({'state': job['state']})
+                    else:
+                        applied = os.path.exists(self._active_state_path())
+                        ok = self._apply_desired_state(
+                            force_retry=job.get('force_retry'))
+                    warnings = list(self._last_apply_warnings)
+                    if ok is False:
+                        status = 'failed'
+                        error = 'desired-state apply failed'
+                        persistent_error = error
+                    elif warnings:
+                        status = 'succeeded_with_warnings'
+                    else:
+                        status = 'succeeded'
+                except Exception as exception:
                     status = 'failed'
-                    error = 'desired-state apply failed'
-                    persistent_error = error
-                elif warnings:
-                    status = 'succeeded_with_warnings'
-                else:
-                    status = 'succeeded'
-            except Exception as exception:
-                status = 'failed'
-                warnings = list(self._last_apply_warnings)
-                error = shared.redact_log_message(exception)[:500]
-                persistent_error = (
-                    f'desired-state apply failed '
-                    f'({type(exception).__name__})')
-                log('mqtt',
-                    f'[data-plane] apply job failed '
-                    f'({type(exception).__name__}): {error}')
+                    warnings = list(self._last_apply_warnings)
+                    error = shared.redact_log_message(exception)[:500]
+                    persistent_error = (
+                        f'desired-state apply failed '
+                        f'({type(exception).__name__})')
+                    log('mqtt',
+                        f'[data-plane] apply job failed '
+                        f'({type(exception).__name__}): {error}')
+                if status == 'failed':
+                    timing_span.close(False)
             self._remember_runtime_error(request_id, error)
             self._apply_results.update(
                 request_id,
@@ -1024,10 +1031,11 @@ class DataPlane:
         hostname = state.get('hostname', '') or shared.get_default_hostname()
         shared.set_hostname(hostname)
 
-        # Apply WiFi config (before compose — connectivity may be needed for image pulls)
+        # Radio setup overlaps local work and cached startup. Network failures
+        # can wait for the worker before retrying on a WiFi-only device.
         wifi = state.get('wifi')
         old_wifi = old_state.get('wifi') if old_state else None
-        self._apply_wifi(wifi, old_wifi)
+        self._wifi_apply.submit(wifi, old_wifi)
 
         # Apply storage config (LUKS + LVM encrypted internal storage)
         storage = state.get('storage')
@@ -1256,7 +1264,7 @@ class DataPlane:
                 return warnings
 
             if apps:
-                with ThreadPoolExecutor(max_workers=len(apps)) as pool:
+                with timing.scope('applications', kind='wait'), ThreadPoolExecutor(max_workers=len(apps)) as pool:
                     futures = {}
                     for app in apps:
                         restore_failed = (
@@ -1264,12 +1272,12 @@ class DataPlane:
                         if (force_retry
                                 and force_retry.get('project_name')
                                 == app.get('project_name')):
-                            future = pool.submit(
+                            future = timing.submit(pool,
                                 self._in_preparation_pass, preparation,
                                 self._prepare_v2_app, app, restore_failed,
                                 force_retry=force_retry)
                         else:
-                            future = pool.submit(
+                            future = timing.submit(pool,
                                 self._in_preparation_pass, preparation,
                                 self._prepare_v2_app, app, restore_failed)
                         futures[future] = app
@@ -1337,9 +1345,9 @@ class DataPlane:
         self._remove_absent_v2_projects(desired_projects)
 
         if apps:
-            with ThreadPoolExecutor(max_workers=len(apps)) as pool:
+            with timing.scope('applications', kind='wait'), ThreadPoolExecutor(max_workers=len(apps)) as pool:
                 futures = {
-                    pool.submit(
+                    timing.submit(pool,
                         self._in_preparation_pass, preparation,
                         self._reconcile_v2_app, app, migration,
                         app.get('instance_uuid') in failed_restores,
@@ -1722,9 +1730,9 @@ class DataPlane:
         self._publish_health_status(
             app.get('instance_uuid') or '', 'starting', phase='artifact')
         preparation = getattr(self._preparation_local, 'value', None)
-        with ThreadPoolExecutor(max_workers=min(2, len(artifacts))) as pool:
+        with timing.scope('artifact_preparation', kind='wait'), ThreadPoolExecutor(max_workers=min(3, len(artifacts))) as pool:
             futures = [
-                pool.submit(self._prepare_one_app_artifact, app, artifact,
+                timing.submit(pool, self._prepare_one_app_artifact, app, artifact,
                             preparation=preparation)
                 for artifact in artifacts
             ]
@@ -1747,13 +1755,14 @@ class DataPlane:
             log('reconciler', f'{prefix}: artifact unavailable for this apply')
         return ok or not required
 
-    @staticmethod
-    def _run_artifact_prepare(ref, kind, prefix):
+    @timing.component('artifact_preparation')
+    def _run_artifact_prepare(self, ref, kind, prefix, *, wifi_retry=True):
         try:
             result = subprocess.run(
                 ['reefy-artifacts', 'prepare', '--ref', ref,
                  '--kind', kind],
-                capture_output=True, text=True, timeout=3600)
+                capture_output=True, text=True, timeout=3600,
+                env=timing.subprocess_env())
         except (OSError, subprocess.TimeoutExpired) as exception:
             log('reconciler',
                 f'{prefix}: artifact prepare failed '
@@ -1773,6 +1782,18 @@ class DataPlane:
             log('reconciler',
                 f'{prefix}: artifact prepare failed '
                 f'(exit {result.returncode})')
+            # The CLI's final error identifies a network failure. A local
+            # digest/admission/mount/hook failure must never wait for radio
+            # setup or re-run a partially completed activation here.
+            errors = (result.stderr or '').strip().splitlines()
+            network_failure = bool(errors and re.fullmatch(
+                r'(registry request failed(?: with HTTP (?:408|429|5[0-9]{2}))?'
+                r'|anonymous registry token request failed'
+                r'|(?:urllib.error.URLError|TimeoutError|ConnectionResetError|'
+                r'http.client.IncompleteRead): .*)', errors[-1]))
+            if wifi_retry and network_failure and self._wait_for_wifi_uplink():
+                return self._run_artifact_prepare(
+                    ref, kind, prefix, wifi_retry=False)
             return False
         return True
 
@@ -2516,6 +2537,7 @@ class DataPlane:
                     message=self._bounded_output_tail(output, reason))
             return False
 
+    @timing.component('image_pull')
     def _pull_project_images(
             self, compose_path, project_name, services, deadline,
             max_retries=5):
@@ -2525,7 +2547,10 @@ class DataPlane:
             return True, '', ''
         last_output = ''
         reason = 'docker compose pull failed'
-        for attempt in range(1, max_retries + 1):
+        attempt = 0
+        wifi_retry = True
+        while attempt < max_retries:
+            attempt += 1
             if self._is_current_app_superseded():
                 return False, '', self.APP_RECONCILE_SUPERSEDED
             remaining = deadline - time.monotonic()
@@ -2553,6 +2578,20 @@ class DataPlane:
             if classification in (
                     'image_missing', 'no_space', 'storage_corruption'):
                 break
+            network_failure = any(marker in output.lower() for marker in (
+                'network is unreachable', 'network is down', 'no route to host',
+                'dial tcp', 'lookup ', 'temporary failure in name resolution',
+                'connection refused', 'connection reset', 'timed out',
+                'timeout', 'unexpected eof', 'net/http:',
+                '502 bad gateway', '503 service unavailable',
+                '504 gateway timeout'))
+            if wifi_retry and network_failure and self._wait_for_wifi_uplink():
+                # Association was still pending, so this first network
+                # failure does not spend the caller's pull-attempt budget.
+                # Optional services intentionally have just one attempt.
+                wifi_retry = False
+                attempt -= 1
+                continue
             if attempt >= max_retries:
                 break
             delay = min(10 * (2 ** (attempt - 1)), 60)
@@ -2564,6 +2603,7 @@ class DataPlane:
                 return False, last_output, self.APP_RECONCILE_SUPERSEDED
         return False, last_output, reason
 
+    @timing.component('container_start')
     def _start_project_services(
             self, compose_path, project_name, services,
             remove_orphans=True, max_retries=5):
@@ -2628,6 +2668,7 @@ class DataPlane:
             'docker', 'compose', '-f', compose_path, '-p', project_name,
             *args,
         ]
+        downloads = timing.ImageDownloads()
         tail = deque(maxlen=self.COMPOSE_OUTPUT_TAIL_LINES)
         classification_signals = {}
         proc = None
@@ -2662,6 +2703,7 @@ class DataPlane:
             return min(candidates) if candidates else -1
 
         def remember(line):
+            downloads.feed(line)
             safe = shared.redact_log_message(line.rstrip('\r\n'))
             if len(safe) > self.COMPOSE_OUTPUT_LINE_CHARS:
                 safe = safe[:self.COMPOSE_OUTPUT_LINE_CHARS] + ' [truncated]'
@@ -2733,7 +2775,8 @@ class DataPlane:
         try:
             proc = subprocess.Popen(
                 command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                bufsize=0, start_new_session=True)
+                bufsize=0, start_new_session=True,
+                env={**os.environ, 'COMPOSE_PROGRESS': 'plain'})
             output_fd = proc.stdout.fileno()
             os.set_blocking(output_fd, False)
             selector = selectors.DefaultSelector()
@@ -2791,6 +2834,7 @@ class DataPlane:
                     f'docker compose {args[0]} timed out after '
                     f'{max(1, int(timeout))} seconds')
                 return False, rendered_output()
+            downloads.close(returncode == 0)
             return returncode == 0, rendered_output()
         except OSError as exception:
             if proc is not None:
@@ -2973,6 +3017,7 @@ class DataPlane:
         except FileNotFoundError:
             pass
 
+    @timing.component('files')
     def _apply_files(self, files):
         """Apply the generic `files` directive from desired-state.
 
@@ -3027,23 +3072,59 @@ class DataPlane:
             except OSError as e:
                 log('mqtt', f'files: failed to write {host_path}: {e}')
 
+    def _wait_for_wifi_uplink(self):
+        """Wait only after network work needs a still-pending sole uplink.
+
+        Cached artifacts and images reach this method only after failure.
+        A usable alternate default route keeps radio failure off the path.
+        Unknown routing evidence waits conservatively, just as before.
+        """
+        worker = getattr(self, '_wifi_apply', None)
+        if worker is None or not worker.busy():
+            return False
+        try:
+            for family in ('-4', '-6'):
+                routes = subprocess.run(
+                    ['ip', '-j', family, 'route', 'show', 'default'],
+                    capture_output=True, text=True, timeout=2, check=True)
+                for route in json.loads(routes.stdout):
+                    interface = route.get('dev')
+                    if not interface or '/' in interface:
+                        continue
+                    with open(f'/sys/class/net/{interface}/operstate') as stream:
+                        if stream.read().strip() == 'up':
+                            return False
+        except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+            pass
+        with timing.scope('dependency_wait', kind='wait'):
+            worker.wait()
+        return True
+
+    @timing.component('wifi')
     def _apply_wifi(self, wifi, old_wifi=None):
         """Configure or disconnect WiFi based on desired state diff."""
         ssid = wifi.get('ssid', '') if wifi else ''
         old_ssid = old_wifi.get('ssid', '') if old_wifi else ''
 
+        from reefy.wifi_bootstrap import CREDENTIALS
+        bootstrap_pending = CREDENTIALS.exists()
         if ssid:
-            # Connect or change network
-            if ssid != old_ssid:
+            # Transfer radio ownership only after desired state is persisted.
+            if ssid != old_ssid or bootstrap_pending:
                 password = wifi.get('password', '')
                 log('mqtt', f'Configuring WiFi: {ssid}')
                 try:
+                    if bootstrap_pending:
+                        subprocess.run(['systemctl', 'stop', 'reefy-wifi-bootstrap.service'],
+                                       capture_output=True, timeout=25, check=True)
                     result = subprocess.run(
                         ['wifi-setup', ssid, password],
                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                         text=True, timeout=30
                     )
                     if result.returncode == 0:
+                        if bootstrap_pending:
+                            CREDENTIALS.unlink(missing_ok=True)
                         print("[mqtt] WiFi configured successfully")
                     else:
                         log('mqtt',
@@ -3071,6 +3152,7 @@ class DataPlane:
             except Exception as e:
                 log('mqtt', f'WiFi disconnect error: {e}')
 
+    @timing.component('network')
     def _apply_network(self, network, old_network=None):
         """Configure secondary static IP addresses on network interfaces.
 
@@ -3344,6 +3426,7 @@ class DataPlane:
             log('mqtt', f'[data-plane] RestartInstance failed: {error}')
             return {'ok': False, 'error': error}
 
+    @timing.component('users')
     def _apply_user_ssh_keys(self, keys):
         """Rewrite /etc/ssh/authorized_keys.d/reefy atomically.
 
@@ -3503,6 +3586,7 @@ class DataPlane:
         except Exception as e:
             log('mqtt', f'_sync_app_users non-fatal error: {e}')
 
+    @timing.component('storage')
     def _apply_storage(self, storage):
         """Set up LUKS-encrypted internal storage with LVM, mounted at /mnt/reefy-data.
 
@@ -3679,6 +3763,7 @@ class DataPlane:
                            capture_output=True, timeout=10)
             raise RuntimeError(f'Mount failed: {result.stderr}')
 
+    @timing.component('backup')
     def _apply_backup_config(self, backup):
         """Write backup SSH keys, config JSON, and install/update systemd timer.
 
@@ -3876,6 +3961,7 @@ Environment=MQTT_PORT={self.port}
             new_inst_dir = f'/mnt/reefy-data/apps/{iuuid}'
             os.makedirs(new_inst_dir, mode=0o755, exist_ok=True)
 
+            self._wait_for_wifi_uplink()
             log('mqtt', f'Restoring archive {archive_name} via borg extract')
             try:
                 from reefy import borg_transport

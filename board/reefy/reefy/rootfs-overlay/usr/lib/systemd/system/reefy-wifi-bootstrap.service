@@ -1,0 +1,18 @@
+[Unit]
+Description=Reefy local WiFi bootstrap
+After=reefy-storage.service reefy-wifi-early.service reefy-hostname.service
+Wants=reefy-storage.service
+ConditionPathExists=!/mnt/reefy-data/state/device-uuid
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/reefy-wifi-bootstrap
+Restart=on-failure
+RestartSec=5
+UMask=0077
+TimeoutStopSec=20
+# Main process stops its children after handling SIGTERM.
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
