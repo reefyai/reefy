@@ -18,6 +18,7 @@
       "restart_instance": 2,
       "wifi_scan": 1,
       "wifi_status": 1,
+      "app_catalog_result": 1,
       "wifi_bootstrap_credentials": 1
     },
     "events": {
