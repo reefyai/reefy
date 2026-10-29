@@ -74,7 +74,7 @@ def wait(boot_device, now=time.monotonic, sleep=time.sleep):
                 if path == disk or (kind != 'disk' and path != usb_data) or path in opened:
                     continue
                 try:
-                    probe = run(['cryptsetup', 'luksUUID', path], timeout=budget(5))
+                    probe = run(['cryptsetup', 'luksUUID', path], timeout=budget(10))
                 except subprocess.TimeoutExpired:
                     # An unrelated slow disk must not hide an already complete
                     # owned VG. Retry this probe on a later discovery pass.

@@ -48,8 +48,10 @@ and verify that kernel records and visible errors are preserved.
 
 ## Storage discovery command timeouts
 
-Discovery command timeouts are retried within the existing 900-second membership
-budget. They do not shorten that budget or increase individual command limits.
+The read-only `cryptsetup luksUUID` probe allows up to 10 seconds per attempt,
+clamped to the remaining overall deadline. Discovery command timeouts are
+retried within the existing 900-second membership budget. Retries do not
+extend that deadline or the per-attempt command limits.
 A timed-out VG refresh stays pending before membership is inspected. Invalid
 metadata and other unexpected errors still refuse provisioning, and discovery
 never formats a disk, repairs a filesystem or activates a partial VG.

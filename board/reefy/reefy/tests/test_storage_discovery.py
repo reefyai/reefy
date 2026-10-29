@@ -65,7 +65,7 @@ class DiscoveryTests(unittest.TestCase):
             with self.subTest(command=command):
                 elapsed, commands, ready = self.exercise(timeout_command=command)
                 self.assertTrue(ready)
-                self.assertGreaterEqual(elapsed, 5)
+                self.assertGreaterEqual(elapsed, 120 if command == 'luksOpen' else 10)
                 self.assertLess(elapsed, discovery.DEADLINE)
                 self.assertFalse(any(command[0] in ('vgchange', 'mkfs', 'xfs_repair', 'mount')
                                      for command in commands))
@@ -75,7 +75,7 @@ class DiscoveryTests(unittest.TestCase):
             wrong_key=True, timeout_command='luksUUID', persistent_timeout=True,
             timeout_path='/dev/unrelated')
         self.assertTrue(ready)
-        self.assertEqual(elapsed, 5)
+        self.assertEqual(elapsed, 10)
         self.assertFalse(any(args[:3] == ['cryptsetup', 'luksOpen', '/dev/unrelated']
                              for args in commands))
 
