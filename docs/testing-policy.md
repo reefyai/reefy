@@ -45,3 +45,27 @@ its existing quiet policy and the explicit debug-shell flavor remains verbose.
 The service E2E console-banner and adopted golden-path checks inject synthetic
 notice traffic, require the status to remain readable without a forced redraw,
 and verify that kernel records and visible errors are preserved.
+
+## Storage discovery command timeouts
+
+Discovery command timeouts are retried within the existing 900-second membership
+budget. They do not shorten that budget or increase individual command limits.
+A timed-out VG refresh stays pending before membership is inspected. Invalid
+metadata and other unexpected errors still refuse provisioning, and discovery
+never formats a disk, repairs a filesystem or activates a partial VG.
+
+Run `python -m pytest board/reefy/reefy/tests/test_storage_discovery.py` for
+synthetic command-timeout, full-deadline, unrelated-disk and deferred-refresh
+coverage. The same final tests fail against unmodified source
+`2f59697d750daadc360cd7a8054ca45cac75b47a` when a bounded command times out.
+The real lifecycle remains the established service scenario:
+
+```bash
+python tests/e2e/run.py -c configs/reefy-dev.yaml --scenario test_missing_storage_member
+```
+
+That journey removes one member after clean poweroff, waits the real policy,
+checks guarded bootstrap and boot-record preservation, then reattaches storage
+and verifies the adopted identity and synthetic data. Keep its 900-second
+assertion and all recovery checks. Retain JUnit, lifecycle JSON and guest serial
+logs under the normal test results directory with exact firmware provenance.

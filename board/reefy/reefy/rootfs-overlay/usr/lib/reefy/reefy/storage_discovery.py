@@ -47,6 +47,7 @@ def wait(boot_device, now=time.monotonic, sleep=time.sleep):
         run(['modprobe', module])
     until = now() + DEADLINE
     opened, rejected = set(), set()
+    refresh_needed = False
     usb_data = disk + ('p4' if disk[-1].isdigit() else '4')
     print('[reefy] Waiting for existing storage and complete VG membership (up to 900s)', flush=True)
 
@@ -56,55 +57,71 @@ def wait(boot_device, now=time.monotonic, sleep=time.sleep):
             raise TimeoutError('Existing storage did not assemble within 900 seconds')
         return remaining
 
+    def deferred_timeout():
+        print('[reefy] Storage discovery command timed out; retrying within 900s policy', flush=True)
+
     while True:
-        listing = run(['lsblk', '-rpn', '-o', 'NAME,TYPE'], timeout=budget(10))
-        if listing.returncode:
-            raise RuntimeError('Cannot enumerate storage devices')
-        changed = False
-        for line in listing.stdout.splitlines():
-            if not line.strip():
-                continue
-            path, kind = line.split()
-            # Match existing boot behavior: whole internal drives and the
-            # optional encrypted USB data partition. Other partitions stay alone.
-            if path == disk or (kind != 'disk' and path != usb_data) or path in opened:
-                continue
-            probe = run(['cryptsetup', 'luksUUID', path], timeout=budget(5))
-            if probe.returncode or not probe.stdout.strip():
-                continue
-            signature = (path, probe.stdout.strip())
-            if signature in rejected:
-                continue
-            name = 'reefy-data' if path == usb_data else 'reefy-' + Path(path).name
-            if not Path('/dev/mapper', name).exists():
-                result = run(['cryptsetup', 'luksOpen', path, name,
-                              '--allow-discards', '--perf-submit_from_crypt_cpus', '--persistent',
-                              '--key-file', str(key), '--keyfile-size', '44'], timeout=budget(120))
-                if result.returncode:
-                    if result.returncode == 2:
-                        rejected.add(signature)
-                    else:
-                        # Device-mapper/udev can finish creating the mapping
-                        # even when cryptsetup reports a transient failure.
-                        # Recheck on the next bounded discovery iteration.
-                        print(f'[reefy] Encrypted disk open deferred (status {result.returncode})', flush=True)
+        try:
+            listing = run(['lsblk', '-rpn', '-o', 'NAME,TYPE'], timeout=budget(10))
+            if listing.returncode:
+                raise RuntimeError('Cannot enumerate storage devices')
+            for line in listing.stdout.splitlines():
+                if not line.strip():
                     continue
-            opened.add(path)
-            changed = True
-        if opened:
-            # Refresh discovery after each new mapping, before reading current
-            # membership. Never use vgchange --partial to bypass missing disks.
-            if changed:
-                run(['vgscan'], timeout=budget(10))
-            # Legacy USB p4 can contain a filesystem directly, without LVM.
-            if usb_data in opened:
-                fs = run(['blkid', '-p', '-s', 'TYPE', '-o', 'value', '/dev/mapper/reefy-data'],
-                         timeout=budget(5))
-                if fs.returncode == 0 and fs.stdout.strip() in ('f2fs', 'ext4', 'xfs'):
+                path, kind = line.split()
+                # Match existing boot behavior: whole internal drives and the
+                # optional encrypted USB data partition. Other partitions stay alone.
+                if path == disk or (kind != 'disk' and path != usb_data) or path in opened:
+                    continue
+                try:
+                    probe = run(['cryptsetup', 'luksUUID', path], timeout=budget(5))
+                except subprocess.TimeoutExpired:
+                    # An unrelated slow disk must not hide an already complete
+                    # owned VG. Retry this probe on a later discovery pass.
+                    deferred_timeout()
+                    continue
+                if probe.returncode or not probe.stdout.strip():
+                    continue
+                signature = (path, probe.stdout.strip())
+                if signature in rejected:
+                    continue
+                name = 'reefy-data' if path == usb_data else 'reefy-' + Path(path).name
+                if not Path('/dev/mapper', name).exists():
+                    result = run(['cryptsetup', 'luksOpen', path, name,
+                                  '--allow-discards', '--perf-submit_from_crypt_cpus', '--persistent',
+                                  '--key-file', str(key), '--keyfile-size', '44'], timeout=budget(120))
+                    if result.returncode:
+                        if result.returncode == 2:
+                            rejected.add(signature)
+                        else:
+                            # Device-mapper/udev can finish creating the mapping
+                            # even when cryptsetup reports a transient failure.
+                            # Recheck on the next bounded discovery iteration.
+                            print(f'[reefy] Encrypted disk open deferred (status {result.returncode})', flush=True)
+                        continue
+                opened.add(path)
+                refresh_needed = True
+            if opened:
+                # Refresh discovery after each new mapping, before reading current
+                # membership. Never use vgchange --partial to bypass missing disks.
+                if refresh_needed:
+                    run(['vgscan'], timeout=budget(10))
+                    refresh_needed = False
+                # Legacy USB p4 can contain a filesystem directly, without LVM.
+                if usb_data in opened:
+                    fs = run(['blkid', '-p', '-s', 'TYPE', '-o', 'value', '/dev/mapper/reefy-data'],
+                             timeout=budget(5))
+                    if fs.returncode == 0 and fs.stdout.strip() in ('f2fs', 'ext4', 'xfs'):
+                        return
+                if complete_vg(budget(10)):
+                    print('[reefy] Existing storage discovery complete', flush=True)
                     return
-            if complete_vg(budget(10)):
-                print('[reefy] Existing storage discovery complete', flush=True)
-                return
+        except subprocess.TimeoutExpired:
+            # A bounded discovery command can stall while disks settle. It is
+            # not evidence that the full membership deadline has elapsed.
+            # Keep opened mappings and a pending VG refresh for the next pass;
+            # no repair, partial activation or formatting occurs in this loop.
+            deferred_timeout()
         sleep(min(0.25, budget(0.25)))
 
 

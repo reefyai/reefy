@@ -1,5 +1,6 @@
 """Late disks, missing VG members and refusal without changing boot metadata."""
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
@@ -11,9 +12,10 @@ from reefy import storage_discovery as discovery
 
 
 class DiscoveryTests(unittest.TestCase):
-    def exercise(self, arrivals=(0,), members=1, wrong_key=False, usb=False, corrupt=False):
+    def exercise(self, arrivals=(0,), members=1, wrong_key=False, usb=False, corrupt=False, timeout_command=None, persistent_timeout=False, timeout_path=None):
         clock = [0.0]
         opened, commands = set(), []
+        timed_out = [False]
         paths = ['/dev/data-a', '/dev/data-b'][:members]
         if usb:
             paths = ['/dev/boot4']
@@ -21,6 +23,12 @@ class DiscoveryTests(unittest.TestCase):
 
         def result(args, **kwargs):
             commands.append(args)
+            command = args[1] if args[0] == 'cryptsetup' else args[0]
+            if (command == timeout_command and (timeout_path is None or args[-1] == timeout_path)
+                    and (persistent_timeout or not timed_out[0])):
+                timed_out[0] = True
+                clock[0] += kwargs.get('timeout', 5)
+                raise subprocess.TimeoutExpired(args, kwargs.get('timeout', 5))
             code, out = 0, ''
             if args[0] == 'lsblk':
                 visible = [path for index, path in enumerate(paths) if clock[0] >= arrivals[index]]
@@ -51,6 +59,49 @@ class DiscoveryTests(unittest.TestCase):
             except TimeoutError:
                 return clock[0], commands, False
         return clock[0], commands, True
+
+    def test_transient_read_only_probe_timeouts_do_not_abandon_existing_storage(self):
+        for command in ('lsblk', 'luksUUID', 'luksOpen', 'vgscan', 'pvs'):
+            with self.subTest(command=command):
+                elapsed, commands, ready = self.exercise(timeout_command=command)
+                self.assertTrue(ready)
+                self.assertGreaterEqual(elapsed, 5)
+                self.assertLess(elapsed, discovery.DEADLINE)
+                self.assertFalse(any(command[0] in ('vgchange', 'mkfs', 'xfs_repair', 'mount')
+                                     for command in commands))
+
+    def test_unrelated_slow_probe_does_not_hide_complete_owned_storage(self):
+        elapsed, commands, ready = self.exercise(
+            wrong_key=True, timeout_command='luksUUID', persistent_timeout=True,
+            timeout_path='/dev/unrelated')
+        self.assertTrue(ready)
+        self.assertEqual(elapsed, 5)
+        self.assertFalse(any(args[:3] == ['cryptsetup', 'luksOpen', '/dev/unrelated']
+                             for args in commands))
+
+    def test_timed_out_vg_refresh_is_retried_before_membership_inspection(self):
+        _, commands, ready = self.exercise(timeout_command='vgscan')
+        self.assertTrue(ready)
+        scans = [index for index, args in enumerate(commands) if args[0] == 'vgscan']
+        membership = [index for index, args in enumerate(commands) if args[0] == 'pvs']
+        self.assertEqual(len(scans), 2)
+        self.assertGreater(min(membership), max(scans))
+        self.assertEqual(sum(args[:2] == ['cryptsetup', 'luksOpen'] for args in commands), 1)
+
+    def test_missing_member_keeps_full_deadline_after_transient_probe_timeout(self):
+        elapsed, commands, ready = self.exercise(
+            arrivals=(0, 1000), members=2, timeout_command='luksUUID')
+        self.assertFalse(ready)
+        self.assertEqual(elapsed, 900)
+        self.assertFalse(any('--partial' in command for command in commands))
+
+    def test_repeated_probe_timeouts_remain_bounded_by_original_deadline(self):
+        elapsed, commands, ready = self.exercise(
+            timeout_command='luksUUID', persistent_timeout=True)
+        self.assertFalse(ready)
+        self.assertEqual(elapsed, 900)
+        self.assertFalse(any(command[0] in ('vgchange', 'mkfs', 'xfs_repair', 'mount')
+                             for command in commands))
 
     def test_fresh_image_skips_wait_and_all_storage_commands(self):
         with patch.object(discovery, 'key_partition', return_value=('/dev/boot', Path('/dev/boot3'))), \
