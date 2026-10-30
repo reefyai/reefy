@@ -177,3 +177,50 @@ The provider commits must remain reachable when merging their review PRs:
 use merge commits to preserve the exact pinned workflow SHAs, or update and
 revalidate the firmware pins after any history rewrite. All 50 existing
 provider payload tests passed before live workflow validation.
+
+## Provider artifact download timeout validation
+
+Fresh-firmware E2E exercises provider publication before OTA. Its existing
+release-success requirement rejects a missing provider input rather than
+accepting a partially published firmware release. A full parallel attempt
+reached that boundary with a successful build but a failed AMD publication:
+workflow `41142073090`, job `124362799377`, OS source
+`47c1c0dfcbf827a489e52b8a9f14dabe26560e2d`. The artifact download step reported
+success after 31 seconds, but `inputs/metadata.env` was absent. An independent
+download verified the immutable ZIP's SHA-256, all CRCs and the metadata entry.
+The failed full attempt is excluded from runtime claims.
+
+The old `actions/download-artifact` bundle at
+`d3f86a106a0bac45b974a628896c90dbdf5c8093` can leave its transfer promise
+unresolved after its inactivity timer destroys the response. The process then
+exits with status zero. The upstream v8.0.2 bundle at
+`9000827ccba6bdab643e8b6fd33ac0654aef8333` explicitly rejects that timeout,
+allowing its existing bounded retry loop to run. Provider workflows pin this
+upstream release. Artifact names, immutable payloads, signature checks and
+release requirements are unchanged. This addresses the false-success boundary;
+it does not establish the cause of intermittent external TLS failures.
+
+The established `tools/ci` unittest discovery includes an opt-in integration
+probe, `test_artifact_download_timeout.py`. It evaluates the unmodified published
+transport function with local synthetic response/extraction fixtures. Only the
+30-second timer is accelerated to 50 milliseconds. It requires Node.js and an
+explicit action bundle, makes no network request and uses no device data.
+Ordinary discovery skips it when that bundle is not supplied. Repeat with:
+
+```bash
+curl -fsSL --retry 3 -o /tmp/artifact-baseline.js \
+  https://raw.githubusercontent.com/actions/download-artifact/d3f86a106a0bac45b974a628896c90dbdf5c8093/dist/index.js
+curl -fsSL --retry 3 -o /tmp/artifact-fixed.js \
+  https://raw.githubusercontent.com/actions/download-artifact/9000827ccba6bdab643e8b6fd33ac0654aef8333/dist/index.js
+REEFY_ARTIFACT_ACTION_BUNDLE=/tmp/artifact-baseline.js \
+  python3 -m unittest discover -s tools/ci -p test_artifact_download_timeout.py -v
+REEFY_ARTIFACT_ACTION_BUNDLE=/tmp/artifact-fixed.js \
+  python3 -m unittest discover -s tools/ci -p test_artifact_download_timeout.py -v
+```
+
+Baseline: complete transfer passes; stalled-transfer rejection fails because the
+process exits zero without settling the promise. Fixed: both tests pass. These
+transport fixtures do not validate ZIP extraction. The same established full
+service E2E suite validates actual archives, provider identities, signatures,
+OTA, rollback and data preservation against the updated immutable workflow pins.
+All 56 existing provider unit tests also passed on Linux before pinning them.
