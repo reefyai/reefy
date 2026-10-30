@@ -390,8 +390,8 @@ jobs:
         id: provider_metadata
         run: bash tools/ci/logged-build.sh tools/ci/stage-providers.sh
 
-      - name: Archive and verify exact kernel debug files
-        run: bash tools/ci/logged-build.sh tools/ci/archive-debug.sh
+      - name: Archive and verify kernel and userspace debug files
+        run: python3 tools/ci/archive-pair.py
 
       - name: Upload kernel debug archive
         uses: actions/upload-artifact@v4
@@ -401,9 +401,6 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 90
-
-      - name: Archive and verify system userspace debug files
-        run: python3 tools/userspace-debug/archive.py archive --output "$BR_OUTPUT"
 
       - name: Upload system userspace debug archive
         uses: actions/upload-artifact@v4
@@ -545,7 +542,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: reefy-build-logs
-          path: ${{ runner.temp }}/reefy-build-logs/${{ github.run_id }}-${{ github.run_attempt }}/*.log
+          path: |
+            ${{ runner.temp }}/reefy-build-logs/${{ github.run_id }}-${{ github.run_attempt }}/*.log
+            archive-pair-logs/*.log
+            archive-pair-logs/summary.json
           if-no-files-found: warn
           retention-days: 30
 
