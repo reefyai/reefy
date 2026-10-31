@@ -243,3 +243,43 @@ pinned NVIDIA `32dce2db6c66e58d24f9423c4b8cb5e12be7e178` and fixture
 selection are committed in each provider's `tests/registry-tool-downloads.md`.
 This covers transfer handling; it does not establish the external TLS error's
 underlying cause. Complete publication and full E2E remain required.
+
+## Completed full dev overlap validation
+
+Functional firmware source `0183813eb1dbf3601bcbee1c1daab77e620c6ea4` and service
+source `40bfe3631cf1e83d90502f0ad8326409fa7db6ec` passed the complete matched
+measurement pair: six workers in 3498.053 seconds, seven in 3441.553 seconds.
+Each includes all 55 scenarios, 22 newly dispatched isolated jobs inside its
+clock and four fresh firmware workflows. Shared ordinary firmware, fresh A/B
+and rollback ordering, readiness budgets and all integrity/preservation checks
+remain unchanged. Both runs demonstrated a maximum of two overlapping build
+jobs using both warm private workspaces; all eight catalogs have distinct
+versions/build IDs and one kernel ABI. The backend digest stayed unchanged.
+
+Qualified six-worker firmware runs: `41158516505`, `41160602152`, `41160837977`,
+`41159654601`. Qualified seven-worker runs: `41163518118`, `41165713215`,
+`41165286074`, `41164545493`. All eight completed successfully on self-hosted
+compute. Corrected-source preparation runs `41156687693` and `41156712949`
+also passed completely before either clock; their concurrent archive pairs
+took 148.296 and 148.287 seconds with a shared 16-CPU budget per pair.
+
+Seven saved only 56.500 seconds (1.615%), less than earlier repeat variation.
+The default remains six. Build-slot utilization was 59.12% and 57.25% within
+the respective first-to-last build windows, with at most 24 seconds of recorded
+prerequisite-plus-builder admission queue excluding prerequisite execution.
+More builders do not address the observed backup/recovery tail. The final
+seven-worker NVMe backup waited 1236.219 seconds for serialized admission,
+then performed 190.885 seconds of guarded work after a 715.502-second clone
+critical section. Those overlapping worker/resource intervals are not added
+to suite wall time. Preserve serialization and connection draining while
+investigating that critical section before increasing scenario parallelism.
+
+Six failed attempts and all regression provenance are retained separately and
+excluded from speedup claims. Preparation and scoped synthetic DNS maintenance
+are outside the matched clocks. The copied runner was restored to its private
+reservation with cache/workspace preserved; the publisher remains repository
+scoped. No merge, default-worker-count change, backend deploy or fleet reconcile
+was performed. Full commands, source pins and evidence locations are recorded
+in Reefy Service's `docs/E2E-SPEEDUP.md` and draft PR 202; firmware draft PR 86
+contains the paired qualification notes. Later documentation-only commits do
+not replace the measured functional source above.
