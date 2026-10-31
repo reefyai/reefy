@@ -51,9 +51,9 @@ permissions:
 
 jobs:
   debug-archive-tests:
-    # Lightweight archive checks use the general pool; preserve the heavy
-    # runner and its persistent cache for compilation and provider packaging.
-    runs-on: [self-hosted, Linux, X64, big-bird]
+    # Keep the short build prerequisite with compilation so general acceptance
+    # jobs cannot leave the reserved builder idle while these checks queue.
+    runs-on: [self-hosted, Linux, X64, large]
     steps:
       - uses: actions/checkout@v4
         with:
