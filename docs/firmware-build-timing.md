@@ -224,3 +224,22 @@ transport fixtures do not validate ZIP extraction. The same established full
 service E2E suite validates actual archives, provider identities, signatures,
 OTA, rollback and data preservation against the updated immutable workflow pins.
 All 56 existing provider unit tests also passed on Linux before pinning them.
+
+
+## Registry tool transfer retries
+
+The NVIDIA and synthetic fixture publishers now use the bounded native curl
+registry-tool download path already exercised by the AMD publisher. Each tool
+is downloaded to a private temporary file with two retries covering read
+failures. Exhaustion removes partial output and fails the job. Extraction and
+installation run only after both downloads succeed; HTTPS verification and
+all artifact checks remain enabled.
+
+The established provider tests include real interrupted-transfer fixtures.
+The same two tests fail against NVIDIA workflow `cd097619e8f01ea723a5c6901bb1cea968341e9f`
+and fixture workflow `198e8ffb34d8eeb0e3fc65d725fb680bf4d8970a`, and pass against
+pinned NVIDIA `32dce2db6c66e58d24f9423c4b8cb5e12be7e178` and fixture
+`5c0654ea1b85acab5d3b35497f0cec02a036cec0`. Reproduction commands and baseline
+selection are committed in each provider's `tests/registry-tool-downloads.md`.
+This covers transfer handling; it does not establish the external TLS error's
+underlying cause. Complete publication and full E2E remain required.
