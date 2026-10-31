@@ -84,7 +84,7 @@ jobs:
       # Do not reuse an older release's host tools, target files or stamps.
       BR_OUTPUT: /buildroot-cache/output-buildroot-d6061d65-go1.27.3
       # Keep the image sequence continuous when switching output directories.
-      REEFY_VERSION_COUNTER_FILES: /buildroot-cache/output/build/.reefy-last-version:/buildroot-cache/.reefy-last-version
+      REEFY_VERSION_COUNTER_FILES: /buildroot-cache/output/build/.reefy-last-version:/buildroot-cache/.reefy-last-version:/buildroot-cache/shared-version/.reefy-last-version
       REEFY_E2E_BUILD_IDENTITY_SALT: ${{ inputs.e2e_build_identity_salt || '' }}
 
     steps:
@@ -97,14 +97,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: reefyai/reefy-artifact-fixtures
-          ref: 6ade769d7d6b9dbf51e476bc7fa5515150233bc9
+          ref: 5c0654ea1b85acab5d3b35497f0cec02a036cec0
           path: artifact-fixtures
 
       - name: Checkout AMD provider builder
         uses: actions/checkout@v4
         with:
           repository: reefyai/reefy-amd
-          ref: ba626ce6b10aaeefc7b14f4855aba2832a0bd864
+          ref: be11248dd3de5c492d06c363a036981d8012a566
           path: amd-provider
 
       - name: Validate E2E build identity salt
@@ -390,8 +390,8 @@ jobs:
         id: provider_metadata
         run: bash tools/ci/logged-build.sh tools/ci/stage-providers.sh
 
-      - name: Archive and verify exact kernel debug files
-        run: bash tools/ci/logged-build.sh tools/ci/archive-debug.sh
+      - name: Archive and verify kernel and userspace debug files
+        run: python3 tools/ci/archive-pair.py
 
       - name: Upload kernel debug archive
         uses: actions/upload-artifact@v4
@@ -401,9 +401,6 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 90
-
-      - name: Archive and verify system userspace debug files
-        run: python3 tools/userspace-debug/archive.py archive --output "$BR_OUTPUT"
 
       - name: Upload system userspace debug archive
         uses: actions/upload-artifact@v4
@@ -545,35 +542,38 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: reefy-build-logs
-          path: ${{ runner.temp }}/reefy-build-logs/${{ github.run_id }}-${{ github.run_attempt }}/*.log
+          path: |
+            ${{ runner.temp }}/reefy-build-logs/${{ github.run_id }}-${{ github.run_attempt }}/*.log
+            archive-pair-logs/*.log
+            archive-pair-logs/summary.json
           if-no-files-found: warn
           retention-days: 30
 
 
   publish-nvidia-provider:
     needs: build
-    uses: reefyai/reefy-nvidia/.github/workflows/publish.yml@ca39fde3967729bcdd8bd5985f5743ad4feb2e8a
+    uses: reefyai/reefy-nvidia/.github/workflows/publish.yml@32dce2db6c66e58d24f9423c4b8cb5e12be7e178
     with:
       input_artifact: reefy-nvidia-inputs
     secrets: inherit
 
   publish-intel-provider:
     needs: build
-    uses: reefyai/reefy-intel/.github/workflows/publish.yml@f75938889aac291c478b541fc635d8b2d27ae8ae
+    uses: reefyai/reefy-intel/.github/workflows/publish.yml@a0fffe946c4d5026de87dc71f94e9433a9716538
     with:
       input_artifact: reefy-intel-inputs
     secrets: inherit
 
   publish-amd-provider:
     needs: build
-    uses: reefyai/reefy-amd/.github/workflows/publish.yml@ba626ce6b10aaeefc7b14f4855aba2832a0bd864
+    uses: reefyai/reefy-amd/.github/workflows/publish.yml@be11248dd3de5c492d06c363a036981d8012a566
     with:
       input_artifact: reefy-amd-inputs
     secrets: inherit
 
   publish-artifact-fixture:
     needs: build
-    uses: reefyai/reefy-artifact-fixtures/.github/workflows/publish.yml@6ade769d7d6b9dbf51e476bc7fa5515150233bc9
+    uses: reefyai/reefy-artifact-fixtures/.github/workflows/publish.yml@5c0654ea1b85acab5d3b35497f0cec02a036cec0
     with:
       input_artifact: reefy-artifact-fixture-inputs
     secrets: inherit

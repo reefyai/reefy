@@ -177,3 +177,109 @@ The provider commits must remain reachable when merging their review PRs:
 use merge commits to preserve the exact pinned workflow SHAs, or update and
 revalidate the firmware pins after any history rewrite. All 50 existing
 provider payload tests passed before live workflow validation.
+
+## Provider artifact download timeout validation
+
+Fresh-firmware E2E exercises provider publication before OTA. Its existing
+release-success requirement rejects a missing provider input rather than
+accepting a partially published firmware release. A full parallel attempt
+reached that boundary with a successful build but a failed AMD publication:
+workflow `41142073090`, job `124362799377`, OS source
+`47c1c0dfcbf827a489e52b8a9f14dabe26560e2d`. The artifact download step reported
+success after 31 seconds, but `inputs/metadata.env` was absent. An independent
+download verified the immutable ZIP's SHA-256, all CRCs and the metadata entry.
+The failed full attempt is excluded from runtime claims.
+
+The old `actions/download-artifact` bundle at
+`d3f86a106a0bac45b974a628896c90dbdf5c8093` can leave its transfer promise
+unresolved after its inactivity timer destroys the response. The process then
+exits with status zero. The upstream v8.0.2 bundle at
+`9000827ccba6bdab643e8b6fd33ac0654aef8333` explicitly rejects that timeout,
+allowing its existing bounded retry loop to run. Provider workflows pin this
+upstream release. Artifact names, immutable payloads, signature checks and
+release requirements are unchanged. This addresses the false-success boundary;
+it does not establish the cause of intermittent external TLS failures.
+
+The established `tools/ci` unittest discovery includes an opt-in integration
+probe, `test_artifact_download_timeout.py`. It evaluates the unmodified published
+transport function with local synthetic response/extraction fixtures. Only the
+30-second timer is accelerated to 50 milliseconds. It requires Node.js and an
+explicit action bundle, makes no network request and uses no device data.
+Ordinary discovery skips it when that bundle is not supplied. Repeat with:
+
+```bash
+curl -fsSL --retry 3 -o /tmp/artifact-baseline.js \
+  https://raw.githubusercontent.com/actions/download-artifact/d3f86a106a0bac45b974a628896c90dbdf5c8093/dist/index.js
+curl -fsSL --retry 3 -o /tmp/artifact-fixed.js \
+  https://raw.githubusercontent.com/actions/download-artifact/9000827ccba6bdab643e8b6fd33ac0654aef8333/dist/index.js
+REEFY_ARTIFACT_ACTION_BUNDLE=/tmp/artifact-baseline.js \
+  python3 -m unittest discover -s tools/ci -p test_artifact_download_timeout.py -v
+REEFY_ARTIFACT_ACTION_BUNDLE=/tmp/artifact-fixed.js \
+  python3 -m unittest discover -s tools/ci -p test_artifact_download_timeout.py -v
+```
+
+Baseline: complete transfer passes; stalled-transfer rejection fails because the
+process exits zero without settling the promise. Fixed: both tests pass. These
+transport fixtures do not validate ZIP extraction. The same established full
+service E2E suite validates actual archives, provider identities, signatures,
+OTA, rollback and data preservation against the updated immutable workflow pins.
+All 56 existing provider unit tests also passed on Linux before pinning them.
+
+
+## Registry tool transfer retries
+
+The NVIDIA and synthetic fixture publishers now use the bounded native curl
+registry-tool download path already exercised by the AMD publisher. Each tool
+is downloaded to a private temporary file with two retries covering read
+failures. Exhaustion removes partial output and fails the job. Extraction and
+installation run only after both downloads succeed; HTTPS verification and
+all artifact checks remain enabled.
+
+The established provider tests include real interrupted-transfer fixtures.
+The same two tests fail against NVIDIA workflow `cd097619e8f01ea723a5c6901bb1cea968341e9f`
+and fixture workflow `198e8ffb34d8eeb0e3fc65d725fb680bf4d8970a`, and pass against
+pinned NVIDIA `32dce2db6c66e58d24f9423c4b8cb5e12be7e178` and fixture
+`5c0654ea1b85acab5d3b35497f0cec02a036cec0`. Reproduction commands and baseline
+selection are committed in each provider's `tests/registry-tool-downloads.md`.
+This covers transfer handling; it does not establish the external TLS error's
+underlying cause. Complete publication and full E2E remain required.
+
+## Completed full dev overlap validation
+
+Functional firmware source `0183813eb1dbf3601bcbee1c1daab77e620c6ea4` and service
+source `40bfe3631cf1e83d90502f0ad8326409fa7db6ec` passed the complete matched
+measurement pair: six workers in 3498.053 seconds, seven in 3441.553 seconds.
+Each includes all 55 scenarios, 22 newly dispatched isolated jobs inside its
+clock and four fresh firmware workflows. Shared ordinary firmware, fresh A/B
+and rollback ordering, readiness budgets and all integrity/preservation checks
+remain unchanged. Both runs demonstrated a maximum of two overlapping build
+jobs using both warm private workspaces; all eight catalogs have distinct
+versions/build IDs and one kernel ABI. The backend digest stayed unchanged.
+
+Qualified six-worker firmware runs: `41158516505`, `41160602152`, `41160837977`,
+`41159654601`. Qualified seven-worker runs: `41163518118`, `41165713215`,
+`41165286074`, `41164545493`. All eight completed successfully on self-hosted
+compute. Corrected-source preparation runs `41156687693` and `41156712949`
+also passed completely before either clock; their concurrent archive pairs
+took 148.296 and 148.287 seconds with a shared 16-CPU budget per pair.
+
+Seven saved only 56.500 seconds (1.615%), less than earlier repeat variation.
+The default remains six. Build-slot utilization was 59.12% and 57.25% within
+the respective first-to-last build windows, with at most 24 seconds of recorded
+prerequisite-plus-builder admission queue excluding prerequisite execution.
+More builders do not address the observed backup/recovery tail. The final
+seven-worker NVMe backup waited 1236.219 seconds for serialized admission,
+then performed 190.885 seconds of guarded work after a 715.502-second clone
+critical section. Those overlapping worker/resource intervals are not added
+to suite wall time. Preserve serialization and connection draining while
+investigating that critical section before increasing scenario parallelism.
+
+Six failed attempts and all regression provenance are retained separately and
+excluded from speedup claims. Preparation and scoped synthetic DNS maintenance
+are outside the matched clocks. The copied runner was restored to its private
+reservation with cache/workspace preserved; the publisher remains repository
+scoped. No merge, default-worker-count change, backend deploy or fleet reconcile
+was performed. Full commands, source pins and evidence locations are recorded
+in Reefy Service's `docs/E2E-SPEEDUP.md` and draft PR 202; firmware draft PR 86
+contains the paired qualification notes. Later documentation-only commits do
+not replace the measured functional source above.
