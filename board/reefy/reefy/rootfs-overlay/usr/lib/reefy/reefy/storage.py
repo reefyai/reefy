@@ -176,6 +176,9 @@ def _boot_gpt_identity(disk):
 # Adoption metadata updates are infrequent and may wait on storage flushes.
 BOOT_GPT_TIMEOUT_SECONDS = 60
 
+# Provisioning writes can wait for local storage writeback under contention.
+KEYFILE_WRITE_TIMEOUT_SECONDS = 60
+
 
 def _repair_boot_gpt(disk):
     """Relocate an expanded boot disk's GPT without interactive prompts."""
@@ -241,7 +244,7 @@ class Storage:
             _log('Writing fresh LUKS keyfile...')
         result = subprocess.run(
             ['dd', 'if=/dev/urandom', f'of={key_part}', 'bs=1M', 'count=1'],
-            capture_output=True, timeout=10)
+            capture_output=True, timeout=KEYFILE_WRITE_TIMEOUT_SECONDS)
         if result.returncode != 0:
             raise RuntimeError(
                 f'Failed to initialize LUKS key partition {key_part}: '
@@ -256,7 +259,7 @@ class Storage:
         passphrase = result.stdout.strip()
         result = subprocess.run(
             ['dd', f'of={key_part}', 'conv=notrunc'],
-            input=passphrase.encode(), capture_output=True, timeout=10)
+            input=passphrase.encode(), capture_output=True, timeout=KEYFILE_WRITE_TIMEOUT_SECONDS)
         if result.returncode != 0:
             raise RuntimeError(
                 f'Failed to write LUKS key partition {key_part}: '

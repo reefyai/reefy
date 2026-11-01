@@ -63,6 +63,8 @@ jobs:
       - run: python3 -m unittest discover -s tools/kernel-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/userspace-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/ci -p 'test_*.py'
+      - name: Verify provider publisher identity pins
+        run: python3 -m unittest discover -s board/reefy/reefy/tests -p 'test_provider_workflow.py'
 
   build:
     needs: debug-archive-tests

@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 import types
@@ -50,6 +51,109 @@ class FreshKeyfileTests(unittest.TestCase):
             command, ['dd', 'of=/dev/synthetic-key', 'conv=notrunc'])
         self.assertNotIn(secret, ' '.join(command))
         self.assertEqual(kwargs['input'], secret.encode())
+
+
+    def _slow_success(self, delayed_write):
+        # Exercise real child deadlines and stock dd against private files.
+        # Only latency is injected; no disk utility or completion is mocked.
+        original_run = subprocess.run
+        writes = 0
+        delayed_child = (
+            'import os,sys,time; time.sleep(12); '
+            'os.execv(sys.argv[1],sys.argv[1:])')
+        with tempfile.TemporaryDirectory(prefix='synthetic-key-write-') as directory:
+            key = Path(directory) / 'key'
+            sentinel = Path(directory) / 'unrelated-data'
+            sentinel.write_bytes(b'synthetic preserved data')
+
+            def run(command, **kwargs):
+                nonlocal writes
+                if command[0] == 'dd':
+                    writes += 1
+                    if writes == delayed_write:
+                        command = [sys.executable, '-c', delayed_child,
+                                   shutil.which('dd'), *command[1:]]
+                return original_run(command, **kwargs)
+
+            with mock.patch.object(storage.subprocess, 'run', side_effect=run):
+                storage.Storage()._write_fresh_keyfile(str(key))
+            self.assertEqual(writes, 2)
+            self.assertEqual(key.stat().st_size, 1024**2)
+            self.assertEqual(len(storage.base64.b64decode(key.read_bytes()[:44],
+                                                         validate=True)), 32)
+            self.assertEqual(sentinel.read_bytes(), b'synthetic preserved data')
+
+    def test_slow_random_fill_completes_without_extending_adoption(self):
+        self._slow_success(1)
+
+    def test_slow_passphrase_write_completes_without_extending_adoption(self):
+        self._slow_success(2)
+
+    def test_write_timeout_aborts_before_formatting_or_wiping_data(self):
+        for delayed_write in (1, 2):
+            with self.subTest(write=delayed_write):
+                writes = 0
+                calls = []
+
+                def run(command, **kwargs):
+                    nonlocal writes
+                    calls.append(command)
+                    if command[0] == 'dd':
+                        writes += 1
+                        if writes == delayed_write:
+                            # Preserve subprocess' timeout failure behavior.
+                            raise subprocess.TimeoutExpired(command, kwargs['timeout'])
+                    if command[0] == 'openssl':
+                        return types.SimpleNamespace(returncode=0,
+                            stdout='synthetic-key\n', stderr='')
+                    return types.SimpleNamespace(returncode=0, stdout='', stderr='')
+
+                instance = storage.Storage()
+                with tempfile.TemporaryDirectory(prefix='synthetic-key-refusal-') as directory:
+                    data = Path(directory) / 'existing-data'
+                    data.write_bytes(b'untouched synthetic volume')
+                    with mock.patch.object(storage.subprocess, 'run', side_effect=run), \
+                            mock.patch.object(instance, '_preflight_luks_targets', return_value=512), \
+                            mock.patch.object(instance, '_force_wipe_device') as wipe:
+                        with self.assertRaises(subprocess.TimeoutExpired) as failure:
+                            instance._provision_luks_stack(
+                                [(str(data), 'synthetic-mapper')],
+                                str(Path(directory) / 'new-key'), sector_size=512)
+                        self.assertGreater(failure.exception.timeout, 0)
+                        self.assertLessEqual(failure.exception.timeout, 60)
+                        wipe.assert_not_called()
+                    self.assertFalse(any(command[0] == 'cryptsetup' for command in calls))
+                    self.assertEqual(data.read_bytes(), b'untouched synthetic volume')
+
+    def test_write_error_aborts_before_formatting_or_wiping_data(self):
+        for failed_write in (1, 2):
+            with self.subTest(write=failed_write):
+                writes = 0
+                calls = []
+
+                def run(command, **kwargs):
+                    nonlocal writes
+                    calls.append(command)
+                    if command[0] == 'dd':
+                        writes += 1
+                        if writes == failed_write:
+                            return types.SimpleNamespace(returncode=1,
+                                stdout='', stderr='synthetic write failure')
+                    if command[0] == 'openssl':
+                        return types.SimpleNamespace(returncode=0,
+                            stdout='synthetic-key\n', stderr='')
+                    return types.SimpleNamespace(returncode=0, stdout='', stderr='')
+
+                instance = storage.Storage()
+                with mock.patch.object(storage.subprocess, 'run', side_effect=run), \
+                        mock.patch.object(instance, '_preflight_luks_targets', return_value=512), \
+                            mock.patch.object(instance, '_force_wipe_device') as wipe:
+                    with self.assertRaisesRegex(RuntimeError, 'key partition'):
+                        instance._provision_luks_stack(
+                            [('/dev/synthetic-data', 'synthetic-mapper')],
+                            '/dev/synthetic-key', sector_size=512)
+                    wipe.assert_not_called()
+                self.assertFalse(any(command[0] == 'cryptsetup' for command in calls))
 
 
 class VolumeLvNameTests(unittest.TestCase):
