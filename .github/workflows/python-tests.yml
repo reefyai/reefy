@@ -18,9 +18,17 @@ on:
       - 'board/reefy/reefy/rootfs-overlay/usr/share/varlink/**'
       - 'board/reefy/reefy/tests/**'
       - '.github/workflows/python-tests.yml'
+      - '.github/workflows/firmware-build.yml'
+      - 'board/reefy/reefy/provider-publisher-pins'
+      - 'board/reefy/reefy/post_build.sh'
+      - 'board/reefy/reefy/scripts/calculate_build_id.sh'
   pull_request:
     paths:
       - '.github/workflows/python-tests.yml'
+      - '.github/workflows/firmware-build.yml'
+      - 'board/reefy/reefy/provider-publisher-pins'
+      - 'board/reefy/reefy/post_build.sh'
+      - 'board/reefy/reefy/scripts/calculate_build_id.sh'
       - 'board/reefy/reefy/rootfs-overlay/usr/lib/reefy/**'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-backup'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/boot-reefy-init.sh'
