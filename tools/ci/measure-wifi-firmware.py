@@ -91,6 +91,11 @@ def main():
     # XE firmware is removed from the OS by post_build.sh and is unchanged here.
     harness.write_text('''SHELL := /bin/bash
 TAR := tar
+qstrip = $(strip $(subst ",,$(1)))
+define sep
+
+
+endef
 include $(CONFIG)
 BR2_PACKAGE_LINUX_FIRMWARE_XE :=
 include $(BUILDROOT)/package/linux-firmware/linux-firmware.mk
@@ -104,7 +109,13 @@ $(FIRMWARE)/.measurement-install:
 \t$(file >$(MANIFEST),$(sort $(LINUX_FIRMWARE_FILES) $(LINUX_FIRMWARE_DIRS)))
 \t$(file >$(LICENSES),$(LINUX_FIRMWARE_LICENSE_FILES))
 \t$(LINUX_FIRMWARE_BUILD_CMDS)
+\t$(foreach hook,$(LINUX_FIRMWARE_POST_BUILD_HOOKS),$(call $(hook))$(sep))
+\t$(foreach hook,$(LINUX_FIRMWARE_PRE_INSTALL_TARGET_HOOKS),$(call $(hook))$(sep))
 \t$(call LINUX_FIRMWARE_INSTALL_FW,$(DESTINATION)/lib/firmware)
+\t$(foreach hook,$(LINUX_FIRMWARE_POST_INSTALL_TARGET_HOOKS),$(call $(hook))$(sep))
+\t$(foreach hook,$(LINUX_FIRMWARE_PRE_INSTALL_IMAGES_HOOKS),$(call $(hook))$(sep))
+\t$(call LINUX_FIRMWARE_INSTALL_FW,$(BINARIES_DIR))
+\t$(foreach hook,$(LINUX_FIRMWARE_POST_INSTALL_IMAGES_HOOKS),$(call $(hook))$(sep))
 ''')
     for name, items in groups.items():
         group = scratch / name
@@ -125,11 +136,17 @@ $(FIRMWARE)/.measurement-install:
              f'BUILDROOT={args.buildroot}', f'SOURCE={source}', f'FIRMWARE={firmware}',
              f'DESTINATION={target}', f'MANIFEST={group / "manifest.txt"}',
              f'LICENSES={group / "licenses.txt"}',
-             f'WITH_OVERRIDE={1 if name in ("mediatek_ralink", "combined") else ""}'], log)
+             f'HOST_DIR={args.mksquashfs.parent.parent}', f'BASE_DIR={group}',
+             f'TARGET_DIR={target}', f'BINARIES_DIR={group / "images"}',
+             'WITH_OVERRIDE=1'], log)
         for relative in (group / 'licenses.txt').read_text().split():
             if not (firmware / relative).is_file():
                 raise RuntimeError(f'Missing package license: {relative}')
         entries = inventory(target)
+        images = inventory(group / 'images')
+        if images != {str(Path(name).relative_to('lib/firmware')): value
+                      for name, value in entries.items()}:
+            raise RuntimeError('Native target and image firmware installations differ')
         image = group / 'firmware.squashfs'
         run([str(args.mksquashfs), str(target), str(image), '-noappend',
              '-comp', 'xz', '-b', '128K', '-processors', '4', '-all-root',

@@ -7,6 +7,25 @@ remain useful after CI artifacts expire. MiB means 1,048,576 bytes.
 
 ## Additional Wi-Fi firmware payload
 
+The optimized implementation adds **30,351,360 compressed bytes** (30.35 MB,
+28.95 MiB), measured through the native Buildroot package hooks for both
+target and image destinations. Intel contributes 10,096,640 compressed bytes.
+All 31 selected Intel firmware prefixes and all three PNVM files remain.
+The broad-bundle measurements below are the original comparison baseline.
+
+The package trims only superseded Intel API files, then compresses the
+retained files with XZ CRC32. Other adapter families retain their complete
+selected firmware. A reviewed manifest pins the kernel, firmware release,
+file hashes and Intel driver source hashes. Pin/source changes or missing
+compressed-loader support stop the build for review. Warm installs remove
+only managed Intel names in the target and image trees. The existing package
+cache includes the manifest and helper source in its input fingerprint.
+
+The self-hosted firmware workflow also builds the kernel's unchanged upstream
+`test_firmware` module as a test artifact. It is not installed in Reefy OS.
+The permanent service E2E scenario uses it to exercise actual kernel loading,
+including refusal and preservation cases, on a run-owned QEMU guest.
+
 The expanded Wi-Fi selections add **217,020,188 bytes unpacked** (217.02 MB,
 206.97 MiB) and **80,678,912 bytes compressed** (80.68 MB, 76.94 MiB).
 There are 263 additional regular files. The table measures each family
@@ -127,8 +146,8 @@ old Intel adapters is unnecessary for the main savings demonstrated here.
 Changing the entire rootfs to 1 MiB blocks affects all boot/read behavior and
 saves less than pruning, so it is not the recommended first change.
 
-These are research results. Production selections remain the broad bundle;
-neither pruning nor per-file compression has been applied or hardware-tested.
+These are the initial research results, followed by the implementation above.
+Physical adapter qualification remains separate from kernel-loader testing.
 The compatible-name selection is based on source inspection, not physical
 adapter qualification. Every input file matches the SHA-256 from the original
 verified `linux-firmware-20260810` inventory. The Intel subtree was retrieved

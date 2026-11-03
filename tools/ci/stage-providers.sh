@@ -67,6 +67,29 @@ make -C "$kernel_build" \
 cp "$GITHUB_WORKSPACE/artifact-fixtures/module/reefy_e2e_artifact.ko" \
   "$fixture/reefy_e2e_artifact.ko"
 
+# Build the upstream firmware-loader self-test as a separate test fixture.
+# Do not install it in Reefy OS or change the production kernel config.
+fw_loader_build="$BR_OUTPUT/reefy-artifacts/firmware-loader-build"
+mkdir -p "$fw_loader_build"
+cp "$kernel_build/lib/test_firmware.c" "$fw_loader_build/test_firmware.c"
+printf 'obj-m := test_firmware.o\n' > "$fw_loader_build/Makefile"
+make -C "$kernel_build" \
+  ARCH=x86 \
+  CROSS_COMPILE="$BR_OUTPUT/host/bin/x86_64-buildroot-linux-gnu-" \
+  M="$fw_loader_build" modules
+cp "$fw_loader_build/test_firmware.ko" "$fixture/test_firmware.ko"
+cp "$GITHUB_WORKSPACE/board/reefy/reefy/package-overrides/intel-wifi-firmware.json" \
+  "$fixture/intel-wifi-firmware.json"
+python3 - "$fixture" "$kernel_build/lib/test_firmware.c" <<'PY'
+import hashlib, json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+metadata = dict(line.split('=', 1) for line in (root / 'metadata.env').read_text().splitlines())
+metadata['test_module_sha256'] = hashlib.sha256((root / 'test_firmware.ko').read_bytes()).hexdigest()
+metadata['stock_source_sha256'] = hashlib.sha256(pathlib.Path(sys.argv[2]).read_bytes()).hexdigest()
+metadata['policy_sha256'] = hashlib.sha256((root / 'intel-wifi-firmware.json').read_bytes()).hexdigest()
+(root / 'firmware-loader-provenance.json').write_text(json.dumps(metadata, indent=2) + '\n')
+PY
+
 echo "reefy_build_id=$reefy_build_id" >> "$GITHUB_OUTPUT"
 echo "kernel_abi_sha256=$kernel_abi_sha256" >> "$GITHUB_OUTPUT"
 echo "image_version=$image_version" >> "$GITHUB_OUTPUT"

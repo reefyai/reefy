@@ -442,6 +442,16 @@ jobs:
           path: ${{ env.BR_OUTPUT }}/reefy-python-ca-provenance.json
           if-no-files-found: ignore
 
+      - name: Upload Intel Wi-Fi firmware provenance
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: firmware-intel-wifi-provenance
+          path: |
+            ${{ env.BR_OUTPUT }}/reefy-intel-wifi-target.json
+            ${{ env.BR_OUTPUT }}/reefy-intel-wifi-images.json
+          if-no-files-found: ignore
+
       - name: Mark verified package caches current
         run: python3 tools/ci/package-cache.py "$BR_OUTPUT" --commit
 
@@ -485,6 +495,9 @@ jobs:
           path: |
             ${{ env.BR_OUTPUT }}/reefy-artifacts/fixture/metadata.env
             ${{ env.BR_OUTPUT }}/reefy-artifacts/fixture/reefy_e2e_artifact.ko
+            ${{ env.BR_OUTPUT }}/reefy-artifacts/fixture/test_firmware.ko
+            ${{ env.BR_OUTPUT }}/reefy-artifacts/fixture/intel-wifi-firmware.json
+            ${{ env.BR_OUTPUT }}/reefy-artifacts/fixture/firmware-loader-provenance.json
 
       # Per-flavor artifact upload. Naming convention `reefy-<flavor>`
       # is the contract reefy-deploy queries against

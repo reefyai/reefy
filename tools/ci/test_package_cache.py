@@ -96,7 +96,9 @@ class PackageFingerprintTests(unittest.TestCase):
             (output / '.config').write_text('CONFIG_INITIAL=y\n')
             names = ['package/thin-provisioning-tools/recipe.mk',
                      'board/reefy/reefy/rootfs-overlay/app.py',
-                     'board/reefy/reefy/post_build.sh']
+                     'board/reefy/reefy/post_build.sh',
+                     'board/reefy/reefy/package-overrides/intel-wifi-firmware.json',
+                     'board/reefy/reefy/scripts/intel_wifi_firmware.py']
             for name in names:
                 path = repo / name
                 path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,4210 @@
+{
+  "firmware_version": "20260810",
+  "archive_sha256": "ac17c34fe73756926a961fbafadf8d8f07a3bd2dd2f4ea31a0fb5d50c714a49a",
+  "buildroot_revision": "d6061d653d7fb215c2409c59e4bfad1b9d677215",
+  "baseline_defconfig_sha256": "6655370396bf8c4e1a5b1ea06078521a647b4658b4e1d64aed2cfc5f34ef2d4b",
+  "updated_defconfig_sha256": "7debe763c9c6cb3e169f5597d1faf6ed1b13f2e2ac584d3624a4a90830a41d4a",
+  "package_override_sha256": "509e19ac4f31055205be7a89d206907985601e3203f58d6f370f67ec14dac55f",
+  "method": "Native Buildroot config/package install; firmware-only SquashFS XZ, 128 KiB blocks; not a full firmware build",
+  "added_selections": [
+    "BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_10K_QCA9377",
+    "BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_10K_QCA998X",
+    "BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_11K_WCN6855",
+    "BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_6002",
+    "BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_6003",
+    "BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_6004",
+    "BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_7010",
+    "BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_9170",
+    "BR2_PACKAGE_LINUX_FIRMWARE_ATHEROS_9271",
+    "BR2_PACKAGE_LINUX_FIRMWARE_BRCM_BCM4366B1",
+    "BR2_PACKAGE_LINUX_FIRMWARE_BRCM_BCM4366C0",
+    "BR2_PACKAGE_LINUX_FIRMWARE_BRCM_BCM43XX",
+    "BR2_PACKAGE_LINUX_FIRMWARE_BRCM_BCM43XXX",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_100",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_1000",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_105",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_135",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_2000",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_2030",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_22000",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_22260",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_3160",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_3168",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_3945",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_4965",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_5000",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_6000G2A",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_6000G2B",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_6E",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_7",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_7260",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_7265",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_7265D",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_8000C",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_8265",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_9XXX",
+    "BR2_PACKAGE_LINUX_FIRMWARE_IWLWIFI_QUZ",
+    "BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7601U",
+    "BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7610E",
+    "BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT76X2E",
+    "BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7921",
+    "BR2_PACKAGE_LINUX_FIRMWARE_QUALCOMM_6174",
+    "BR2_PACKAGE_LINUX_FIRMWARE_RALINK_RT2XX",
+    "BR2_PACKAGE_LINUX_FIRMWARE_RALINK_RT61",
+    "BR2_PACKAGE_LINUX_FIRMWARE_RALINK_RT73"
+  ],
+  "groups": {
+    "baseline": {
+      "regular_file_bytes": 38687410,
+      "regular_files": 86,
+      "symlinks": 4,
+      "squashfs_bytes": 14688256,
+      "seconds": 13.955,
+      "inventory": {
+        "lib/firmware/mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin": {
+          "bytes": 137632,
+          "sha256": "7fc9075d6d54b31e0539734614ca971fa52caf41b642a3000c8a4501591a4d98"
+        },
+        "lib/firmware/mediatek/WIFI_RAM_CODE_MT7922_1.bin": {
+          "bytes": 1231252,
+          "sha256": "d100e5e04c324fc8da6302112d1e0b4fac952286447d2419eabcd8fb0a1f5b93"
+        },
+        "lib/firmware/rtl_nic/rtl8105e-1.fw": {
+          "bytes": 2076,
+          "sha256": "03f7ee92f1a7c1723ac7a7447ae006930c9bb07e1d77c3d12bc70cc0d855bb00"
+        },
+        "lib/firmware/rtl_nic/rtl8106e-1.fw": {
+          "bytes": 1856,
+          "sha256": "b249074519d87ff8bde17185894333c993f25f747f221305cf69a5d7b4519674"
+        },
+        "lib/firmware/rtl_nic/rtl8106e-2.fw": {
+          "bytes": 832,
+          "sha256": "ba4f7ed4bac4768810ba8a6c118457f5912f61a0380aa4fb322093caf52de0ef"
+        },
+        "lib/firmware/rtl_nic/rtl8107e-1.fw": {
+          "bytes": 992,
+          "sha256": "da3b9939538376c0dd1a97cdfead9fedba1213146bbdda31ef12b87fd616b831"
+        },
+        "lib/firmware/rtl_nic/rtl8107e-2.fw": {
+          "bytes": 976,
+          "sha256": "edc3a14a76852c411c4af5514dae5d55be37873f56a7563f80db7a76f2dc1ba7"
+        },
+        "lib/firmware/rtl_nic/rtl8125a-3.fw": {
+          "bytes": 3456,
+          "sha256": "3f6c328af0ceff5969c729edf0f535e8bb2a9b9e05d15b6be3199a3e6d421b99"
+        },
+        "lib/firmware/rtl_nic/rtl8125b-2.fw": {
+          "bytes": 3328,
+          "sha256": "529bf1c25c97ff52b401090d00ff89cc22351012336e5a0c9662728a3ee909ef"
+        },
+        "lib/firmware/rtl_nic/rtl8125d-1.fw": {
+          "bytes": 17168,
+          "sha256": "bc3c82939f02df2f58a17e7354096375001a80a5c1ca3f459c555d5a7d42bf1b"
+        },
+        "lib/firmware/rtl_nic/rtl8125d-2.fw": {
+          "bytes": 6800,
+          "sha256": "c1cb0d358ca985b0d45584612143fd93613d567064702e265bfb370e99c90e35"
+        },
+        "lib/firmware/rtl_nic/rtl8168d-1.fw": {
+          "bytes": 1492,
+          "sha256": "ded779f55b3fc5bb8576b2d2b6c724581c72160b3c2f88e33b42dc6c2c4e70b0"
+        },
+        "lib/firmware/rtl_nic/rtl8168d-2.fw": {
+          "bytes": 1324,
+          "sha256": "35dd68c01a7b24f6e554bd2c0b9cf57cf962a826651f66e75ffcea37cf2c3bb9"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-1.fw": {
+          "bytes": 5500,
+          "sha256": "c38d6818a99336c8e43883bbc136f9fab3b1b470ec0e86c61bf5dac617fe94bd"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-2.fw": {
+          "bytes": 3920,
+          "sha256": "0a489929b270df1533645a75d55ff357fd66e42057aa4e198ab738930de39386"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-3.fw": {
+          "bytes": 3872,
+          "sha256": "1287fdd82ff2f60d75c9970c108b49cfd11456ad3fe29c9666b8539a35777dbf"
+        },
+        "lib/firmware/rtl_nic/rtl8168f-1.fw": {
+          "bytes": 3424,
+          "sha256": "ed3794c651d38b807168c7c49431bb8036922b16766588c520a20287f277615d"
+        },
+        "lib/firmware/rtl_nic/rtl8168f-2.fw": {
+          "bytes": 1232,
+          "sha256": "5586b2093502f7dec762f23091fa90d6d8731e7d873509072ce2eae23ab8ee99"
+        },
+        "lib/firmware/rtl_nic/rtl8168fp-3.fw": {
+          "bytes": 336,
+          "sha256": "c526c06aa0ab8d9b57ba2b730bb1e40a1c3513f8591e238dceb2e0f45210ed27"
+        },
+        "lib/firmware/rtl_nic/rtl8168g-2.fw": {
+          "bytes": 4896,
+          "sha256": "f878ec719f78e0b104bc73362a9862611858bec893f58a1b3b289a0a57d71d25"
+        },
+        "lib/firmware/rtl_nic/rtl8168g-3.fw": {
+          "bytes": 832,
+          "sha256": "e4d5e62b0a5a097af34c7aa3c55f634fd5be2c232e02c6b983ebd7e699cb27e9"
+        },
+        "lib/firmware/rtl_nic/rtl8168h-1.fw": {
+          "bytes": 992,
+          "sha256": "4ef963690f3a7b25a9bc97fb12c58922c02886699933ed6297636cc15aad9d8d"
+        },
+        "lib/firmware/rtl_nic/rtl8168h-2.fw": {
+          "bytes": 976,
+          "sha256": "0b4beab008e308f28296c13188ee23edfeff7d865e398a7ade170495c8cec7e6"
+        },
+        "lib/firmware/rtl_nic/rtl8402-1.fw": {
+          "bytes": 1824,
+          "sha256": "a14adee93b7c7ecc738137d910334761ecf9c64d3addeccbd024a2f902f7f808"
+        },
+        "lib/firmware/rtl_nic/rtl8411-1.fw": {
+          "bytes": 2112,
+          "sha256": "e66a3183787c80987e1e36c9f7d4b2c3cd5d976640b83f462702f914febc4b38"
+        },
+        "lib/firmware/rtl_nic/rtl8411-2.fw": {
+          "bytes": 1040,
+          "sha256": "80dbdacba4d5dfee46b6c2b4e433f6f2eeb756d29ad46bf2362ba20c8ec594b1"
+        },
+        "lib/firmware/rtlwifi/rtl8188efw.bin": {
+          "bytes": 11216,
+          "sha256": "ca778610db58042c395141918b319c76df10a83dbd0aa9b3db6a9bb01c477cce"
+        },
+        "lib/firmware/rtlwifi/rtl8188eufw.bin": {
+          "bytes": 15262,
+          "sha256": "2ff74315287529dec2e50eb57d6e0c97d2116f28ae166773ccdf93b6360000c4"
+        },
+        "lib/firmware/rtlwifi/rtl8188fufw.bin": {
+          "bytes": 21020,
+          "sha256": "e6189d6d7032b83f0ed4284629c43db66262449a866f33fd329e611239f62e1f"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfw.bin": {
+          "bytes": 16192,
+          "sha256": "1f4fae583e47e28b208a955a55e187e07ec44a0efcf0e0d357a7462d1f135618"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfwU.bin": {
+          "bytes": 14818,
+          "sha256": "2d6ad600581c5792d2de9c2bd31617563dbbe50f2ba709acf35ea36158586f01"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfwU_B.bin": {
+          "bytes": 16332,
+          "sha256": "a5a32fcb5c9876b63472aafaab4b6ec37104f23c48becb52e0b57c7a326d755b"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw.bin": {
+          "bytes": 16014,
+          "sha256": "6327de71c544c27fe909d509a3d5605d46b94c102a3c27700f812b95cbe74254"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_A.bin": {
+          "bytes": 16126,
+          "sha256": "32846065b017c8b1d2d448e8c0ea2f5e741424809be49f2c6a6261339cd0b0cf"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_B.bin": {
+          "bytes": 16096,
+          "sha256": "479e5e6732b0e07cfcab4cc190b8c30465c0b7f8c0ed22d742bedd4412cbcf2a"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_TMSC.bin": {
+          "bytes": 16126,
+          "sha256": "c083f2db36ef33d0ffffc979aba1d40f55fa9dc38dce50f26e0108a21c080286"
+        },
+        "lib/firmware/rtlwifi/rtl8192defw.bin": {
+          "bytes": 31376,
+          "sha256": "618a5c9fbf96d60a9340abd740d75224ba47cd08dd4fbed05aae47a082155e78"
+        },
+        "lib/firmware/rtlwifi/rtl8192eefw.bin": {
+          "link": "rtl8192eu_nic.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_ap_wowlan.bin": {
+          "bytes": 25264,
+          "sha256": "52ba57df842c97b38b8108e53577911efb9da29dc352499c149564a08827db60"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_nic.bin": {
+          "bytes": 32286,
+          "sha256": "b15bc955fba2fc3abc093affe62c9f7284a0b84d4f13f8ce55366488dc9aad8b"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_wowlan.bin": {
+          "bytes": 29008,
+          "sha256": "4caf9e99e31b059a6c6f42e11554f14b5413eadde20dba1c66476d284a5e52f7"
+        },
+        "lib/firmware/rtlwifi/rtl8192sefw.bin": {
+          "bytes": 80208,
+          "sha256": "a24d1c61251321b94943f8bd65b4110658cc4c94e61e2e643946d6e5008e4c5b"
+        },
+        "lib/firmware/rtlwifi/rtl8712u.bin": {
+          "bytes": 122328,
+          "sha256": "6e84ec69c300b0182c9bc8fa41e88281eeb04013c4a34c341748052c3c6a9d3d"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_A.bin": {
+          "bytes": 22172,
+          "sha256": "d63e39f41dd726b3a833e64fea44696c7b74ad595d31dcaae509b17d247f125c"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_B.bin": {
+          "bytes": 24118,
+          "sha256": "850374b96076ab4b854ee9dc42ef57f9bd6b24493b74ba6b609c690d17f1c552"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_B_NoBT.bin": {
+          "bytes": 19200,
+          "sha256": "a24af5491dbfa3937633049fc66576ed478dec60e7676263f00a2ce9dd22c25b"
+        },
+        "lib/firmware/rtlwifi/rtl8723befw.bin": {
+          "bytes": 30746,
+          "sha256": "1bfa6d0910e072ed26d793ccf27889ebd774851be95d2d2543fd8de7cf31b969"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_ap_wowlan.bin": {
+          "link": "rtl8723bu_ap_wowlan.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_bt.bin": {
+          "bytes": 9120,
+          "sha256": "774f6628ae2cd7d6d8563cbf88f67f9a95e895cb44b55fb26ffdf895fdf26aea"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_nic.bin": {
+          "link": "rtl8723bu_nic.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_wowlan.bin": {
+          "link": "rtl8723bu_wowlan.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_ap_wowlan.bin": {
+          "bytes": 20886,
+          "sha256": "957707c7d6e01564685a801da1084a60b6b726c3d756d54dbe56ce064110e288"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_nic.bin": {
+          "bytes": 32108,
+          "sha256": "a52b5a7be4841b4b2839eddf5122b3300a3610866abe4bb3c3c9e444c8ab7969"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_wowlan.bin": {
+          "bytes": 26398,
+          "sha256": "534f6c4ad8a8068f7888db7af83408f0d2ef04e5d4fc8514e07522a4b0bab3a7"
+        },
+        "lib/firmware/rtlwifi/rtl8723fw.bin": {
+          "bytes": 11662,
+          "sha256": "9b6d8f2546834b69abc675fe4450e5d92f6ecbeaa22619d9047b8e5f27909d4e"
+        },
+        "lib/firmware/rtlwifi/rtl8723fw_B.bin": {
+          "bytes": 22996,
+          "sha256": "a8d1b37e7585445f599de24f4b655b194857e2c836f450798be04f67b3898305"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw.bin": {
+          "bytes": 28984,
+          "sha256": "025c13f2e7f7526e1f932049bed2146467318f547ffa8481804ecfd911cda695"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw_29.bin": {
+          "bytes": 28348,
+          "sha256": "11e7ea00504fa2fa6f5216bb59403c4f2f20eec5b676c0add0695db3b0c4a335"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw_wowlan.bin": {
+          "bytes": 19858,
+          "sha256": "df6fe0f14f6c7755da351b8d02282dde1c190133c118a5ca9627b6fd87dfd5da"
+        },
+        "lib/firmware/rtlwifi/rtl8822befw.bin": {
+          "bytes": 127496,
+          "sha256": "0952522dd0fa8cd226a0394a8092e98cd0bdccb59b31ed00dd682a6c28f60839"
+        },
+        "lib/firmware/rtw88/rtw8703b_fw.bin": {
+          "bytes": 20290,
+          "sha256": "5e32bd891c74a0719c871726b74490cf5e1a05cdcefb8fe2414f80fffdeb9f9d"
+        },
+        "lib/firmware/rtw88/rtw8703b_wow_fw.bin": {
+          "bytes": 23074,
+          "sha256": "7156b0d2b4580e63d11a3a78258c35ff28e840c7c6428953920ae6a1cd5d05ac"
+        },
+        "lib/firmware/rtw88/rtw8723b_fw.bin": {
+          "bytes": 32272,
+          "sha256": "9ed919e9a6977b3d0cb05e7bbf5e8b1bd8edb20db6d4bc1b279273aa333ab9e4"
+        },
+        "lib/firmware/rtw88/rtw8723d_fw.bin": {
+          "bytes": 28884,
+          "sha256": "9c64e079815a333a3f7b731be7cc0be65206ebc883891659dc8ff5ed36a5e2f5"
+        },
+        "lib/firmware/rtw88/rtw8812a_fw.bin": {
+          "bytes": 27030,
+          "sha256": "abdcca4e8bf76ebfba23d433de310ffefebd0ff9d01990639d4cd9602b32b71a"
+        },
+        "lib/firmware/rtw88/rtw8814a_fw.bin": {
+          "bytes": 68320,
+          "sha256": "aa6bf9d62b2d2d8a37254fd6d917ba2839888cdedc21850d4481874cb1d3d7cb"
+        },
+        "lib/firmware/rtw88/rtw8821a_fw.bin": {
+          "bytes": 31898,
+          "sha256": "4693ece655044d96f81bd3f3e8db14dc352b493219c4fd0a75788a6fbd9eac3c"
+        },
+        "lib/firmware/rtw88/rtw8821c_fw.bin": {
+          "bytes": 139472,
+          "sha256": "2ef409bc418549fcf294061dd0cae1fc22fd9da79b60524950b25de18732f3f0"
+        },
+        "lib/firmware/rtw88/rtw8822b_fw.bin": {
+          "bytes": 161240,
+          "sha256": "a72da690597bfa99d8eb6fc2ab090d18d8ad92ac2befd35db1c9e3662d8d8418"
+        },
+        "lib/firmware/rtw88/rtw8822c_fw.bin": {
+          "bytes": 202600,
+          "sha256": "3deecb31210986d98cdbfb000391e08d602a6eee4ffc883969faa2b907ab03ba"
+        },
+        "lib/firmware/rtw88/rtw8822c_wow_fw.bin": {
+          "bytes": 145224,
+          "sha256": "6717fc6ff426a74571ac4f04cd9698fb2f356012c05c58aa64cf21ceb6b958a2"
+        },
+        "lib/firmware/rtw89/rtw8851b_fw-1.bin": {
+          "bytes": 1408706,
+          "sha256": "1c4ccb5fa06bf5649146025e95993db66876a1fbc0bd766ec05686587f69c1b7"
+        },
+        "lib/firmware/rtw89/rtw8851b_fw.bin": {
+          "bytes": 1164440,
+          "sha256": "945c854d7cf69dd97bf1da0181b011787d9b3c5d59c47e8b9dbea4eb4eee170b"
+        },
+        "lib/firmware/rtw89/rtw8852a_fw-1.bin": {
+          "bytes": 1958648,
+          "sha256": "fdb5513cf7372440d7980a61aa4b753b192b056734a978458ae4a4ef7f4b2c1e"
+        },
+        "lib/firmware/rtw89/rtw8852a_fw.bin": {
+          "bytes": 1428272,
+          "sha256": "7eb1fe457f5a704b7a4f05a66c67cfa6af2f1142566b640c8e402445d04b0159"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw-1.bin": {
+          "bytes": 1245944,
+          "sha256": "5b68415e3bfe72715d63a70703d4471b04b5475b8ff69cfdc8cdf48233cd5d3a"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw-2.bin": {
+          "bytes": 1554594,
+          "sha256": "6ff6aeb56bb5b85cba333b755f8cc1dbfe9ff6e5b16e39f6ba01ce7f1eaa7714"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw.bin": {
+          "bytes": 1035232,
+          "sha256": "5b9c224ae014e0aeade8701412d820e213c8880e08615b3905dba89659f21baf"
+        },
+        "lib/firmware/rtw89/rtw8852bt_fw-1.bin": {
+          "bytes": 937688,
+          "sha256": "164e5e2243b1241a23d5e77876aa11be003fb09f5aa7794dc7bbf80957c8c254"
+        },
+        "lib/firmware/rtw89/rtw8852bt_fw.bin": {
+          "bytes": 928714,
+          "sha256": "b75914312181a2cd8a15fe65024d218e875324de9231ce2071e31513bffbffa3"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw-1.bin": {
+          "bytes": 2375560,
+          "sha256": "95e4226f7a4c2a506a5ea2bb8b6247842dd12fc312639750881c5bfdec7bbec5"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw-2.bin": {
+          "bytes": 2644326,
+          "sha256": "916e87d1470bce5400712f53d419ae68a0f44d858670c57e118d4f0b1d89c5b4"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw.bin": {
+          "bytes": 1532656,
+          "sha256": "e05e704911ec5d6523e2951416290cc2189444d48a0420e637de6acf5bf21228"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-1.bin": {
+          "bytes": 1583434,
+          "sha256": "4340bc322912f30f1793bb57a1747c23b15e40db2df628d6687d1ddf722f2828"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-2.bin": {
+          "bytes": 1586954,
+          "sha256": "9ca08cd3098b954cc0d44edd5c0b079877e5dd9b98d55cfec1c302b41475d88c"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-3.bin": {
+          "bytes": 1238542,
+          "sha256": "484f496bc149706b92c7352925fef4155fecb60bc61ec0f5c55a3b651ed915f4"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-4.bin": {
+          "bytes": 1849226,
+          "sha256": "d11927f593c82879bd0437435475d7915a60932374747984b3dc906a23009dea"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw.bin": {
+          "bytes": 1537690,
+          "sha256": "84458f2fa7c9a730fae242d858a82814141421d66a1f672a10121982513daf6d"
+        },
+        "lib/firmware/rtw89/rtw8922d_fw.bin": {
+          "bytes": 5683768,
+          "sha256": "95cbd1630267b6fa6e1736fc3fbc85d9339d0d52dfe71b5042ddb448196bfc5a"
+        },
+        "lib/firmware/rtw89/rtw8922ds_fw.bin": {
+          "bytes": 3768808,
+          "sha256": "e2718524d6808c7c0cd4eea1a9597a9c99c5001ae7e29507bab2b4a4199c5d8f"
+        }
+      },
+      "added_regular_file_bytes": 0,
+      "added_squashfs_bytes": 0
+    },
+    "intel": {
+      "regular_file_bytes": 48772446,
+      "regular_files": 120,
+      "symlinks": 38,
+      "squashfs_bytes": 24784896,
+      "seconds": 24.324,
+      "inventory": {
+        "lib/firmware/intel/iwlwifi/iwlwifi-100-5.ucode.xz": {
+          "bytes": 115956,
+          "sha256": "ca1f3942b3e492b6566c8fa39f0408638f9894473f4832a36d2da54eb8dcd444"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-1000-5.ucode.xz": {
+          "bytes": 116068,
+          "sha256": "eca1eb04373c7a6a8e73a2f7ed6dd5adf42bb131e66aa6cbcd2907dcec022645"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-105-6.ucode.xz": {
+          "bytes": 196948,
+          "sha256": "b3c946392eeae1572dab48cb1cb084edacf04bc7b94a93afedc7a37979b64fdb"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-135-6.ucode.xz": {
+          "bytes": 205632,
+          "sha256": "f6d5b66ccbf867b45144c31582d5837430d17f8b9ba739ce862761c9fb5d0b74"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-2000-6.ucode.xz": {
+          "bytes": 199376,
+          "sha256": "1111b842d88057b47f29e15b6515e4555ef5ccc3626aaf483a1d15f4e19737b1"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-2030-6.ucode.xz": {
+          "bytes": 207776,
+          "sha256": "604a802c0feb60ceec50d490c849a19e01bc87f55f951d0a4b4f873aef8a3e07"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-3160-17.ucode.xz": {
+          "bytes": 218056,
+          "sha256": "aa01b2e5d5f35042d3c2cf4a7caa1c13882b19cc943595b8060ea31c4150aa2f"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-3168-29.ucode.xz": {
+          "bytes": 262648,
+          "sha256": "a1d8b0a895c78c725cbefe0f6096302db7de1ff786449ace253b0d18bc3c531d"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-3945-2.ucode.xz": {
+          "bytes": 55432,
+          "sha256": "8d798f2b32b3884e1b7ee5c2a5f7e25a99bf2fa43f022a0517c757412b2e5cda"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-4965-2.ucode.xz": {
+          "bytes": 68592,
+          "sha256": "dbff56561f763a10cd45677336be4489778c1a4ca98244ac07db0ae9489d22cd"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-5000-5.ucode.xz": {
+          "bytes": 113208,
+          "sha256": "71d73c69d9b113c33306d64642e6ab25c8365c1aec9fafb870a5718cdf2d4642"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-6000g2a-6.ucode.xz": {
+          "bytes": 182732,
+          "sha256": "2097e2cf9f5bf209a2132a7c477d1f8715c29a5e19c524cc0c7bfdb118e184a7"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-6000g2b-6.ucode.xz": {
+          "bytes": 184324,
+          "sha256": "084fcddab6f5ba015260d2133caf8f85db9659239b2a7792ce94f493687bc565"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-7260-17.ucode.xz": {
+          "bytes": 243044,
+          "sha256": "62f75b944fd79fdd495946fbb33e7b9481ee48a64fc9847aae9ff0e5b124803e"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-7265-17.ucode.xz": {
+          "bytes": 258968,
+          "sha256": "c5982d66a47b1e563ae9edc36ae4c6301fb30c4d2f5f5f483d290f9f51e07b12"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-7265D-29.ucode.xz": {
+          "bytes": 269452,
+          "sha256": "0049d3700584e19f24b87da5109af4adc0ce21cdf8a76c7614e68d5df0d2bba8"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-8000C-36.ucode.xz": {
+          "bytes": 380392,
+          "sha256": "fa63713c71ba876d63b3e2bf7176764a2712d7a26aee2ab8a53dae7721d30466"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-8265-36.ucode.xz": {
+          "bytes": 384552,
+          "sha256": "ba5e602b8b646246cce94e6abd713a916ac33d6c8442f4d3d93abadb04de949a"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-9000-pu-b0-jf-b0-46.ucode.xz": {
+          "bytes": 435052,
+          "sha256": "50f7c056ad3cb3a3026170ae67d255cb6462765fb5f7cd2192e2c8c5fb30446a"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-9260-th-b0-jf-b0-46.ucode.xz": {
+          "bytes": 430948,
+          "sha256": "aa38ba2fe1247f8a13bd13922d7e7278369ed22c696667b6db112cc892c2f11a"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-Qu-b0-hr-b0-77.ucode.xz": {
+          "bytes": 483792,
+          "sha256": "aa4c22fe8f0c1c4d6dbe438e124ecf94f2164818adfd228646a96dc7b260aeec"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-Qu-b0-jf-b0-77.ucode.xz": {
+          "bytes": 450200,
+          "sha256": "50944f4aac48bdaf05fd29b36fdc7da8deb6b60fca544e3c0e704841ff4555aa"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-Qu-c0-hr-b0-77.ucode.xz": {
+          "bytes": 483852,
+          "sha256": "f2d2bb313513ca8633b88f167138884aee8b63d5771ec59aa2934f120da8ba60"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-Qu-c0-jf-b0-77.ucode.xz": {
+          "bytes": 450296,
+          "sha256": "f881479907062d02a14f063f020177af3d73bc8283f8d1516d7a7546d4edcffc"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-QuZ-a0-hr-b0-77.ucode.xz": {
+          "bytes": 483868,
+          "sha256": "9d75ee2df33304b9d2f0fcf66289c3d3563234c65efe276690bf0282ba53f594"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-QuZ-a0-jf-b0-77.ucode.xz": {
+          "bytes": 450260,
+          "sha256": "5faa7caed1b595886825602ef8741b460053e7a922a2d7b0bf1c3c16b5110a2c"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-cc-a0-77.ucode.xz": {
+          "bytes": 477108,
+          "sha256": "8ffa2b4ef0c1715b3d04b3da0ef3c7bf14a16421cd995fa95db8bd09000fcf65"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-gl-c0-fm-c0-101.ucode.xz": {
+          "bytes": 628096,
+          "sha256": "e2363c54f127288feb5686be295434cc22c911d4a594aecdd2c396f1c2bcca0e"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-gl-c0-fm-c0.pnvm.xz": {
+          "bytes": 42740,
+          "sha256": "b14f4f0088e694038abbb87319047cea7e6419beb7868b15c73ede2f4e94fa7e"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-so-a0-gf-a0-89.ucode.xz": {
+          "bytes": 569940,
+          "sha256": "86cc00b50b0e0478b3924ef9b826fa39f3f473a56169540de7ee744a3ad8a95b"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-so-a0-gf-a0.pnvm.xz": {
+          "bytes": 7184,
+          "sha256": "4dfe9a7aea038d64f8e1b7ce8efae414368ac4076357fb0378863ecffb2f86f6"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-so-a0-jf-b0-77.ucode.xz": {
+          "bytes": 460920,
+          "sha256": "917baceed07b9e7ca3b1085c3063d70d690043a8be0909f66c07c8a0784e077e"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-ty-a0-gf-a0-89.ucode.xz": {
+          "bytes": 560816,
+          "sha256": "ee9f4b1795d20ef4c1014e9492b67b0416c45edbb0383695a9326d4d352b938d"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-ty-a0-gf-a0.pnvm.xz": {
+          "bytes": 6808,
+          "sha256": "ac31770ed23e873db9bead67bdc443c77c9d4d4a1de1bc62b0858e75f6c012a6"
+        },
+        "lib/firmware/iwlwifi-100-5.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-100-5.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-1000-5.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-1000-5.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-105-6.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-105-6.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-135-6.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-135-6.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-2000-6.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-2000-6.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-2030-6.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-2030-6.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-3160-17.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-3160-17.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-3168-29.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-3168-29.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-3945-2.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-3945-2.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-4965-2.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-4965-2.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-5000-5.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-5000-5.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-6000g2a-6.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-6000g2a-6.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-6000g2b-6.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-6000g2b-6.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-7260-17.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-7260-17.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-7265-17.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-7265-17.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-7265D-29.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-7265D-29.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-8000C-36.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-8000C-36.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-8265-36.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-8265-36.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-9000-pu-b0-jf-b0-46.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-9000-pu-b0-jf-b0-46.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-9260-th-b0-jf-b0-46.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-9260-th-b0-jf-b0-46.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-Qu-b0-hr-b0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-Qu-b0-hr-b0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-Qu-b0-jf-b0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-Qu-b0-jf-b0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-Qu-c0-hr-b0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-Qu-c0-hr-b0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-Qu-c0-jf-b0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-Qu-c0-jf-b0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-QuZ-a0-hr-b0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-QuZ-a0-hr-b0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-QuZ-a0-jf-b0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-QuZ-a0-jf-b0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-cc-a0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-cc-a0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-gl-c0-fm-c0-101.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-gl-c0-fm-c0-101.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-gl-c0-fm-c0.pnvm.xz": {
+          "link": "intel/iwlwifi/iwlwifi-gl-c0-fm-c0.pnvm.xz"
+        },
+        "lib/firmware/iwlwifi-so-a0-gf-a0-89.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-so-a0-gf-a0-89.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-so-a0-gf-a0.pnvm.xz": {
+          "link": "intel/iwlwifi/iwlwifi-so-a0-gf-a0.pnvm.xz"
+        },
+        "lib/firmware/iwlwifi-so-a0-jf-b0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-so-a0-jf-b0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-ty-a0-gf-a0-89.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-ty-a0-gf-a0-89.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-ty-a0-gf-a0.pnvm.xz": {
+          "link": "intel/iwlwifi/iwlwifi-ty-a0-gf-a0.pnvm.xz"
+        },
+        "lib/firmware/mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin": {
+          "bytes": 137632,
+          "sha256": "7fc9075d6d54b31e0539734614ca971fa52caf41b642a3000c8a4501591a4d98"
+        },
+        "lib/firmware/mediatek/WIFI_RAM_CODE_MT7922_1.bin": {
+          "bytes": 1231252,
+          "sha256": "d100e5e04c324fc8da6302112d1e0b4fac952286447d2419eabcd8fb0a1f5b93"
+        },
+        "lib/firmware/rtl_nic/rtl8105e-1.fw": {
+          "bytes": 2076,
+          "sha256": "03f7ee92f1a7c1723ac7a7447ae006930c9bb07e1d77c3d12bc70cc0d855bb00"
+        },
+        "lib/firmware/rtl_nic/rtl8106e-1.fw": {
+          "bytes": 1856,
+          "sha256": "b249074519d87ff8bde17185894333c993f25f747f221305cf69a5d7b4519674"
+        },
+        "lib/firmware/rtl_nic/rtl8106e-2.fw": {
+          "bytes": 832,
+          "sha256": "ba4f7ed4bac4768810ba8a6c118457f5912f61a0380aa4fb322093caf52de0ef"
+        },
+        "lib/firmware/rtl_nic/rtl8107e-1.fw": {
+          "bytes": 992,
+          "sha256": "da3b9939538376c0dd1a97cdfead9fedba1213146bbdda31ef12b87fd616b831"
+        },
+        "lib/firmware/rtl_nic/rtl8107e-2.fw": {
+          "bytes": 976,
+          "sha256": "edc3a14a76852c411c4af5514dae5d55be37873f56a7563f80db7a76f2dc1ba7"
+        },
+        "lib/firmware/rtl_nic/rtl8125a-3.fw": {
+          "bytes": 3456,
+          "sha256": "3f6c328af0ceff5969c729edf0f535e8bb2a9b9e05d15b6be3199a3e6d421b99"
+        },
+        "lib/firmware/rtl_nic/rtl8125b-2.fw": {
+          "bytes": 3328,
+          "sha256": "529bf1c25c97ff52b401090d00ff89cc22351012336e5a0c9662728a3ee909ef"
+        },
+        "lib/firmware/rtl_nic/rtl8125d-1.fw": {
+          "bytes": 17168,
+          "sha256": "bc3c82939f02df2f58a17e7354096375001a80a5c1ca3f459c555d5a7d42bf1b"
+        },
+        "lib/firmware/rtl_nic/rtl8125d-2.fw": {
+          "bytes": 6800,
+          "sha256": "c1cb0d358ca985b0d45584612143fd93613d567064702e265bfb370e99c90e35"
+        },
+        "lib/firmware/rtl_nic/rtl8168d-1.fw": {
+          "bytes": 1492,
+          "sha256": "ded779f55b3fc5bb8576b2d2b6c724581c72160b3c2f88e33b42dc6c2c4e70b0"
+        },
+        "lib/firmware/rtl_nic/rtl8168d-2.fw": {
+          "bytes": 1324,
+          "sha256": "35dd68c01a7b24f6e554bd2c0b9cf57cf962a826651f66e75ffcea37cf2c3bb9"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-1.fw": {
+          "bytes": 5500,
+          "sha256": "c38d6818a99336c8e43883bbc136f9fab3b1b470ec0e86c61bf5dac617fe94bd"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-2.fw": {
+          "bytes": 3920,
+          "sha256": "0a489929b270df1533645a75d55ff357fd66e42057aa4e198ab738930de39386"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-3.fw": {
+          "bytes": 3872,
+          "sha256": "1287fdd82ff2f60d75c9970c108b49cfd11456ad3fe29c9666b8539a35777dbf"
+        },
+        "lib/firmware/rtl_nic/rtl8168f-1.fw": {
+          "bytes": 3424,
+          "sha256": "ed3794c651d38b807168c7c49431bb8036922b16766588c520a20287f277615d"
+        },
+        "lib/firmware/rtl_nic/rtl8168f-2.fw": {
+          "bytes": 1232,
+          "sha256": "5586b2093502f7dec762f23091fa90d6d8731e7d873509072ce2eae23ab8ee99"
+        },
+        "lib/firmware/rtl_nic/rtl8168fp-3.fw": {
+          "bytes": 336,
+          "sha256": "c526c06aa0ab8d9b57ba2b730bb1e40a1c3513f8591e238dceb2e0f45210ed27"
+        },
+        "lib/firmware/rtl_nic/rtl8168g-2.fw": {
+          "bytes": 4896,
+          "sha256": "f878ec719f78e0b104bc73362a9862611858bec893f58a1b3b289a0a57d71d25"
+        },
+        "lib/firmware/rtl_nic/rtl8168g-3.fw": {
+          "bytes": 832,
+          "sha256": "e4d5e62b0a5a097af34c7aa3c55f634fd5be2c232e02c6b983ebd7e699cb27e9"
+        },
+        "lib/firmware/rtl_nic/rtl8168h-1.fw": {
+          "bytes": 992,
+          "sha256": "4ef963690f3a7b25a9bc97fb12c58922c02886699933ed6297636cc15aad9d8d"
+        },
+        "lib/firmware/rtl_nic/rtl8168h-2.fw": {
+          "bytes": 976,
+          "sha256": "0b4beab008e308f28296c13188ee23edfeff7d865e398a7ade170495c8cec7e6"
+        },
+        "lib/firmware/rtl_nic/rtl8402-1.fw": {
+          "bytes": 1824,
+          "sha256": "a14adee93b7c7ecc738137d910334761ecf9c64d3addeccbd024a2f902f7f808"
+        },
+        "lib/firmware/rtl_nic/rtl8411-1.fw": {
+          "bytes": 2112,
+          "sha256": "e66a3183787c80987e1e36c9f7d4b2c3cd5d976640b83f462702f914febc4b38"
+        },
+        "lib/firmware/rtl_nic/rtl8411-2.fw": {
+          "bytes": 1040,
+          "sha256": "80dbdacba4d5dfee46b6c2b4e433f6f2eeb756d29ad46bf2362ba20c8ec594b1"
+        },
+        "lib/firmware/rtlwifi/rtl8188efw.bin": {
+          "bytes": 11216,
+          "sha256": "ca778610db58042c395141918b319c76df10a83dbd0aa9b3db6a9bb01c477cce"
+        },
+        "lib/firmware/rtlwifi/rtl8188eufw.bin": {
+          "bytes": 15262,
+          "sha256": "2ff74315287529dec2e50eb57d6e0c97d2116f28ae166773ccdf93b6360000c4"
+        },
+        "lib/firmware/rtlwifi/rtl8188fufw.bin": {
+          "bytes": 21020,
+          "sha256": "e6189d6d7032b83f0ed4284629c43db66262449a866f33fd329e611239f62e1f"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfw.bin": {
+          "bytes": 16192,
+          "sha256": "1f4fae583e47e28b208a955a55e187e07ec44a0efcf0e0d357a7462d1f135618"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfwU.bin": {
+          "bytes": 14818,
+          "sha256": "2d6ad600581c5792d2de9c2bd31617563dbbe50f2ba709acf35ea36158586f01"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfwU_B.bin": {
+          "bytes": 16332,
+          "sha256": "a5a32fcb5c9876b63472aafaab4b6ec37104f23c48becb52e0b57c7a326d755b"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw.bin": {
+          "bytes": 16014,
+          "sha256": "6327de71c544c27fe909d509a3d5605d46b94c102a3c27700f812b95cbe74254"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_A.bin": {
+          "bytes": 16126,
+          "sha256": "32846065b017c8b1d2d448e8c0ea2f5e741424809be49f2c6a6261339cd0b0cf"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_B.bin": {
+          "bytes": 16096,
+          "sha256": "479e5e6732b0e07cfcab4cc190b8c30465c0b7f8c0ed22d742bedd4412cbcf2a"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_TMSC.bin": {
+          "bytes": 16126,
+          "sha256": "c083f2db36ef33d0ffffc979aba1d40f55fa9dc38dce50f26e0108a21c080286"
+        },
+        "lib/firmware/rtlwifi/rtl8192defw.bin": {
+          "bytes": 31376,
+          "sha256": "618a5c9fbf96d60a9340abd740d75224ba47cd08dd4fbed05aae47a082155e78"
+        },
+        "lib/firmware/rtlwifi/rtl8192eefw.bin": {
+          "link": "rtl8192eu_nic.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_ap_wowlan.bin": {
+          "bytes": 25264,
+          "sha256": "52ba57df842c97b38b8108e53577911efb9da29dc352499c149564a08827db60"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_nic.bin": {
+          "bytes": 32286,
+          "sha256": "b15bc955fba2fc3abc093affe62c9f7284a0b84d4f13f8ce55366488dc9aad8b"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_wowlan.bin": {
+          "bytes": 29008,
+          "sha256": "4caf9e99e31b059a6c6f42e11554f14b5413eadde20dba1c66476d284a5e52f7"
+        },
+        "lib/firmware/rtlwifi/rtl8192sefw.bin": {
+          "bytes": 80208,
+          "sha256": "a24d1c61251321b94943f8bd65b4110658cc4c94e61e2e643946d6e5008e4c5b"
+        },
+        "lib/firmware/rtlwifi/rtl8712u.bin": {
+          "bytes": 122328,
+          "sha256": "6e84ec69c300b0182c9bc8fa41e88281eeb04013c4a34c341748052c3c6a9d3d"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_A.bin": {
+          "bytes": 22172,
+          "sha256": "d63e39f41dd726b3a833e64fea44696c7b74ad595d31dcaae509b17d247f125c"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_B.bin": {
+          "bytes": 24118,
+          "sha256": "850374b96076ab4b854ee9dc42ef57f9bd6b24493b74ba6b609c690d17f1c552"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_B_NoBT.bin": {
+          "bytes": 19200,
+          "sha256": "a24af5491dbfa3937633049fc66576ed478dec60e7676263f00a2ce9dd22c25b"
+        },
+        "lib/firmware/rtlwifi/rtl8723befw.bin": {
+          "bytes": 30746,
+          "sha256": "1bfa6d0910e072ed26d793ccf27889ebd774851be95d2d2543fd8de7cf31b969"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_ap_wowlan.bin": {
+          "link": "rtl8723bu_ap_wowlan.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_bt.bin": {
+          "bytes": 9120,
+          "sha256": "774f6628ae2cd7d6d8563cbf88f67f9a95e895cb44b55fb26ffdf895fdf26aea"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_nic.bin": {
+          "link": "rtl8723bu_nic.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_wowlan.bin": {
+          "link": "rtl8723bu_wowlan.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_ap_wowlan.bin": {
+          "bytes": 20886,
+          "sha256": "957707c7d6e01564685a801da1084a60b6b726c3d756d54dbe56ce064110e288"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_nic.bin": {
+          "bytes": 32108,
+          "sha256": "a52b5a7be4841b4b2839eddf5122b3300a3610866abe4bb3c3c9e444c8ab7969"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_wowlan.bin": {
+          "bytes": 26398,
+          "sha256": "534f6c4ad8a8068f7888db7af83408f0d2ef04e5d4fc8514e07522a4b0bab3a7"
+        },
+        "lib/firmware/rtlwifi/rtl8723fw.bin": {
+          "bytes": 11662,
+          "sha256": "9b6d8f2546834b69abc675fe4450e5d92f6ecbeaa22619d9047b8e5f27909d4e"
+        },
+        "lib/firmware/rtlwifi/rtl8723fw_B.bin": {
+          "bytes": 22996,
+          "sha256": "a8d1b37e7585445f599de24f4b655b194857e2c836f450798be04f67b3898305"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw.bin": {
+          "bytes": 28984,
+          "sha256": "025c13f2e7f7526e1f932049bed2146467318f547ffa8481804ecfd911cda695"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw_29.bin": {
+          "bytes": 28348,
+          "sha256": "11e7ea00504fa2fa6f5216bb59403c4f2f20eec5b676c0add0695db3b0c4a335"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw_wowlan.bin": {
+          "bytes": 19858,
+          "sha256": "df6fe0f14f6c7755da351b8d02282dde1c190133c118a5ca9627b6fd87dfd5da"
+        },
+        "lib/firmware/rtlwifi/rtl8822befw.bin": {
+          "bytes": 127496,
+          "sha256": "0952522dd0fa8cd226a0394a8092e98cd0bdccb59b31ed00dd682a6c28f60839"
+        },
+        "lib/firmware/rtw88/rtw8703b_fw.bin": {
+          "bytes": 20290,
+          "sha256": "5e32bd891c74a0719c871726b74490cf5e1a05cdcefb8fe2414f80fffdeb9f9d"
+        },
+        "lib/firmware/rtw88/rtw8703b_wow_fw.bin": {
+          "bytes": 23074,
+          "sha256": "7156b0d2b4580e63d11a3a78258c35ff28e840c7c6428953920ae6a1cd5d05ac"
+        },
+        "lib/firmware/rtw88/rtw8723b_fw.bin": {
+          "bytes": 32272,
+          "sha256": "9ed919e9a6977b3d0cb05e7bbf5e8b1bd8edb20db6d4bc1b279273aa333ab9e4"
+        },
+        "lib/firmware/rtw88/rtw8723d_fw.bin": {
+          "bytes": 28884,
+          "sha256": "9c64e079815a333a3f7b731be7cc0be65206ebc883891659dc8ff5ed36a5e2f5"
+        },
+        "lib/firmware/rtw88/rtw8812a_fw.bin": {
+          "bytes": 27030,
+          "sha256": "abdcca4e8bf76ebfba23d433de310ffefebd0ff9d01990639d4cd9602b32b71a"
+        },
+        "lib/firmware/rtw88/rtw8814a_fw.bin": {
+          "bytes": 68320,
+          "sha256": "aa6bf9d62b2d2d8a37254fd6d917ba2839888cdedc21850d4481874cb1d3d7cb"
+        },
+        "lib/firmware/rtw88/rtw8821a_fw.bin": {
+          "bytes": 31898,
+          "sha256": "4693ece655044d96f81bd3f3e8db14dc352b493219c4fd0a75788a6fbd9eac3c"
+        },
+        "lib/firmware/rtw88/rtw8821c_fw.bin": {
+          "bytes": 139472,
+          "sha256": "2ef409bc418549fcf294061dd0cae1fc22fd9da79b60524950b25de18732f3f0"
+        },
+        "lib/firmware/rtw88/rtw8822b_fw.bin": {
+          "bytes": 161240,
+          "sha256": "a72da690597bfa99d8eb6fc2ab090d18d8ad92ac2befd35db1c9e3662d8d8418"
+        },
+        "lib/firmware/rtw88/rtw8822c_fw.bin": {
+          "bytes": 202600,
+          "sha256": "3deecb31210986d98cdbfb000391e08d602a6eee4ffc883969faa2b907ab03ba"
+        },
+        "lib/firmware/rtw88/rtw8822c_wow_fw.bin": {
+          "bytes": 145224,
+          "sha256": "6717fc6ff426a74571ac4f04cd9698fb2f356012c05c58aa64cf21ceb6b958a2"
+        },
+        "lib/firmware/rtw89/rtw8851b_fw-1.bin": {
+          "bytes": 1408706,
+          "sha256": "1c4ccb5fa06bf5649146025e95993db66876a1fbc0bd766ec05686587f69c1b7"
+        },
+        "lib/firmware/rtw89/rtw8851b_fw.bin": {
+          "bytes": 1164440,
+          "sha256": "945c854d7cf69dd97bf1da0181b011787d9b3c5d59c47e8b9dbea4eb4eee170b"
+        },
+        "lib/firmware/rtw89/rtw8852a_fw-1.bin": {
+          "bytes": 1958648,
+          "sha256": "fdb5513cf7372440d7980a61aa4b753b192b056734a978458ae4a4ef7f4b2c1e"
+        },
+        "lib/firmware/rtw89/rtw8852a_fw.bin": {
+          "bytes": 1428272,
+          "sha256": "7eb1fe457f5a704b7a4f05a66c67cfa6af2f1142566b640c8e402445d04b0159"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw-1.bin": {
+          "bytes": 1245944,
+          "sha256": "5b68415e3bfe72715d63a70703d4471b04b5475b8ff69cfdc8cdf48233cd5d3a"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw-2.bin": {
+          "bytes": 1554594,
+          "sha256": "6ff6aeb56bb5b85cba333b755f8cc1dbfe9ff6e5b16e39f6ba01ce7f1eaa7714"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw.bin": {
+          "bytes": 1035232,
+          "sha256": "5b9c224ae014e0aeade8701412d820e213c8880e08615b3905dba89659f21baf"
+        },
+        "lib/firmware/rtw89/rtw8852bt_fw-1.bin": {
+          "bytes": 937688,
+          "sha256": "164e5e2243b1241a23d5e77876aa11be003fb09f5aa7794dc7bbf80957c8c254"
+        },
+        "lib/firmware/rtw89/rtw8852bt_fw.bin": {
+          "bytes": 928714,
+          "sha256": "b75914312181a2cd8a15fe65024d218e875324de9231ce2071e31513bffbffa3"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw-1.bin": {
+          "bytes": 2375560,
+          "sha256": "95e4226f7a4c2a506a5ea2bb8b6247842dd12fc312639750881c5bfdec7bbec5"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw-2.bin": {
+          "bytes": 2644326,
+          "sha256": "916e87d1470bce5400712f53d419ae68a0f44d858670c57e118d4f0b1d89c5b4"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw.bin": {
+          "bytes": 1532656,
+          "sha256": "e05e704911ec5d6523e2951416290cc2189444d48a0420e637de6acf5bf21228"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-1.bin": {
+          "bytes": 1583434,
+          "sha256": "4340bc322912f30f1793bb57a1747c23b15e40db2df628d6687d1ddf722f2828"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-2.bin": {
+          "bytes": 1586954,
+          "sha256": "9ca08cd3098b954cc0d44edd5c0b079877e5dd9b98d55cfec1c302b41475d88c"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-3.bin": {
+          "bytes": 1238542,
+          "sha256": "484f496bc149706b92c7352925fef4155fecb60bc61ec0f5c55a3b651ed915f4"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-4.bin": {
+          "bytes": 1849226,
+          "sha256": "d11927f593c82879bd0437435475d7915a60932374747984b3dc906a23009dea"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw.bin": {
+          "bytes": 1537690,
+          "sha256": "84458f2fa7c9a730fae242d858a82814141421d66a1f672a10121982513daf6d"
+        },
+        "lib/firmware/rtw89/rtw8922d_fw.bin": {
+          "bytes": 5683768,
+          "sha256": "95cbd1630267b6fa6e1736fc3fbc85d9339d0d52dfe71b5042ddb448196bfc5a"
+        },
+        "lib/firmware/rtw89/rtw8922ds_fw.bin": {
+          "bytes": 3768808,
+          "sha256": "e2718524d6808c7c0cd4eea1a9597a9c99c5001ae7e29507bab2b4a4199c5d8f"
+        }
+      },
+      "added_regular_file_bytes": 10085036,
+      "added_squashfs_bytes": 10096640
+    },
+    "atheros": {
+      "regular_file_bytes": 64901354,
+      "regular_files": 153,
+      "symlinks": 10,
+      "squashfs_bytes": 23433216,
+      "seconds": 14.902,
+      "inventory": {
+        "lib/firmware/ar7010.fw": {
+          "bytes": 70624,
+          "sha256": "b5a089618861ed242f8101a04e0a9c1d246cf237af5b363567ffbdd9165e994c"
+        },
+        "lib/firmware/ar7010_1_1.fw": {
+          "bytes": 70624,
+          "sha256": "73917b6a4c87cad2da753e497c9a1056b1a14b70f265ea928bb06ac97ac20d67"
+        },
+        "lib/firmware/ar9170-1.fw": {
+          "bytes": 83968,
+          "sha256": "5b45481b87b8b3e4deb8fd54651506cb388f43d893bea323b10d8a273e40a6a7"
+        },
+        "lib/firmware/ar9170-2.fw": {
+          "bytes": 3508,
+          "sha256": "ea0e8fd7202b250b423a368f124eee8d7a9537a15ddaff2e3745065f69a08cfd"
+        },
+        "lib/firmware/ar9271.fw": {
+          "bytes": 51312,
+          "sha256": "89a99f6a73c409065dbef3d7706d089c03d2530003f03fac62cf1d37949b78b9"
+        },
+        "lib/firmware/ath10k/QCA6174/hw2.1/board-2.bin": {
+          "bytes": 263188,
+          "sha256": "fd5cab002d3533b674dfda6ec92d1d705c267c46d0e2e4dc8c917360e9e4913e"
+        },
+        "lib/firmware/ath10k/QCA6174/hw2.1/board.bin": {
+          "bytes": 8124,
+          "sha256": "23c51bdaf0ec685d9ce2ecf08fa91d05dc8c6506f82f0811cd365b55a92cbad1"
+        },
+        "lib/firmware/ath10k/QCA6174/hw2.1/firmware-5.bin": {
+          "bytes": 498172,
+          "sha256": "cc77874b709e26ffcc1cd548a4813e4be8cd523329c1b3ba34e341417d2935c5"
+        },
+        "lib/firmware/ath10k/QCA6174/hw2.1/notice_ath10k_firmware-5.txt": {
+          "bytes": 46087,
+          "sha256": "631065703055d11b099477c508508f20a80b202aad548a7726564bfa59a96c91"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/board-2.bin": {
+          "bytes": 740076,
+          "sha256": "66e83dde1c9af535df1fcd17c72971a96a263357300e921b358d35a353227d60"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/board.bin": {
+          "bytes": 8124,
+          "sha256": "1a8d225818b46986fc4f615594fbe448fa820618590d6902c8f844bb37cda667"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/firmware-4.bin": {
+          "bytes": 733784,
+          "sha256": "dc74ba148cf88f1f99a62854112ec574d8c265d88417a4d969461448b0ab60c5"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/firmware-6.bin": {
+          "bytes": 706360,
+          "sha256": "04d3bad5efa3f9fbe3ba53fd3e25fa9b0585ed227eea8111303b4e08861f979d"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/firmware-sdio-6.bin": {
+          "bytes": 607252,
+          "sha256": "b5fc019e98de2035ae00feb7c7db332c6c417cb763a8007c774cedb2e515eb06"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/notice_ath10k_firmware-4.txt": {
+          "bytes": 79689,
+          "sha256": "3b5eb392b2d9d8c46d6aae26d06c187e5ea3029b12d13bc2b8deb8b3ce6bfa53"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/notice_ath10k_firmware-6.txt": {
+          "bytes": 53425,
+          "sha256": "8ce5c6ea0542bf4aac31fc3ae16a39792ad22d0eae4543063fac56fb3380f021"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/notice_ath10k_firmware-sdio-6.txt": {
+          "bytes": 53425,
+          "sha256": "8ce5c6ea0542bf4aac31fc3ae16a39792ad22d0eae4543063fac56fb3380f021"
+        },
+        "lib/firmware/ath10k/QCA9377/hw1.0/board-2.bin": {
+          "bytes": 304308,
+          "sha256": "0fdcc7838f478da81704de88f7b33e28862110c6d5decf7818543f8e37e6cd98"
+        },
+        "lib/firmware/ath10k/QCA9377/hw1.0/board.bin": {
+          "bytes": 8124,
+          "sha256": "127d35d82edb46278f30c448cbca664d755ff0d5fed57b649959cdbc4208c768"
+        },
+        "lib/firmware/ath10k/QCA9377/hw1.0/firmware-5.bin": {
+          "bytes": 783336,
+          "sha256": "95ed94c24795c31dbdf8c97ab7278dd3a107673ea7330dfe4d01b1c65965f7a8"
+        },
+        "lib/firmware/ath10k/QCA9377/hw1.0/firmware-6.bin": {
+          "bytes": 751436,
+          "sha256": "8f8b002fccfe81d42238f27dd1f56d189604f180bd4772c7c8e75ae1fef16f01"
+        },
+        "lib/firmware/ath10k/QCA9377/hw1.0/firmware-sdio-5.bin": {
+          "bytes": 617852,
+          "sha256": "017b4ae7bdb5821ecb439fbf96d198421a57926918f2513db5fbd6d9c01debe6"
+        },
+        "lib/firmware/ath10k/QCA988X/hw2.0/board.bin": {
+          "bytes": 2116,
+          "sha256": "5b5b380333c2dd3b6ce67f30e2f7008f4020bf594970d3b464fd8d4a80fcd880"
+        },
+        "lib/firmware/ath10k/QCA988X/hw2.0/firmware-4.bin": {
+          "bytes": 241892,
+          "sha256": "208f91dd40b7db5feb645104125338491ca932028c2dd858bb12f07ac6c90cc1"
+        },
+        "lib/firmware/ath10k/QCA988X/hw2.0/firmware-5.bin": {
+          "bytes": 249044,
+          "sha256": "15867031c87f1d7408c1b25fb6419077a1b97de208f2aa58c3266b60e1f8daa2"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/Notice.txt": {
+          "bytes": 152394,
+          "sha256": "770720d03de70ff503c6d9bb6f6932fc7833d078647fe8352c6d5d49d44bbc5f"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/amss.bin": {
+          "bytes": 4988928,
+          "sha256": "e12b23ddc4b8d2d2a10a651a5d6fdcd00f60fcae884d2cf5dad17627211fcdfd"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/board-2.bin": {
+          "bytes": 7237392,
+          "sha256": "9287fa8d14d915892666b03e9403135875d08371fd1438d2c6d9fe96ae71cf68"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/m3.bin": {
+          "bytes": 266684,
+          "sha256": "0c590881870d0e6e98fc7d393ce05690e09287933b1b535e935bf5d98b77713f"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/nfa765/Notice.txt": {
+          "bytes": 152394,
+          "sha256": "770720d03de70ff503c6d9bb6f6932fc7833d078647fe8352c6d5d49d44bbc5f"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/nfa765/amss.bin": {
+          "bytes": 5079040,
+          "sha256": "8cb5e63877c7cfdc5002a7d28bc5d7f7d20368183e6f93b12c977bfd0351c7b7"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/nfa765/m3.bin": {
+          "bytes": 266684,
+          "sha256": "d20460e104b85a7be9cdb5199c4d8b94a9787912e3f920acd845694d4d71f730"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/regdb.bin": {
+          "bytes": 24310,
+          "sha256": "e1b774b1feda4cab01f5a26089124059539fc31544ac34129dce45c8ff26d645"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.1/amss.bin": {
+          "link": "../hw2.0/amss.bin"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.1/board-2.bin": {
+          "link": "../hw2.0/board-2.bin"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.1/m3.bin": {
+          "link": "../hw2.0/m3.bin"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.1/nfa765/amss.bin": {
+          "link": "../../hw2.0/nfa765/amss.bin"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.1/nfa765/m3.bin": {
+          "link": "../../hw2.0/nfa765/m3.bin"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.1/regdb.bin": {
+          "link": "../hw2.0/regdb.bin"
+        },
+        "lib/firmware/ath6k/AR6002/athwlan.bin.z77": {
+          "bytes": 98425,
+          "sha256": "6e08f2c2017182a339d366b387b66d0a79695f1c843362f29ab77e11d3456a71"
+        },
+        "lib/firmware/ath6k/AR6002/data.patch.hw2_0.bin": {
+          "bytes": 1336,
+          "sha256": "706cd9400ecd85035f0834856458adece8ee76718226a640f7732accb4292268"
+        },
+        "lib/firmware/ath6k/AR6002/eeprom.bin": {
+          "bytes": 784,
+          "sha256": "a0754af6dddf6a80fbf96a04be201cf12a46f2eab65495326000acd5c30bf0f9"
+        },
+        "lib/firmware/ath6k/AR6002/eeprom.data": {
+          "bytes": 48,
+          "sha256": "2c8be8370f764cce2210c8198453de0d66be107707ded8577486899a227b33b8"
+        },
+        "lib/firmware/ath6k/AR6003/hw1.0/athwlan.bin.z77": {
+          "bytes": 122209,
+          "sha256": "85b60e36d6beac63d7f7a9723bfab96926fb999d214bccf9a883066a542ed5c9"
+        },
+        "lib/firmware/ath6k/AR6003/hw1.0/bdata.SD31.bin": {
+          "bytes": 1024,
+          "sha256": "a8213ce2b3b8426c6c3173226d64770f3f32179f40f1e1733c20b54f47e235db"
+        },
+        "lib/firmware/ath6k/AR6003/hw1.0/bdata.SD32.bin": {
+          "bytes": 1024,
+          "sha256": "cdbcb99d80caea8ad08a784f9abedef4fad450f4a6e4b285cd120dd307107936"
+        },
+        "lib/firmware/ath6k/AR6003/hw1.0/bdata.WB31.bin": {
+          "bytes": 1024,
+          "sha256": "a8213ce2b3b8426c6c3173226d64770f3f32179f40f1e1733c20b54f47e235db"
+        },
+        "lib/firmware/ath6k/AR6003/hw1.0/data.patch.bin": {
+          "bytes": 5524,
+          "sha256": "690af1aba5e6adfb9f3ad98f6f2d1122bc72cc051a77a604e308943deb127b13"
+        },
+        "lib/firmware/ath6k/AR6003/hw1.0/otp.bin.z77": {
+          "bytes": 1665,
+          "sha256": "36abab469835f5adf8d329bd8ab2374629b21ce3270deb1da9de94cafefb2408"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.0/athwlan.bin.z77": {
+          "bytes": 100694,
+          "sha256": "93f293b68fa67b23137df5e41c2e6a0c633a8c7f2e990ff5c33408a564e6c0b5"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.0/bdata.SD31.bin": {
+          "bytes": 1792,
+          "sha256": "2bd79ecb33d7644702e250cb544c8a4dfcb73f4264b47b445ee94467b1d9d2f2"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.0/bdata.SD32.bin": {
+          "bytes": 1792,
+          "sha256": "cf8b458877eafc3d4f901377d3fedceac1149891343c5ae6bfb3aeca3e78ca7d"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.0/bdata.WB31.bin": {
+          "bytes": 1792,
+          "sha256": "2bd79ecb33d7644702e250cb544c8a4dfcb73f4264b47b445ee94467b1d9d2f2"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.0/data.patch.bin": {
+          "bytes": 6012,
+          "sha256": "a962f1a7268b2df783b34f9f90ebeee1b3fc9fcb6b05685144a48c73f96aad13"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.0/otp.bin.z77": {
+          "bytes": 3689,
+          "sha256": "761b35b0bec5dc7ea27c48691692a96abb10fd653e4fe95450d991168f479638"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/athwlan.bin": {
+          "bytes": 68975,
+          "sha256": "949028942832f7f63f7e3752c82bd0db4a2404fb78801e9322b4f370e281162e"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/bdata.SD31.bin": {
+          "bytes": 1792,
+          "sha256": "2bd79ecb33d7644702e250cb544c8a4dfcb73f4264b47b445ee94467b1d9d2f2"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/bdata.SD32.bin": {
+          "bytes": 1792,
+          "sha256": "cf8b458877eafc3d4f901377d3fedceac1149891343c5ae6bfb3aeca3e78ca7d"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/bdata.WB31.bin": {
+          "bytes": 1792,
+          "sha256": "2bd79ecb33d7644702e250cb544c8a4dfcb73f4264b47b445ee94467b1d9d2f2"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/data.patch.bin": {
+          "bytes": 140,
+          "sha256": "167fe4c11334ae0a2a3c6636d53d10ef9b228ff29af2d3c61a4d3d3dddba858d"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/endpointping.bin": {
+          "bytes": 12810,
+          "sha256": "39416ca2349f1c55cbe60dd34f747e004cd7f903ad4911ee55e1e71d27f5ed85"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/fw-2.bin": {
+          "bytes": 89844,
+          "sha256": "05cbc35708afa22dadef1b4ae7fb8532262565bbbae95faa2c6a93ab12800994"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/fw-3.bin": {
+          "bytes": 104562,
+          "sha256": "b627e9c74010a0947e2ab9a7138344ec2985ba3934e1ab7085fb45a75599645c"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/otp.bin": {
+          "bytes": 2783,
+          "sha256": "fe81e2ae6e330e1f36162743789809d977335de7d211dd3b87af7d5800d08683"
+        },
+        "lib/firmware/ath6k/AR6004/hw1.2/bdata.bin": {
+          "bytes": 6144,
+          "sha256": "7a8afa2dcc30ba0b59f87c8aca4f9bb819b9e8149495119b0517a8600b1ac915"
+        },
+        "lib/firmware/ath6k/AR6004/hw1.2/fw-2.bin": {
+          "bytes": 53122,
+          "sha256": "0170f161064f412842a09610bd043b3f86fde3cf4f291b366e05e4e4b8773897"
+        },
+        "lib/firmware/ath6k/AR6004/hw1.3/bdata.bin": {
+          "bytes": 6144,
+          "sha256": "3df79508fac33ed7a3f878245f3d76185d7fb79c96fe2a9bb160baac125ae492"
+        },
+        "lib/firmware/ath6k/AR6004/hw1.3/fw-3.bin": {
+          "bytes": 50662,
+          "sha256": "a512d907b00f87581532a8d84a6366e7ffc30c3372ad0b70ef3dc948803538f4"
+        },
+        "lib/firmware/ath9k_htc/htc_7010-1.4.0.fw": {
+          "bytes": 72812,
+          "sha256": "737850aaf66ca13f82e0f5ca5e758f606f840c2f23c291350ab916bbf88e6f75"
+        },
+        "lib/firmware/ath9k_htc/htc_9271-1.4.0.fw": {
+          "bytes": 51008,
+          "sha256": "78f7d592a95b419a02fde7440f30c606fc31a871cf0ce150ced40d4857173eb0"
+        },
+        "lib/firmware/carl9170-1.fw": {
+          "bytes": 13388,
+          "sha256": "e1695dbfbc6aa7bb3182615bd47905e2df808317e4050878e50bb24285b37068"
+        },
+        "lib/firmware/htc_7010.fw": {
+          "bytes": 72684,
+          "sha256": "45cc9e5e9450f0b494bbff81c382b080885d6dd86d816b22d322c58eb1b47114"
+        },
+        "lib/firmware/htc_9271.fw": {
+          "bytes": 50980,
+          "sha256": "b5c123f9a8f2b0388eddd630860c100b4fe889ccdb4fcf24bc88b0fe2df3e59e"
+        },
+        "lib/firmware/mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin": {
+          "bytes": 137632,
+          "sha256": "7fc9075d6d54b31e0539734614ca971fa52caf41b642a3000c8a4501591a4d98"
+        },
+        "lib/firmware/mediatek/WIFI_RAM_CODE_MT7922_1.bin": {
+          "bytes": 1231252,
+          "sha256": "d100e5e04c324fc8da6302112d1e0b4fac952286447d2419eabcd8fb0a1f5b93"
+        },
+        "lib/firmware/rtl_nic/rtl8105e-1.fw": {
+          "bytes": 2076,
+          "sha256": "03f7ee92f1a7c1723ac7a7447ae006930c9bb07e1d77c3d12bc70cc0d855bb00"
+        },
+        "lib/firmware/rtl_nic/rtl8106e-1.fw": {
+          "bytes": 1856,
+          "sha256": "b249074519d87ff8bde17185894333c993f25f747f221305cf69a5d7b4519674"
+        },
+        "lib/firmware/rtl_nic/rtl8106e-2.fw": {
+          "bytes": 832,
+          "sha256": "ba4f7ed4bac4768810ba8a6c118457f5912f61a0380aa4fb322093caf52de0ef"
+        },
+        "lib/firmware/rtl_nic/rtl8107e-1.fw": {
+          "bytes": 992,
+          "sha256": "da3b9939538376c0dd1a97cdfead9fedba1213146bbdda31ef12b87fd616b831"
+        },
+        "lib/firmware/rtl_nic/rtl8107e-2.fw": {
+          "bytes": 976,
+          "sha256": "edc3a14a76852c411c4af5514dae5d55be37873f56a7563f80db7a76f2dc1ba7"
+        },
+        "lib/firmware/rtl_nic/rtl8125a-3.fw": {
+          "bytes": 3456,
+          "sha256": "3f6c328af0ceff5969c729edf0f535e8bb2a9b9e05d15b6be3199a3e6d421b99"
+        },
+        "lib/firmware/rtl_nic/rtl8125b-2.fw": {
+          "bytes": 3328,
+          "sha256": "529bf1c25c97ff52b401090d00ff89cc22351012336e5a0c9662728a3ee909ef"
+        },
+        "lib/firmware/rtl_nic/rtl8125d-1.fw": {
+          "bytes": 17168,
+          "sha256": "bc3c82939f02df2f58a17e7354096375001a80a5c1ca3f459c555d5a7d42bf1b"
+        },
+        "lib/firmware/rtl_nic/rtl8125d-2.fw": {
+          "bytes": 6800,
+          "sha256": "c1cb0d358ca985b0d45584612143fd93613d567064702e265bfb370e99c90e35"
+        },
+        "lib/firmware/rtl_nic/rtl8168d-1.fw": {
+          "bytes": 1492,
+          "sha256": "ded779f55b3fc5bb8576b2d2b6c724581c72160b3c2f88e33b42dc6c2c4e70b0"
+        },
+        "lib/firmware/rtl_nic/rtl8168d-2.fw": {
+          "bytes": 1324,
+          "sha256": "35dd68c01a7b24f6e554bd2c0b9cf57cf962a826651f66e75ffcea37cf2c3bb9"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-1.fw": {
+          "bytes": 5500,
+          "sha256": "c38d6818a99336c8e43883bbc136f9fab3b1b470ec0e86c61bf5dac617fe94bd"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-2.fw": {
+          "bytes": 3920,
+          "sha256": "0a489929b270df1533645a75d55ff357fd66e42057aa4e198ab738930de39386"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-3.fw": {
+          "bytes": 3872,
+          "sha256": "1287fdd82ff2f60d75c9970c108b49cfd11456ad3fe29c9666b8539a35777dbf"
+        },
+        "lib/firmware/rtl_nic/rtl8168f-1.fw": {
+          "bytes": 3424,
+          "sha256": "ed3794c651d38b807168c7c49431bb8036922b16766588c520a20287f277615d"
+        },
+        "lib/firmware/rtl_nic/rtl8168f-2.fw": {
+          "bytes": 1232,
+          "sha256": "5586b2093502f7dec762f23091fa90d6d8731e7d873509072ce2eae23ab8ee99"
+        },
+        "lib/firmware/rtl_nic/rtl8168fp-3.fw": {
+          "bytes": 336,
+          "sha256": "c526c06aa0ab8d9b57ba2b730bb1e40a1c3513f8591e238dceb2e0f45210ed27"
+        },
+        "lib/firmware/rtl_nic/rtl8168g-2.fw": {
+          "bytes": 4896,
+          "sha256": "f878ec719f78e0b104bc73362a9862611858bec893f58a1b3b289a0a57d71d25"
+        },
+        "lib/firmware/rtl_nic/rtl8168g-3.fw": {
+          "bytes": 832,
+          "sha256": "e4d5e62b0a5a097af34c7aa3c55f634fd5be2c232e02c6b983ebd7e699cb27e9"
+        },
+        "lib/firmware/rtl_nic/rtl8168h-1.fw": {
+          "bytes": 992,
+          "sha256": "4ef963690f3a7b25a9bc97fb12c58922c02886699933ed6297636cc15aad9d8d"
+        },
+        "lib/firmware/rtl_nic/rtl8168h-2.fw": {
+          "bytes": 976,
+          "sha256": "0b4beab008e308f28296c13188ee23edfeff7d865e398a7ade170495c8cec7e6"
+        },
+        "lib/firmware/rtl_nic/rtl8402-1.fw": {
+          "bytes": 1824,
+          "sha256": "a14adee93b7c7ecc738137d910334761ecf9c64d3addeccbd024a2f902f7f808"
+        },
+        "lib/firmware/rtl_nic/rtl8411-1.fw": {
+          "bytes": 2112,
+          "sha256": "e66a3183787c80987e1e36c9f7d4b2c3cd5d976640b83f462702f914febc4b38"
+        },
+        "lib/firmware/rtl_nic/rtl8411-2.fw": {
+          "bytes": 1040,
+          "sha256": "80dbdacba4d5dfee46b6c2b4e433f6f2eeb756d29ad46bf2362ba20c8ec594b1"
+        },
+        "lib/firmware/rtlwifi/rtl8188efw.bin": {
+          "bytes": 11216,
+          "sha256": "ca778610db58042c395141918b319c76df10a83dbd0aa9b3db6a9bb01c477cce"
+        },
+        "lib/firmware/rtlwifi/rtl8188eufw.bin": {
+          "bytes": 15262,
+          "sha256": "2ff74315287529dec2e50eb57d6e0c97d2116f28ae166773ccdf93b6360000c4"
+        },
+        "lib/firmware/rtlwifi/rtl8188fufw.bin": {
+          "bytes": 21020,
+          "sha256": "e6189d6d7032b83f0ed4284629c43db66262449a866f33fd329e611239f62e1f"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfw.bin": {
+          "bytes": 16192,
+          "sha256": "1f4fae583e47e28b208a955a55e187e07ec44a0efcf0e0d357a7462d1f135618"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfwU.bin": {
+          "bytes": 14818,
+          "sha256": "2d6ad600581c5792d2de9c2bd31617563dbbe50f2ba709acf35ea36158586f01"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfwU_B.bin": {
+          "bytes": 16332,
+          "sha256": "a5a32fcb5c9876b63472aafaab4b6ec37104f23c48becb52e0b57c7a326d755b"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw.bin": {
+          "bytes": 16014,
+          "sha256": "6327de71c544c27fe909d509a3d5605d46b94c102a3c27700f812b95cbe74254"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_A.bin": {
+          "bytes": 16126,
+          "sha256": "32846065b017c8b1d2d448e8c0ea2f5e741424809be49f2c6a6261339cd0b0cf"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_B.bin": {
+          "bytes": 16096,
+          "sha256": "479e5e6732b0e07cfcab4cc190b8c30465c0b7f8c0ed22d742bedd4412cbcf2a"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_TMSC.bin": {
+          "bytes": 16126,
+          "sha256": "c083f2db36ef33d0ffffc979aba1d40f55fa9dc38dce50f26e0108a21c080286"
+        },
+        "lib/firmware/rtlwifi/rtl8192defw.bin": {
+          "bytes": 31376,
+          "sha256": "618a5c9fbf96d60a9340abd740d75224ba47cd08dd4fbed05aae47a082155e78"
+        },
+        "lib/firmware/rtlwifi/rtl8192eefw.bin": {
+          "link": "rtl8192eu_nic.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_ap_wowlan.bin": {
+          "bytes": 25264,
+          "sha256": "52ba57df842c97b38b8108e53577911efb9da29dc352499c149564a08827db60"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_nic.bin": {
+          "bytes": 32286,
+          "sha256": "b15bc955fba2fc3abc093affe62c9f7284a0b84d4f13f8ce55366488dc9aad8b"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_wowlan.bin": {
+          "bytes": 29008,
+          "sha256": "4caf9e99e31b059a6c6f42e11554f14b5413eadde20dba1c66476d284a5e52f7"
+        },
+        "lib/firmware/rtlwifi/rtl8192sefw.bin": {
+          "bytes": 80208,
+          "sha256": "a24d1c61251321b94943f8bd65b4110658cc4c94e61e2e643946d6e5008e4c5b"
+        },
+        "lib/firmware/rtlwifi/rtl8712u.bin": {
+          "bytes": 122328,
+          "sha256": "6e84ec69c300b0182c9bc8fa41e88281eeb04013c4a34c341748052c3c6a9d3d"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_A.bin": {
+          "bytes": 22172,
+          "sha256": "d63e39f41dd726b3a833e64fea44696c7b74ad595d31dcaae509b17d247f125c"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_B.bin": {
+          "bytes": 24118,
+          "sha256": "850374b96076ab4b854ee9dc42ef57f9bd6b24493b74ba6b609c690d17f1c552"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_B_NoBT.bin": {
+          "bytes": 19200,
+          "sha256": "a24af5491dbfa3937633049fc66576ed478dec60e7676263f00a2ce9dd22c25b"
+        },
+        "lib/firmware/rtlwifi/rtl8723befw.bin": {
+          "bytes": 30746,
+          "sha256": "1bfa6d0910e072ed26d793ccf27889ebd774851be95d2d2543fd8de7cf31b969"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_ap_wowlan.bin": {
+          "link": "rtl8723bu_ap_wowlan.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_bt.bin": {
+          "bytes": 9120,
+          "sha256": "774f6628ae2cd7d6d8563cbf88f67f9a95e895cb44b55fb26ffdf895fdf26aea"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_nic.bin": {
+          "link": "rtl8723bu_nic.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_wowlan.bin": {
+          "link": "rtl8723bu_wowlan.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_ap_wowlan.bin": {
+          "bytes": 20886,
+          "sha256": "957707c7d6e01564685a801da1084a60b6b726c3d756d54dbe56ce064110e288"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_nic.bin": {
+          "bytes": 32108,
+          "sha256": "a52b5a7be4841b4b2839eddf5122b3300a3610866abe4bb3c3c9e444c8ab7969"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_wowlan.bin": {
+          "bytes": 26398,
+          "sha256": "534f6c4ad8a8068f7888db7af83408f0d2ef04e5d4fc8514e07522a4b0bab3a7"
+        },
+        "lib/firmware/rtlwifi/rtl8723fw.bin": {
+          "bytes": 11662,
+          "sha256": "9b6d8f2546834b69abc675fe4450e5d92f6ecbeaa22619d9047b8e5f27909d4e"
+        },
+        "lib/firmware/rtlwifi/rtl8723fw_B.bin": {
+          "bytes": 22996,
+          "sha256": "a8d1b37e7585445f599de24f4b655b194857e2c836f450798be04f67b3898305"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw.bin": {
+          "bytes": 28984,
+          "sha256": "025c13f2e7f7526e1f932049bed2146467318f547ffa8481804ecfd911cda695"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw_29.bin": {
+          "bytes": 28348,
+          "sha256": "11e7ea00504fa2fa6f5216bb59403c4f2f20eec5b676c0add0695db3b0c4a335"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw_wowlan.bin": {
+          "bytes": 19858,
+          "sha256": "df6fe0f14f6c7755da351b8d02282dde1c190133c118a5ca9627b6fd87dfd5da"
+        },
+        "lib/firmware/rtlwifi/rtl8822befw.bin": {
+          "bytes": 127496,
+          "sha256": "0952522dd0fa8cd226a0394a8092e98cd0bdccb59b31ed00dd682a6c28f60839"
+        },
+        "lib/firmware/rtw88/rtw8703b_fw.bin": {
+          "bytes": 20290,
+          "sha256": "5e32bd891c74a0719c871726b74490cf5e1a05cdcefb8fe2414f80fffdeb9f9d"
+        },
+        "lib/firmware/rtw88/rtw8703b_wow_fw.bin": {
+          "bytes": 23074,
+          "sha256": "7156b0d2b4580e63d11a3a78258c35ff28e840c7c6428953920ae6a1cd5d05ac"
+        },
+        "lib/firmware/rtw88/rtw8723b_fw.bin": {
+          "bytes": 32272,
+          "sha256": "9ed919e9a6977b3d0cb05e7bbf5e8b1bd8edb20db6d4bc1b279273aa333ab9e4"
+        },
+        "lib/firmware/rtw88/rtw8723d_fw.bin": {
+          "bytes": 28884,
+          "sha256": "9c64e079815a333a3f7b731be7cc0be65206ebc883891659dc8ff5ed36a5e2f5"
+        },
+        "lib/firmware/rtw88/rtw8812a_fw.bin": {
+          "bytes": 27030,
+          "sha256": "abdcca4e8bf76ebfba23d433de310ffefebd0ff9d01990639d4cd9602b32b71a"
+        },
+        "lib/firmware/rtw88/rtw8814a_fw.bin": {
+          "bytes": 68320,
+          "sha256": "aa6bf9d62b2d2d8a37254fd6d917ba2839888cdedc21850d4481874cb1d3d7cb"
+        },
+        "lib/firmware/rtw88/rtw8821a_fw.bin": {
+          "bytes": 31898,
+          "sha256": "4693ece655044d96f81bd3f3e8db14dc352b493219c4fd0a75788a6fbd9eac3c"
+        },
+        "lib/firmware/rtw88/rtw8821c_fw.bin": {
+          "bytes": 139472,
+          "sha256": "2ef409bc418549fcf294061dd0cae1fc22fd9da79b60524950b25de18732f3f0"
+        },
+        "lib/firmware/rtw88/rtw8822b_fw.bin": {
+          "bytes": 161240,
+          "sha256": "a72da690597bfa99d8eb6fc2ab090d18d8ad92ac2befd35db1c9e3662d8d8418"
+        },
+        "lib/firmware/rtw88/rtw8822c_fw.bin": {
+          "bytes": 202600,
+          "sha256": "3deecb31210986d98cdbfb000391e08d602a6eee4ffc883969faa2b907ab03ba"
+        },
+        "lib/firmware/rtw88/rtw8822c_wow_fw.bin": {
+          "bytes": 145224,
+          "sha256": "6717fc6ff426a74571ac4f04cd9698fb2f356012c05c58aa64cf21ceb6b958a2"
+        },
+        "lib/firmware/rtw89/rtw8851b_fw-1.bin": {
+          "bytes": 1408706,
+          "sha256": "1c4ccb5fa06bf5649146025e95993db66876a1fbc0bd766ec05686587f69c1b7"
+        },
+        "lib/firmware/rtw89/rtw8851b_fw.bin": {
+          "bytes": 1164440,
+          "sha256": "945c854d7cf69dd97bf1da0181b011787d9b3c5d59c47e8b9dbea4eb4eee170b"
+        },
+        "lib/firmware/rtw89/rtw8852a_fw-1.bin": {
+          "bytes": 1958648,
+          "sha256": "fdb5513cf7372440d7980a61aa4b753b192b056734a978458ae4a4ef7f4b2c1e"
+        },
+        "lib/firmware/rtw89/rtw8852a_fw.bin": {
+          "bytes": 1428272,
+          "sha256": "7eb1fe457f5a704b7a4f05a66c67cfa6af2f1142566b640c8e402445d04b0159"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw-1.bin": {
+          "bytes": 1245944,
+          "sha256": "5b68415e3bfe72715d63a70703d4471b04b5475b8ff69cfdc8cdf48233cd5d3a"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw-2.bin": {
+          "bytes": 1554594,
+          "sha256": "6ff6aeb56bb5b85cba333b755f8cc1dbfe9ff6e5b16e39f6ba01ce7f1eaa7714"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw.bin": {
+          "bytes": 1035232,
+          "sha256": "5b9c224ae014e0aeade8701412d820e213c8880e08615b3905dba89659f21baf"
+        },
+        "lib/firmware/rtw89/rtw8852bt_fw-1.bin": {
+          "bytes": 937688,
+          "sha256": "164e5e2243b1241a23d5e77876aa11be003fb09f5aa7794dc7bbf80957c8c254"
+        },
+        "lib/firmware/rtw89/rtw8852bt_fw.bin": {
+          "bytes": 928714,
+          "sha256": "b75914312181a2cd8a15fe65024d218e875324de9231ce2071e31513bffbffa3"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw-1.bin": {
+          "bytes": 2375560,
+          "sha256": "95e4226f7a4c2a506a5ea2bb8b6247842dd12fc312639750881c5bfdec7bbec5"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw-2.bin": {
+          "bytes": 2644326,
+          "sha256": "916e87d1470bce5400712f53d419ae68a0f44d858670c57e118d4f0b1d89c5b4"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw.bin": {
+          "bytes": 1532656,
+          "sha256": "e05e704911ec5d6523e2951416290cc2189444d48a0420e637de6acf5bf21228"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-1.bin": {
+          "bytes": 1583434,
+          "sha256": "4340bc322912f30f1793bb57a1747c23b15e40db2df628d6687d1ddf722f2828"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-2.bin": {
+          "bytes": 1586954,
+          "sha256": "9ca08cd3098b954cc0d44edd5c0b079877e5dd9b98d55cfec1c302b41475d88c"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-3.bin": {
+          "bytes": 1238542,
+          "sha256": "484f496bc149706b92c7352925fef4155fecb60bc61ec0f5c55a3b651ed915f4"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-4.bin": {
+          "bytes": 1849226,
+          "sha256": "d11927f593c82879bd0437435475d7915a60932374747984b3dc906a23009dea"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw.bin": {
+          "bytes": 1537690,
+          "sha256": "84458f2fa7c9a730fae242d858a82814141421d66a1f672a10121982513daf6d"
+        },
+        "lib/firmware/rtw89/rtw8922d_fw.bin": {
+          "bytes": 5683768,
+          "sha256": "95cbd1630267b6fa6e1736fc3fbc85d9339d0d52dfe71b5042ddb448196bfc5a"
+        },
+        "lib/firmware/rtw89/rtw8922ds_fw.bin": {
+          "bytes": 3768808,
+          "sha256": "e2718524d6808c7c0cd4eea1a9597a9c99c5001ae7e29507bab2b4a4199c5d8f"
+        }
+      },
+      "added_regular_file_bytes": 26213944,
+      "added_squashfs_bytes": 8744960
+    },
+    "broadcom": {
+      "regular_file_bytes": 56445184,
+      "regular_files": 143,
+      "symlinks": 48,
+      "squashfs_bytes": 24485888,
+      "seconds": 15.578,
+      "inventory": {
+        "lib/firmware/brcm/bcm4329-fullmac-4.bin": {
+          "bytes": 269595,
+          "sha256": "ee87d73bc8b54aa29e343490297ca1294f71a1a4f66c845e6b301770c94082ee"
+        },
+        "lib/firmware/brcm/brcmfmac43012-sdio.bin": {
+          "link": "../cypress/cyfmac43012-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac43012-sdio.clm_blob": {
+          "link": "../cypress/cyfmac43012-sdio.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac43143-sdio.bin": {
+          "bytes": 385067,
+          "sha256": "0c95c5616861856b055209a05270c0cc75cb500daa550a659b275e124ea334aa"
+        },
+        "lib/firmware/brcm/brcmfmac43143.bin": {
+          "bytes": 397312,
+          "sha256": "a0ace23094652c3aa3bcd480906b1a769d0169afcc3b5f074b187a30d8617e03"
+        },
+        "lib/firmware/brcm/brcmfmac43236b.bin": {
+          "bytes": 348160,
+          "sha256": "2138a2edca76a1f808250fd89381b30529938e04b2a9befa138afda71a9c96e4"
+        },
+        "lib/firmware/brcm/brcmfmac43241b0-sdio.bin": {
+          "bytes": 459988,
+          "sha256": "ad8229c94cf516e364d54ff73955049535cfd8214adb839deb39420105f5d8ed"
+        },
+        "lib/firmware/brcm/brcmfmac43241b4-sdio.bin": {
+          "bytes": 403855,
+          "sha256": "0e53e2eadb22610c298df18b631f571d216a3eca3d537812a6f074337fb38eca"
+        },
+        "lib/firmware/brcm/brcmfmac43241b5-sdio.bin": {
+          "bytes": 408682,
+          "sha256": "272838b46ebc04131d44bca4542befa89c808c4fbb5af376df4664b0943a1863"
+        },
+        "lib/firmware/brcm/brcmfmac43242a.bin": {
+          "bytes": 479232,
+          "sha256": "3cb5eccfad59736241d6207322f4aa26505fe6129c957f2742b4168593304487"
+        },
+        "lib/firmware/brcm/brcmfmac4329-sdio.bin": {
+          "bytes": 253748,
+          "sha256": "d61983946b1e733e4c75dbe6841ac0f1250ebed2e3ee9058cdfdbbba3ba37c93"
+        },
+        "lib/firmware/brcm/brcmfmac4330-sdio.Prowise-PT301.txt": {
+          "bytes": 1509,
+          "sha256": "baa957121b4ba54ecabbdfef811143120401f54abd485d3f6bde414f994875ca"
+        },
+        "lib/firmware/brcm/brcmfmac4330-sdio.bin": {
+          "bytes": 223581,
+          "sha256": "69ee0e9b9a4233b320cdfdd935853cdf2fbd84ff6ec42f8ec572f2f0a19975a7"
+        },
+        "lib/firmware/brcm/brcmfmac4334-sdio.bin": {
+          "bytes": 451566,
+          "sha256": "7b4eebe4d3bbc9a8bf3c2d55d9404cf0ed9cce3388b3d5708d2352d0af89eeb3"
+        },
+        "lib/firmware/brcm/brcmfmac43340-sdio.bin": {
+          "link": "../cypress/cyfmac43340-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac43340-sdio.meegopad-t08.txt": {
+          "bytes": 1693,
+          "sha256": "8ae5a78127e583f647789eda9cb869c5480fdd09124786ff818c1acf3a9a52cc"
+        },
+        "lib/firmware/brcm/brcmfmac43340-sdio.pov-tab-p1006w-data.txt": {
+          "bytes": 1724,
+          "sha256": "9a01ead1b4fb7b128b58ba7570a0fd4b5a9d5e07196f06ab01f5e7d16729b93b"
+        },
+        "lib/firmware/brcm/brcmfmac43340-sdio.predia-basic.txt": {
+          "bytes": 1689,
+          "sha256": "4e268a0c4803bac74b55e71b4e08c20c70f2f273b669156d6424bae1b7a1c35c"
+        },
+        "lib/firmware/brcm/brcmfmac4335-sdio.bin": {
+          "bytes": 569291,
+          "sha256": "1551fd7680db31d230c70f55860ca071331a37eeb54c9229307b8fa475f9d6e7"
+        },
+        "lib/firmware/brcm/brcmfmac43362-sdio.bin": {
+          "link": "../cypress/cyfmac43362-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac43362-sdio.cubietech,cubietruck.txt": {
+          "bytes": 803,
+          "sha256": "c17e2913e43c6420a3bfb63d34b5572e60ab038fcb5bc6b401c4200c56c12597"
+        },
+        "lib/firmware/brcm/brcmfmac43362-sdio.lemaker,bananapro.txt": {
+          "link": "brcmfmac43362-sdio.cubietech,cubietruck.txt"
+        },
+        "lib/firmware/brcm/brcmfmac4339-sdio.bin": {
+          "link": "../cypress/cyfmac4339-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.AP6212.txt": {
+          "bytes": 875,
+          "sha256": "fdef0603345dd023ad28c0eff2d5167915c617bee2d6944da9a6da1c4ac87ca5"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.Hampoo-D2D3_Vi8A1.txt": {
+          "bytes": 928,
+          "sha256": "91d701c64b1ea10e38963e893ae64576774178314abb0cf2030b45fd9c4dfd94"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.MUR1DX.txt": {
+          "bytes": 831,
+          "sha256": "c9ee1d910b6f089d60bc9c4b34e7341e69b3e07f98968382469f43384dd7ac9b"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.beagle,beaglev-starlight-jh7100-a1.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.beagle,beaglev-starlight-jh7100-r0.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.bin": {
+          "link": "../cypress/cyfmac43430-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.clm_blob": {
+          "link": "../cypress/cyfmac43430-sdio.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.friendlyarm,nanopi-neo4.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.friendlyarm,nanopi-r1.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.raspberrypi,3-model-b.txt": {
+          "bytes": 874,
+          "sha256": "489c12a33e0fd0899cd27bfb316b30944f0b9dd571c266a0aa3704b35817b788"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.raspberrypi,model-zero-2-w.txt": {
+          "link": "brcmfmac43430-sdio.raspberrypi,3-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.raspberrypi,model-zero-w.txt": {
+          "link": "brcmfmac43430-sdio.raspberrypi,3-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.sinovoip,bananapi-m64.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.sinovoip,bpi-m2-plus.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.sinovoip,bpi-m2-ultra.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.sinovoip,bpi-m2-zero.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.sinovoip,bpi-m3.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.starfive,visionfive-v1.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430a0-sdio.bin": {
+          "bytes": 382455,
+          "sha256": "ad85074b7919517d7e1a7e463e0176d46e7b312216bd7aa372e4aee2bfe8e07a"
+        },
+        "lib/firmware/brcm/brcmfmac43430a0-sdio.ilife-S806.txt": {
+          "bytes": 908,
+          "sha256": "63dc7f254f3e7a8ccb5d6246488d1a18ca548eefeee622b8e5b62a997b53ee87"
+        },
+        "lib/firmware/brcm/brcmfmac43430a0-sdio.jumper-ezpad-mini3.txt": {
+          "bytes": 951,
+          "sha256": "b07a8148015d6f09dca935c8841ca9df462d7eb6eba6e8ff9f03fd399eb9760a"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.Raspberry Pi Foundation-Raspberry Pi 4 Model B.txt": {
+          "link": "brcmfmac43455-sdio.raspberrypi,4-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.Raspberry Pi Foundation-Raspberry Pi Compute Module 4.txt": {
+          "link": "brcmfmac43455-sdio.raspberrypi,4-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.bin": {
+          "link": "../cypress/cyfmac43455-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.clm_blob": {
+          "link": "../cypress/cyfmac43455-sdio.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.raspberrypi,3-model-a-plus.txt": {
+          "link": "brcmfmac43455-sdio.raspberrypi,3-model-b-plus.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.raspberrypi,3-model-b-plus.txt": {
+          "bytes": 1884,
+          "sha256": "ae2f9e43c609766036cd7d82d709e62135fc266cbe8f40fb10f782114d585658"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.raspberrypi,4-compute-module.txt": {
+          "link": "brcmfmac43455-sdio.raspberrypi,4-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.raspberrypi,4-model-b.txt": {
+          "bytes": 1883,
+          "sha256": "edb6f4e4fb19e18940004124feb4ffe160d72fc607243a07a4480338a28b2748"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.raspberrypi,5-compute-module.txt": {
+          "link": "brcmfmac43455-sdio.raspberrypi,4-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.raspberrypi,5-model-b.txt": {
+          "link": "brcmfmac43455-sdio.raspberrypi,4-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.raspberrypi,500.txt": {
+          "link": "brcmfmac43455-sdio.raspberrypi,4-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac4350-pcie.bin": {
+          "bytes": 626140,
+          "sha256": "5691d1e0ceb70baf18efb7a0ec6cb84feb9edd2d0700c525b42930c4e7e4b845"
+        },
+        "lib/firmware/brcm/brcmfmac4350c2-pcie.bin": {
+          "bytes": 623304,
+          "sha256": "423c2373faf403ce39c822312f8f4810e63f5b67ea62bfd60552af119591b115"
+        },
+        "lib/firmware/brcm/brcmfmac4354-sdio.bin": {
+          "link": "../cypress/cyfmac4354-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac4354-sdio.clm_blob": {
+          "link": "../cypress/cyfmac4354-sdio.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac4356-pcie.bin": {
+          "link": "../cypress/cyfmac4356-pcie.bin"
+        },
+        "lib/firmware/brcm/brcmfmac4356-pcie.clm_blob": {
+          "link": "../cypress/cyfmac4356-pcie.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac4356-pcie.gpd-win-pocket.txt": {
+          "bytes": 2515,
+          "sha256": "7c6d8e0b1a1fba2c100833b99a585f9b69c8719c260932ca76bed2647bb7af00"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.AP6356S.txt": {
+          "bytes": 2610,
+          "sha256": "bdc88ecb0289973d1c784550fa540223bb41f49213b20af59f2267359e0c5a09"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.bin": {
+          "link": "../cypress/cyfmac4356-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.clm_blob": {
+          "link": "../cypress/cyfmac4356-sdio.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.firefly,firefly-rk3399.txt": {
+          "link": "brcmfmac4356-sdio.AP6356S.txt"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.friendlyarm,nanopc-t4.txt": {
+          "link": "brcmfmac4356-sdio.AP6356S.txt"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.friendlyarm,nanopi-m4.txt": {
+          "link": "brcmfmac4356-sdio.AP6356S.txt"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.khadas,vim2.txt": {
+          "link": "brcmfmac4356-sdio.AP6356S.txt"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.vamrs,rock960.txt": {
+          "link": "brcmfmac4356-sdio.AP6356S.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43569.bin": {
+          "bytes": 557056,
+          "sha256": "0a57d51cd676b98e3313463dccf7fa9aadafe52a45216b7a919a379cd8f07f1d"
+        },
+        "lib/firmware/brcm/brcmfmac43570-pcie.bin": {
+          "link": "../cypress/cyfmac43570-pcie.bin"
+        },
+        "lib/firmware/brcm/brcmfmac43570-pcie.clm_blob": {
+          "link": "../cypress/cyfmac43570-pcie.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac4358-pcie.bin": {
+          "bytes": 634361,
+          "sha256": "f04d8fdc0a0a301ccbbf543a2b470108c64ee341360f3450ed4fa9bbee04337c"
+        },
+        "lib/firmware/brcm/brcmfmac43602-pcie.ap.bin": {
+          "bytes": 595472,
+          "sha256": "7f735b7254527ce7cae84a854211879a4b85d6a77a92210c4d92bcf12a35618b"
+        },
+        "lib/firmware/brcm/brcmfmac43602-pcie.bin": {
+          "bytes": 635449,
+          "sha256": "bf4cfc23ee952a3d82ef33a0f5f87853201c98f1bed034876a910f354f37862d"
+        },
+        "lib/firmware/brcm/brcmfmac4366b-pcie.bin": {
+          "bytes": 1105361,
+          "sha256": "ab4d5012393aed59dc76e27d6e11d1c8f821ab24c3005436dee8d799b6298224"
+        },
+        "lib/firmware/brcm/brcmfmac4366c-pcie.bin": {
+          "bytes": 1120971,
+          "sha256": "a250275c81c626de4379591d367624b7d9da99a665a946738e657217a9d9e53e"
+        },
+        "lib/firmware/brcm/brcmfmac4371-pcie.bin": {
+          "bytes": 623448,
+          "sha256": "ffb7180db84dfa77171ab920412f68bfc801b4c5d0f89252b9effdedafb3ff7c"
+        },
+        "lib/firmware/brcm/brcmfmac4373-sdio.bin": {
+          "link": "../cypress/cyfmac4373-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac4373-sdio.clm_blob": {
+          "link": "../cypress/cyfmac4373-sdio.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac4373.bin": {
+          "bytes": 479232,
+          "sha256": "5ad7af8a9605a23bf714e612313b55b8cf8b152cea19ad49d8744f6c602dcc5a"
+        },
+        "lib/firmware/cypress/cyfmac43012-sdio.bin": {
+          "bytes": 490686,
+          "sha256": "f9e2c5a6ce50ab37f3e6557e03bbd18ea6766257d28b7aff608d47b02bbf1d91"
+        },
+        "lib/firmware/cypress/cyfmac43012-sdio.clm_blob": {
+          "bytes": 4692,
+          "sha256": "47cf9e8647d3c3f1b924324ebbbeabd2a6659cfda62cbf8351e5fe965e3e5413"
+        },
+        "lib/firmware/cypress/cyfmac43340-sdio.bin": {
+          "bytes": 409717,
+          "sha256": "4c76b2a161fc65d91db50b461e16e3e9c003305682c35c083faa65cd232e8496"
+        },
+        "lib/firmware/cypress/cyfmac43362-sdio.bin": {
+          "bytes": 202623,
+          "sha256": "24e9c2eb18628f855e8d9453cdef2cf66ba06ee0dcfa9c664adce144e7ca2c5f"
+        },
+        "lib/firmware/cypress/cyfmac4339-sdio.bin": {
+          "bytes": 574096,
+          "sha256": "c366f88569dab307dc04aca88dabca74b5333fcf5968f5b36ab96a154fb7718e"
+        },
+        "lib/firmware/cypress/cyfmac43430-sdio.bin": {
+          "bytes": 419798,
+          "sha256": "93f3c40c94340c29a40714cb04e3e89974870fcae42a844b8a4544750159f40d"
+        },
+        "lib/firmware/cypress/cyfmac43430-sdio.clm_blob": {
+          "bytes": 4733,
+          "sha256": "3376b9c9b32d16bf762e21c7fafb665365070ae240d092498d0d1987c22022aa"
+        },
+        "lib/firmware/cypress/cyfmac43455-sdio.bin": {
+          "bytes": 643651,
+          "sha256": "d408faa9d0d5b1a2f9912dcea53ab0be48217288e398406d117f0edafe7c3edd"
+        },
+        "lib/firmware/cypress/cyfmac43455-sdio.clm_blob": {
+          "bytes": 4733,
+          "sha256": "15f50a27020b263d1bea215c8f68d0550d912932d1d9ef19ffd59f18d82dd460"
+        },
+        "lib/firmware/cypress/cyfmac4354-sdio.bin": {
+          "bytes": 601704,
+          "sha256": "f6b4164c50c4406573f3671d50c2d19b370ed079035a7d76a38535e244ae41d8"
+        },
+        "lib/firmware/cypress/cyfmac4354-sdio.clm_blob": {
+          "bytes": 5750,
+          "sha256": "a72cbbaea17415d99be5c747d719cb22e6787471d047cf72fd66f9e07ab12dbd"
+        },
+        "lib/firmware/cypress/cyfmac4356-pcie.bin": {
+          "bytes": 616174,
+          "sha256": "ce4ed5a7389634c37c1920b0d70e12c4be17e43cc6f191800240c3aa02e20ca2"
+        },
+        "lib/firmware/cypress/cyfmac4356-pcie.clm_blob": {
+          "bytes": 5750,
+          "sha256": "8107aa3926c7a4ec35d8a0c508d5b563fa8b0b4a146aa912d6f3b2b4c06c1e4f"
+        },
+        "lib/firmware/cypress/cyfmac4356-sdio.bin": {
+          "bytes": 580258,
+          "sha256": "be355bcc2226930d2d8aa3833d63c29cfd93ed7ed279a33d1a315fb3fc5dc3cc"
+        },
+        "lib/firmware/cypress/cyfmac4356-sdio.clm_blob": {
+          "bytes": 5750,
+          "sha256": "b093951c75a4a47fe0c02ee92231edce4bbe4f0b77a192fa3ac4105a200d9929"
+        },
+        "lib/firmware/cypress/cyfmac43570-pcie.bin": {
+          "bytes": 558388,
+          "sha256": "5aeb8c18d6eca4ad1df580fdd97bb7a0ce0a286c109cab81532aca768ef9a560"
+        },
+        "lib/firmware/cypress/cyfmac43570-pcie.clm_blob": {
+          "bytes": 5750,
+          "sha256": "3b170fa97e3f03f9527904abab70af3551874e2a0b4e5bb399285dc0c77732c8"
+        },
+        "lib/firmware/cypress/cyfmac4373-sdio.bin": {
+          "bytes": 563834,
+          "sha256": "00ea58a5a27d7184a488409e5b2e7ba99c55ecab0da7e4673549f1716e2707ea"
+        },
+        "lib/firmware/cypress/cyfmac4373-sdio.clm_blob": {
+          "bytes": 4684,
+          "sha256": "a54ae6e7e7dcf42f09809ab4ad471895e115b21a9b4c12c8bff4e4edb36afe41"
+        },
+        "lib/firmware/mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin": {
+          "bytes": 137632,
+          "sha256": "7fc9075d6d54b31e0539734614ca971fa52caf41b642a3000c8a4501591a4d98"
+        },
+        "lib/firmware/mediatek/WIFI_RAM_CODE_MT7922_1.bin": {
+          "bytes": 1231252,
+          "sha256": "d100e5e04c324fc8da6302112d1e0b4fac952286447d2419eabcd8fb0a1f5b93"
+        },
+        "lib/firmware/rtl_nic/rtl8105e-1.fw": {
+          "bytes": 2076,
+          "sha256": "03f7ee92f1a7c1723ac7a7447ae006930c9bb07e1d77c3d12bc70cc0d855bb00"
+        },
+        "lib/firmware/rtl_nic/rtl8106e-1.fw": {
+          "bytes": 1856,
+          "sha256": "b249074519d87ff8bde17185894333c993f25f747f221305cf69a5d7b4519674"
+        },
+        "lib/firmware/rtl_nic/rtl8106e-2.fw": {
+          "bytes": 832,
+          "sha256": "ba4f7ed4bac4768810ba8a6c118457f5912f61a0380aa4fb322093caf52de0ef"
+        },
+        "lib/firmware/rtl_nic/rtl8107e-1.fw": {
+          "bytes": 992,
+          "sha256": "da3b9939538376c0dd1a97cdfead9fedba1213146bbdda31ef12b87fd616b831"
+        },
+        "lib/firmware/rtl_nic/rtl8107e-2.fw": {
+          "bytes": 976,
+          "sha256": "edc3a14a76852c411c4af5514dae5d55be37873f56a7563f80db7a76f2dc1ba7"
+        },
+        "lib/firmware/rtl_nic/rtl8125a-3.fw": {
+          "bytes": 3456,
+          "sha256": "3f6c328af0ceff5969c729edf0f535e8bb2a9b9e05d15b6be3199a3e6d421b99"
+        },
+        "lib/firmware/rtl_nic/rtl8125b-2.fw": {
+          "bytes": 3328,
+          "sha256": "529bf1c25c97ff52b401090d00ff89cc22351012336e5a0c9662728a3ee909ef"
+        },
+        "lib/firmware/rtl_nic/rtl8125d-1.fw": {
+          "bytes": 17168,
+          "sha256": "bc3c82939f02df2f58a17e7354096375001a80a5c1ca3f459c555d5a7d42bf1b"
+        },
+        "lib/firmware/rtl_nic/rtl8125d-2.fw": {
+          "bytes": 6800,
+          "sha256": "c1cb0d358ca985b0d45584612143fd93613d567064702e265bfb370e99c90e35"
+        },
+        "lib/firmware/rtl_nic/rtl8168d-1.fw": {
+          "bytes": 1492,
+          "sha256": "ded779f55b3fc5bb8576b2d2b6c724581c72160b3c2f88e33b42dc6c2c4e70b0"
+        },
+        "lib/firmware/rtl_nic/rtl8168d-2.fw": {
+          "bytes": 1324,
+          "sha256": "35dd68c01a7b24f6e554bd2c0b9cf57cf962a826651f66e75ffcea37cf2c3bb9"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-1.fw": {
+          "bytes": 5500,
+          "sha256": "c38d6818a99336c8e43883bbc136f9fab3b1b470ec0e86c61bf5dac617fe94bd"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-2.fw": {
+          "bytes": 3920,
+          "sha256": "0a489929b270df1533645a75d55ff357fd66e42057aa4e198ab738930de39386"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-3.fw": {
+          "bytes": 3872,
+          "sha256": "1287fdd82ff2f60d75c9970c108b49cfd11456ad3fe29c9666b8539a35777dbf"
+        },
+        "lib/firmware/rtl_nic/rtl8168f-1.fw": {
+          "bytes": 3424,
+          "sha256": "ed3794c651d38b807168c7c49431bb8036922b16766588c520a20287f277615d"
+        },
+        "lib/firmware/rtl_nic/rtl8168f-2.fw": {
+          "bytes": 1232,
+          "sha256": "5586b2093502f7dec762f23091fa90d6d8731e7d873509072ce2eae23ab8ee99"
+        },
+        "lib/firmware/rtl_nic/rtl8168fp-3.fw": {
+          "bytes": 336,
+          "sha256": "c526c06aa0ab8d9b57ba2b730bb1e40a1c3513f8591e238dceb2e0f45210ed27"
+        },
+        "lib/firmware/rtl_nic/rtl8168g-2.fw": {
+          "bytes": 4896,
+          "sha256": "f878ec719f78e0b104bc73362a9862611858bec893f58a1b3b289a0a57d71d25"
+        },
+        "lib/firmware/rtl_nic/rtl8168g-3.fw": {
+          "bytes": 832,
+          "sha256": "e4d5e62b0a5a097af34c7aa3c55f634fd5be2c232e02c6b983ebd7e699cb27e9"
+        },
+        "lib/firmware/rtl_nic/rtl8168h-1.fw": {
+          "bytes": 992,
+          "sha256": "4ef963690f3a7b25a9bc97fb12c58922c02886699933ed6297636cc15aad9d8d"
+        },
+        "lib/firmware/rtl_nic/rtl8168h-2.fw": {
+          "bytes": 976,
+          "sha256": "0b4beab008e308f28296c13188ee23edfeff7d865e398a7ade170495c8cec7e6"
+        },
+        "lib/firmware/rtl_nic/rtl8402-1.fw": {
+          "bytes": 1824,
+          "sha256": "a14adee93b7c7ecc738137d910334761ecf9c64d3addeccbd024a2f902f7f808"
+        },
+        "lib/firmware/rtl_nic/rtl8411-1.fw": {
+          "bytes": 2112,
+          "sha256": "e66a3183787c80987e1e36c9f7d4b2c3cd5d976640b83f462702f914febc4b38"
+        },
+        "lib/firmware/rtl_nic/rtl8411-2.fw": {
+          "bytes": 1040,
+          "sha256": "80dbdacba4d5dfee46b6c2b4e433f6f2eeb756d29ad46bf2362ba20c8ec594b1"
+        },
+        "lib/firmware/rtlwifi/rtl8188efw.bin": {
+          "bytes": 11216,
+          "sha256": "ca778610db58042c395141918b319c76df10a83dbd0aa9b3db6a9bb01c477cce"
+        },
+        "lib/firmware/rtlwifi/rtl8188eufw.bin": {
+          "bytes": 15262,
+          "sha256": "2ff74315287529dec2e50eb57d6e0c97d2116f28ae166773ccdf93b6360000c4"
+        },
+        "lib/firmware/rtlwifi/rtl8188fufw.bin": {
+          "bytes": 21020,
+          "sha256": "e6189d6d7032b83f0ed4284629c43db66262449a866f33fd329e611239f62e1f"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfw.bin": {
+          "bytes": 16192,
+          "sha256": "1f4fae583e47e28b208a955a55e187e07ec44a0efcf0e0d357a7462d1f135618"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfwU.bin": {
+          "bytes": 14818,
+          "sha256": "2d6ad600581c5792d2de9c2bd31617563dbbe50f2ba709acf35ea36158586f01"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfwU_B.bin": {
+          "bytes": 16332,
+          "sha256": "a5a32fcb5c9876b63472aafaab4b6ec37104f23c48becb52e0b57c7a326d755b"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw.bin": {
+          "bytes": 16014,
+          "sha256": "6327de71c544c27fe909d509a3d5605d46b94c102a3c27700f812b95cbe74254"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_A.bin": {
+          "bytes": 16126,
+          "sha256": "32846065b017c8b1d2d448e8c0ea2f5e741424809be49f2c6a6261339cd0b0cf"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_B.bin": {
+          "bytes": 16096,
+          "sha256": "479e5e6732b0e07cfcab4cc190b8c30465c0b7f8c0ed22d742bedd4412cbcf2a"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_TMSC.bin": {
+          "bytes": 16126,
+          "sha256": "c083f2db36ef33d0ffffc979aba1d40f55fa9dc38dce50f26e0108a21c080286"
+        },
+        "lib/firmware/rtlwifi/rtl8192defw.bin": {
+          "bytes": 31376,
+          "sha256": "618a5c9fbf96d60a9340abd740d75224ba47cd08dd4fbed05aae47a082155e78"
+        },
+        "lib/firmware/rtlwifi/rtl8192eefw.bin": {
+          "link": "rtl8192eu_nic.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_ap_wowlan.bin": {
+          "bytes": 25264,
+          "sha256": "52ba57df842c97b38b8108e53577911efb9da29dc352499c149564a08827db60"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_nic.bin": {
+          "bytes": 32286,
+          "sha256": "b15bc955fba2fc3abc093affe62c9f7284a0b84d4f13f8ce55366488dc9aad8b"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_wowlan.bin": {
+          "bytes": 29008,
+          "sha256": "4caf9e99e31b059a6c6f42e11554f14b5413eadde20dba1c66476d284a5e52f7"
+        },
+        "lib/firmware/rtlwifi/rtl8192sefw.bin": {
+          "bytes": 80208,
+          "sha256": "a24d1c61251321b94943f8bd65b4110658cc4c94e61e2e643946d6e5008e4c5b"
+        },
+        "lib/firmware/rtlwifi/rtl8712u.bin": {
+          "bytes": 122328,
+          "sha256": "6e84ec69c300b0182c9bc8fa41e88281eeb04013c4a34c341748052c3c6a9d3d"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_A.bin": {
+          "bytes": 22172,
+          "sha256": "d63e39f41dd726b3a833e64fea44696c7b74ad595d31dcaae509b17d247f125c"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_B.bin": {
+          "bytes": 24118,
+          "sha256": "850374b96076ab4b854ee9dc42ef57f9bd6b24493b74ba6b609c690d17f1c552"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_B_NoBT.bin": {
+          "bytes": 19200,
+          "sha256": "a24af5491dbfa3937633049fc66576ed478dec60e7676263f00a2ce9dd22c25b"
+        },
+        "lib/firmware/rtlwifi/rtl8723befw.bin": {
+          "bytes": 30746,
+          "sha256": "1bfa6d0910e072ed26d793ccf27889ebd774851be95d2d2543fd8de7cf31b969"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_ap_wowlan.bin": {
+          "link": "rtl8723bu_ap_wowlan.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_bt.bin": {
+          "bytes": 9120,
+          "sha256": "774f6628ae2cd7d6d8563cbf88f67f9a95e895cb44b55fb26ffdf895fdf26aea"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_nic.bin": {
+          "link": "rtl8723bu_nic.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_wowlan.bin": {
+          "link": "rtl8723bu_wowlan.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_ap_wowlan.bin": {
+          "bytes": 20886,
+          "sha256": "957707c7d6e01564685a801da1084a60b6b726c3d756d54dbe56ce064110e288"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_nic.bin": {
+          "bytes": 32108,
+          "sha256": "a52b5a7be4841b4b2839eddf5122b3300a3610866abe4bb3c3c9e444c8ab7969"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_wowlan.bin": {
+          "bytes": 26398,
+          "sha256": "534f6c4ad8a8068f7888db7af83408f0d2ef04e5d4fc8514e07522a4b0bab3a7"
+        },
+        "lib/firmware/rtlwifi/rtl8723fw.bin": {
+          "bytes": 11662,
+          "sha256": "9b6d8f2546834b69abc675fe4450e5d92f6ecbeaa22619d9047b8e5f27909d4e"
+        },
+        "lib/firmware/rtlwifi/rtl8723fw_B.bin": {
+          "bytes": 22996,
+          "sha256": "a8d1b37e7585445f599de24f4b655b194857e2c836f450798be04f67b3898305"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw.bin": {
+          "bytes": 28984,
+          "sha256": "025c13f2e7f7526e1f932049bed2146467318f547ffa8481804ecfd911cda695"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw_29.bin": {
+          "bytes": 28348,
+          "sha256": "11e7ea00504fa2fa6f5216bb59403c4f2f20eec5b676c0add0695db3b0c4a335"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw_wowlan.bin": {
+          "bytes": 19858,
+          "sha256": "df6fe0f14f6c7755da351b8d02282dde1c190133c118a5ca9627b6fd87dfd5da"
+        },
+        "lib/firmware/rtlwifi/rtl8822befw.bin": {
+          "bytes": 127496,
+          "sha256": "0952522dd0fa8cd226a0394a8092e98cd0bdccb59b31ed00dd682a6c28f60839"
+        },
+        "lib/firmware/rtw88/rtw8703b_fw.bin": {
+          "bytes": 20290,
+          "sha256": "5e32bd891c74a0719c871726b74490cf5e1a05cdcefb8fe2414f80fffdeb9f9d"
+        },
+        "lib/firmware/rtw88/rtw8703b_wow_fw.bin": {
+          "bytes": 23074,
+          "sha256": "7156b0d2b4580e63d11a3a78258c35ff28e840c7c6428953920ae6a1cd5d05ac"
+        },
+        "lib/firmware/rtw88/rtw8723b_fw.bin": {
+          "bytes": 32272,
+          "sha256": "9ed919e9a6977b3d0cb05e7bbf5e8b1bd8edb20db6d4bc1b279273aa333ab9e4"
+        },
+        "lib/firmware/rtw88/rtw8723d_fw.bin": {
+          "bytes": 28884,
+          "sha256": "9c64e079815a333a3f7b731be7cc0be65206ebc883891659dc8ff5ed36a5e2f5"
+        },
+        "lib/firmware/rtw88/rtw8812a_fw.bin": {
+          "bytes": 27030,
+          "sha256": "abdcca4e8bf76ebfba23d433de310ffefebd0ff9d01990639d4cd9602b32b71a"
+        },
+        "lib/firmware/rtw88/rtw8814a_fw.bin": {
+          "bytes": 68320,
+          "sha256": "aa6bf9d62b2d2d8a37254fd6d917ba2839888cdedc21850d4481874cb1d3d7cb"
+        },
+        "lib/firmware/rtw88/rtw8821a_fw.bin": {
+          "bytes": 31898,
+          "sha256": "4693ece655044d96f81bd3f3e8db14dc352b493219c4fd0a75788a6fbd9eac3c"
+        },
+        "lib/firmware/rtw88/rtw8821c_fw.bin": {
+          "bytes": 139472,
+          "sha256": "2ef409bc418549fcf294061dd0cae1fc22fd9da79b60524950b25de18732f3f0"
+        },
+        "lib/firmware/rtw88/rtw8822b_fw.bin": {
+          "bytes": 161240,
+          "sha256": "a72da690597bfa99d8eb6fc2ab090d18d8ad92ac2befd35db1c9e3662d8d8418"
+        },
+        "lib/firmware/rtw88/rtw8822c_fw.bin": {
+          "bytes": 202600,
+          "sha256": "3deecb31210986d98cdbfb000391e08d602a6eee4ffc883969faa2b907ab03ba"
+        },
+        "lib/firmware/rtw88/rtw8822c_wow_fw.bin": {
+          "bytes": 145224,
+          "sha256": "6717fc6ff426a74571ac4f04cd9698fb2f356012c05c58aa64cf21ceb6b958a2"
+        },
+        "lib/firmware/rtw89/rtw8851b_fw-1.bin": {
+          "bytes": 1408706,
+          "sha256": "1c4ccb5fa06bf5649146025e95993db66876a1fbc0bd766ec05686587f69c1b7"
+        },
+        "lib/firmware/rtw89/rtw8851b_fw.bin": {
+          "bytes": 1164440,
+          "sha256": "945c854d7cf69dd97bf1da0181b011787d9b3c5d59c47e8b9dbea4eb4eee170b"
+        },
+        "lib/firmware/rtw89/rtw8852a_fw-1.bin": {
+          "bytes": 1958648,
+          "sha256": "fdb5513cf7372440d7980a61aa4b753b192b056734a978458ae4a4ef7f4b2c1e"
+        },
+        "lib/firmware/rtw89/rtw8852a_fw.bin": {
+          "bytes": 1428272,
+          "sha256": "7eb1fe457f5a704b7a4f05a66c67cfa6af2f1142566b640c8e402445d04b0159"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw-1.bin": {
+          "bytes": 1245944,
+          "sha256": "5b68415e3bfe72715d63a70703d4471b04b5475b8ff69cfdc8cdf48233cd5d3a"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw-2.bin": {
+          "bytes": 1554594,
+          "sha256": "6ff6aeb56bb5b85cba333b755f8cc1dbfe9ff6e5b16e39f6ba01ce7f1eaa7714"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw.bin": {
+          "bytes": 1035232,
+          "sha256": "5b9c224ae014e0aeade8701412d820e213c8880e08615b3905dba89659f21baf"
+        },
+        "lib/firmware/rtw89/rtw8852bt_fw-1.bin": {
+          "bytes": 937688,
+          "sha256": "164e5e2243b1241a23d5e77876aa11be003fb09f5aa7794dc7bbf80957c8c254"
+        },
+        "lib/firmware/rtw89/rtw8852bt_fw.bin": {
+          "bytes": 928714,
+          "sha256": "b75914312181a2cd8a15fe65024d218e875324de9231ce2071e31513bffbffa3"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw-1.bin": {
+          "bytes": 2375560,
+          "sha256": "95e4226f7a4c2a506a5ea2bb8b6247842dd12fc312639750881c5bfdec7bbec5"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw-2.bin": {
+          "bytes": 2644326,
+          "sha256": "916e87d1470bce5400712f53d419ae68a0f44d858670c57e118d4f0b1d89c5b4"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw.bin": {
+          "bytes": 1532656,
+          "sha256": "e05e704911ec5d6523e2951416290cc2189444d48a0420e637de6acf5bf21228"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-1.bin": {
+          "bytes": 1583434,
+          "sha256": "4340bc322912f30f1793bb57a1747c23b15e40db2df628d6687d1ddf722f2828"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-2.bin": {
+          "bytes": 1586954,
+          "sha256": "9ca08cd3098b954cc0d44edd5c0b079877e5dd9b98d55cfec1c302b41475d88c"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-3.bin": {
+          "bytes": 1238542,
+          "sha256": "484f496bc149706b92c7352925fef4155fecb60bc61ec0f5c55a3b651ed915f4"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-4.bin": {
+          "bytes": 1849226,
+          "sha256": "d11927f593c82879bd0437435475d7915a60932374747984b3dc906a23009dea"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw.bin": {
+          "bytes": 1537690,
+          "sha256": "84458f2fa7c9a730fae242d858a82814141421d66a1f672a10121982513daf6d"
+        },
+        "lib/firmware/rtw89/rtw8922d_fw.bin": {
+          "bytes": 5683768,
+          "sha256": "95cbd1630267b6fa6e1736fc3fbc85d9339d0d52dfe71b5042ddb448196bfc5a"
+        },
+        "lib/firmware/rtw89/rtw8922ds_fw.bin": {
+          "bytes": 3768808,
+          "sha256": "e2718524d6808c7c0cd4eea1a9597a9c99c5001ae7e29507bab2b4a4199c5d8f"
+        }
+      },
+      "added_regular_file_bytes": 17757774,
+      "added_squashfs_bytes": 9797632
+    },
+    "mediatek_ralink": {
+      "regular_file_bytes": 41580140,
+      "regular_files": 105,
+      "symlinks": 9,
+      "squashfs_bytes": 16437248,
+      "seconds": 14.466,
+      "inventory": {
+        "lib/firmware/mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin": {
+          "bytes": 137632,
+          "sha256": "7fc9075d6d54b31e0539734614ca971fa52caf41b642a3000c8a4501591a4d98"
+        },
+        "lib/firmware/mediatek/WIFI_MT7961_patch_mcu_1_2_hdr.bin": {
+          "bytes": 92192,
+          "sha256": "a276c06c2b772adb50b86639d33c82824ff4c21d617feb78caea74c040b873f6"
+        },
+        "lib/firmware/mediatek/WIFI_RAM_CODE_MT7922_1.bin": {
+          "bytes": 1231252,
+          "sha256": "d100e5e04c324fc8da6302112d1e0b4fac952286447d2419eabcd8fb0a1f5b93"
+        },
+        "lib/firmware/mediatek/WIFI_RAM_CODE_MT7961_1.bin": {
+          "bytes": 792036,
+          "sha256": "b94217a951518a9c14095765f367bc5dd7698f2dc033941d6f18fc2ebd6a2ab9"
+        },
+        "lib/firmware/mediatek/mt7601u.bin": {
+          "bytes": 45412,
+          "sha256": "4511b1d840e22aea2bf5fdca419c91c0d94cbfb291b9ac4f8be6d9100d1a7046"
+        },
+        "lib/firmware/mediatek/mt7610e.bin": {
+          "bytes": 80680,
+          "sha256": "538d08c08f8fb5aa05cacf34e49aeb307e8b2dc094407fc655fbf3580c893953"
+        },
+        "lib/firmware/mediatek/mt7610u.bin": {
+          "bytes": 80288,
+          "sha256": "5a4268e9021bb587426ba624b425f1e660bfc82cd63b36ad3ce6fb9ce6751760"
+        },
+        "lib/firmware/mediatek/mt7650e.bin": {
+          "bytes": 382212,
+          "sha256": "7eecb7cd7637aed35d8f0e6b898a06d6e0b901e3b4e1d8ef3dae537a832efed2"
+        },
+        "lib/firmware/mediatek/mt7662.bin": {
+          "bytes": 81908,
+          "sha256": "f7e52492f58088cae50e51a54cca68e4abc5b74f7d0b6b731dbb4c04465a94b6"
+        },
+        "lib/firmware/mediatek/mt7662_rom_patch.bin": {
+          "bytes": 26350,
+          "sha256": "6f0e871268f6e4d99196d90d89bcc09fe493d010366260a2cfcaa5dd66095f8c"
+        },
+        "lib/firmware/mediatek/mt7663_n9_rebb.bin": {
+          "bytes": 335072,
+          "sha256": "5e1a65036ccf9f53a6f69d9d8f75a07f546f9a7cec83ca89f24907925c54f079"
+        },
+        "lib/firmware/mediatek/mt7663_n9_v3.bin": {
+          "bytes": 441688,
+          "sha256": "d8b8488f37f65e41ded9a911950afb000d236b36e5aa94ad9650ad0c3a86fd45"
+        },
+        "lib/firmware/mediatek/mt7663pr2h.bin": {
+          "bytes": 278558,
+          "sha256": "534f2152f9b0f48dfcec9c1727b0bab9a3727a655d76d5ec818cc39a55602336"
+        },
+        "lib/firmware/mediatek/mt7663pr2h_rebb.bin": {
+          "bytes": 209230,
+          "sha256": "e812442fd631ecbea7d2898c3168cb5780377378a0eed74c14fe8d8057fe547c"
+        },
+        "lib/firmware/mt7601u.bin": {
+          "link": "mediatek/mt7601u.bin"
+        },
+        "lib/firmware/mt7662.bin": {
+          "link": "mediatek/mt7662.bin"
+        },
+        "lib/firmware/mt7662_rom_patch.bin": {
+          "link": "mediatek/mt7662_rom_patch.bin"
+        },
+        "lib/firmware/rt2561.bin": {
+          "bytes": 8192,
+          "sha256": "955792180c61929abc63b8b01cc1eb67f75f67e3b4f4fc4c9b29ee74f7e029b7"
+        },
+        "lib/firmware/rt2561s.bin": {
+          "bytes": 8192,
+          "sha256": "248154ae562ea7e310aac323baa5c9ee723709848ae8e88650f15b43f85a6165"
+        },
+        "lib/firmware/rt2661.bin": {
+          "bytes": 8192,
+          "sha256": "b01b17c7ec9832567a4a23abe750e66b339636a5eccf1e596ee780e479aa3b7f"
+        },
+        "lib/firmware/rt2860.bin": {
+          "bytes": 8192,
+          "sha256": "67d5e8b32293cc2f31f67ebb112d4dabf1e23019a11c517036ba42cb48e4159c"
+        },
+        "lib/firmware/rt2870.bin": {
+          "bytes": 8192,
+          "sha256": "251b8918391eac6415d60dca239e415aad0177e885376f2a17782e64fcbbe317"
+        },
+        "lib/firmware/rt3070.bin": {
+          "link": "rt2870.bin"
+        },
+        "lib/firmware/rt3071.bin": {
+          "bytes": 4096,
+          "sha256": "b94fcb60065735d18709096cbe0e5345833fc15832e950669e2c9a2d838ae1b9"
+        },
+        "lib/firmware/rt3090.bin": {
+          "link": "rt2860.bin"
+        },
+        "lib/firmware/rt73.bin": {
+          "bytes": 2048,
+          "sha256": "a57745fa55b7700ff410bc69f3630c889e46d771ac17f6c48bda1c02908116bc"
+        },
+        "lib/firmware/rtl_nic/rtl8105e-1.fw": {
+          "bytes": 2076,
+          "sha256": "03f7ee92f1a7c1723ac7a7447ae006930c9bb07e1d77c3d12bc70cc0d855bb00"
+        },
+        "lib/firmware/rtl_nic/rtl8106e-1.fw": {
+          "bytes": 1856,
+          "sha256": "b249074519d87ff8bde17185894333c993f25f747f221305cf69a5d7b4519674"
+        },
+        "lib/firmware/rtl_nic/rtl8106e-2.fw": {
+          "bytes": 832,
+          "sha256": "ba4f7ed4bac4768810ba8a6c118457f5912f61a0380aa4fb322093caf52de0ef"
+        },
+        "lib/firmware/rtl_nic/rtl8107e-1.fw": {
+          "bytes": 992,
+          "sha256": "da3b9939538376c0dd1a97cdfead9fedba1213146bbdda31ef12b87fd616b831"
+        },
+        "lib/firmware/rtl_nic/rtl8107e-2.fw": {
+          "bytes": 976,
+          "sha256": "edc3a14a76852c411c4af5514dae5d55be37873f56a7563f80db7a76f2dc1ba7"
+        },
+        "lib/firmware/rtl_nic/rtl8125a-3.fw": {
+          "bytes": 3456,
+          "sha256": "3f6c328af0ceff5969c729edf0f535e8bb2a9b9e05d15b6be3199a3e6d421b99"
+        },
+        "lib/firmware/rtl_nic/rtl8125b-2.fw": {
+          "bytes": 3328,
+          "sha256": "529bf1c25c97ff52b401090d00ff89cc22351012336e5a0c9662728a3ee909ef"
+        },
+        "lib/firmware/rtl_nic/rtl8125d-1.fw": {
+          "bytes": 17168,
+          "sha256": "bc3c82939f02df2f58a17e7354096375001a80a5c1ca3f459c555d5a7d42bf1b"
+        },
+        "lib/firmware/rtl_nic/rtl8125d-2.fw": {
+          "bytes": 6800,
+          "sha256": "c1cb0d358ca985b0d45584612143fd93613d567064702e265bfb370e99c90e35"
+        },
+        "lib/firmware/rtl_nic/rtl8168d-1.fw": {
+          "bytes": 1492,
+          "sha256": "ded779f55b3fc5bb8576b2d2b6c724581c72160b3c2f88e33b42dc6c2c4e70b0"
+        },
+        "lib/firmware/rtl_nic/rtl8168d-2.fw": {
+          "bytes": 1324,
+          "sha256": "35dd68c01a7b24f6e554bd2c0b9cf57cf962a826651f66e75ffcea37cf2c3bb9"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-1.fw": {
+          "bytes": 5500,
+          "sha256": "c38d6818a99336c8e43883bbc136f9fab3b1b470ec0e86c61bf5dac617fe94bd"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-2.fw": {
+          "bytes": 3920,
+          "sha256": "0a489929b270df1533645a75d55ff357fd66e42057aa4e198ab738930de39386"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-3.fw": {
+          "bytes": 3872,
+          "sha256": "1287fdd82ff2f60d75c9970c108b49cfd11456ad3fe29c9666b8539a35777dbf"
+        },
+        "lib/firmware/rtl_nic/rtl8168f-1.fw": {
+          "bytes": 3424,
+          "sha256": "ed3794c651d38b807168c7c49431bb8036922b16766588c520a20287f277615d"
+        },
+        "lib/firmware/rtl_nic/rtl8168f-2.fw": {
+          "bytes": 1232,
+          "sha256": "5586b2093502f7dec762f23091fa90d6d8731e7d873509072ce2eae23ab8ee99"
+        },
+        "lib/firmware/rtl_nic/rtl8168fp-3.fw": {
+          "bytes": 336,
+          "sha256": "c526c06aa0ab8d9b57ba2b730bb1e40a1c3513f8591e238dceb2e0f45210ed27"
+        },
+        "lib/firmware/rtl_nic/rtl8168g-2.fw": {
+          "bytes": 4896,
+          "sha256": "f878ec719f78e0b104bc73362a9862611858bec893f58a1b3b289a0a57d71d25"
+        },
+        "lib/firmware/rtl_nic/rtl8168g-3.fw": {
+          "bytes": 832,
+          "sha256": "e4d5e62b0a5a097af34c7aa3c55f634fd5be2c232e02c6b983ebd7e699cb27e9"
+        },
+        "lib/firmware/rtl_nic/rtl8168h-1.fw": {
+          "bytes": 992,
+          "sha256": "4ef963690f3a7b25a9bc97fb12c58922c02886699933ed6297636cc15aad9d8d"
+        },
+        "lib/firmware/rtl_nic/rtl8168h-2.fw": {
+          "bytes": 976,
+          "sha256": "0b4beab008e308f28296c13188ee23edfeff7d865e398a7ade170495c8cec7e6"
+        },
+        "lib/firmware/rtl_nic/rtl8402-1.fw": {
+          "bytes": 1824,
+          "sha256": "a14adee93b7c7ecc738137d910334761ecf9c64d3addeccbd024a2f902f7f808"
+        },
+        "lib/firmware/rtl_nic/rtl8411-1.fw": {
+          "bytes": 2112,
+          "sha256": "e66a3183787c80987e1e36c9f7d4b2c3cd5d976640b83f462702f914febc4b38"
+        },
+        "lib/firmware/rtl_nic/rtl8411-2.fw": {
+          "bytes": 1040,
+          "sha256": "80dbdacba4d5dfee46b6c2b4e433f6f2eeb756d29ad46bf2362ba20c8ec594b1"
+        },
+        "lib/firmware/rtlwifi/rtl8188efw.bin": {
+          "bytes": 11216,
+          "sha256": "ca778610db58042c395141918b319c76df10a83dbd0aa9b3db6a9bb01c477cce"
+        },
+        "lib/firmware/rtlwifi/rtl8188eufw.bin": {
+          "bytes": 15262,
+          "sha256": "2ff74315287529dec2e50eb57d6e0c97d2116f28ae166773ccdf93b6360000c4"
+        },
+        "lib/firmware/rtlwifi/rtl8188fufw.bin": {
+          "bytes": 21020,
+          "sha256": "e6189d6d7032b83f0ed4284629c43db66262449a866f33fd329e611239f62e1f"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfw.bin": {
+          "bytes": 16192,
+          "sha256": "1f4fae583e47e28b208a955a55e187e07ec44a0efcf0e0d357a7462d1f135618"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfwU.bin": {
+          "bytes": 14818,
+          "sha256": "2d6ad600581c5792d2de9c2bd31617563dbbe50f2ba709acf35ea36158586f01"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfwU_B.bin": {
+          "bytes": 16332,
+          "sha256": "a5a32fcb5c9876b63472aafaab4b6ec37104f23c48becb52e0b57c7a326d755b"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw.bin": {
+          "bytes": 16014,
+          "sha256": "6327de71c544c27fe909d509a3d5605d46b94c102a3c27700f812b95cbe74254"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_A.bin": {
+          "bytes": 16126,
+          "sha256": "32846065b017c8b1d2d448e8c0ea2f5e741424809be49f2c6a6261339cd0b0cf"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_B.bin": {
+          "bytes": 16096,
+          "sha256": "479e5e6732b0e07cfcab4cc190b8c30465c0b7f8c0ed22d742bedd4412cbcf2a"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_TMSC.bin": {
+          "bytes": 16126,
+          "sha256": "c083f2db36ef33d0ffffc979aba1d40f55fa9dc38dce50f26e0108a21c080286"
+        },
+        "lib/firmware/rtlwifi/rtl8192defw.bin": {
+          "bytes": 31376,
+          "sha256": "618a5c9fbf96d60a9340abd740d75224ba47cd08dd4fbed05aae47a082155e78"
+        },
+        "lib/firmware/rtlwifi/rtl8192eefw.bin": {
+          "link": "rtl8192eu_nic.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_ap_wowlan.bin": {
+          "bytes": 25264,
+          "sha256": "52ba57df842c97b38b8108e53577911efb9da29dc352499c149564a08827db60"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_nic.bin": {
+          "bytes": 32286,
+          "sha256": "b15bc955fba2fc3abc093affe62c9f7284a0b84d4f13f8ce55366488dc9aad8b"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_wowlan.bin": {
+          "bytes": 29008,
+          "sha256": "4caf9e99e31b059a6c6f42e11554f14b5413eadde20dba1c66476d284a5e52f7"
+        },
+        "lib/firmware/rtlwifi/rtl8192sefw.bin": {
+          "bytes": 80208,
+          "sha256": "a24d1c61251321b94943f8bd65b4110658cc4c94e61e2e643946d6e5008e4c5b"
+        },
+        "lib/firmware/rtlwifi/rtl8712u.bin": {
+          "bytes": 122328,
+          "sha256": "6e84ec69c300b0182c9bc8fa41e88281eeb04013c4a34c341748052c3c6a9d3d"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_A.bin": {
+          "bytes": 22172,
+          "sha256": "d63e39f41dd726b3a833e64fea44696c7b74ad595d31dcaae509b17d247f125c"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_B.bin": {
+          "bytes": 24118,
+          "sha256": "850374b96076ab4b854ee9dc42ef57f9bd6b24493b74ba6b609c690d17f1c552"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_B_NoBT.bin": {
+          "bytes": 19200,
+          "sha256": "a24af5491dbfa3937633049fc66576ed478dec60e7676263f00a2ce9dd22c25b"
+        },
+        "lib/firmware/rtlwifi/rtl8723befw.bin": {
+          "bytes": 30746,
+          "sha256": "1bfa6d0910e072ed26d793ccf27889ebd774851be95d2d2543fd8de7cf31b969"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_ap_wowlan.bin": {
+          "link": "rtl8723bu_ap_wowlan.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_bt.bin": {
+          "bytes": 9120,
+          "sha256": "774f6628ae2cd7d6d8563cbf88f67f9a95e895cb44b55fb26ffdf895fdf26aea"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_nic.bin": {
+          "link": "rtl8723bu_nic.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_wowlan.bin": {
+          "link": "rtl8723bu_wowlan.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_ap_wowlan.bin": {
+          "bytes": 20886,
+          "sha256": "957707c7d6e01564685a801da1084a60b6b726c3d756d54dbe56ce064110e288"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_nic.bin": {
+          "bytes": 32108,
+          "sha256": "a52b5a7be4841b4b2839eddf5122b3300a3610866abe4bb3c3c9e444c8ab7969"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_wowlan.bin": {
+          "bytes": 26398,
+          "sha256": "534f6c4ad8a8068f7888db7af83408f0d2ef04e5d4fc8514e07522a4b0bab3a7"
+        },
+        "lib/firmware/rtlwifi/rtl8723fw.bin": {
+          "bytes": 11662,
+          "sha256": "9b6d8f2546834b69abc675fe4450e5d92f6ecbeaa22619d9047b8e5f27909d4e"
+        },
+        "lib/firmware/rtlwifi/rtl8723fw_B.bin": {
+          "bytes": 22996,
+          "sha256": "a8d1b37e7585445f599de24f4b655b194857e2c836f450798be04f67b3898305"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw.bin": {
+          "bytes": 28984,
+          "sha256": "025c13f2e7f7526e1f932049bed2146467318f547ffa8481804ecfd911cda695"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw_29.bin": {
+          "bytes": 28348,
+          "sha256": "11e7ea00504fa2fa6f5216bb59403c4f2f20eec5b676c0add0695db3b0c4a335"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw_wowlan.bin": {
+          "bytes": 19858,
+          "sha256": "df6fe0f14f6c7755da351b8d02282dde1c190133c118a5ca9627b6fd87dfd5da"
+        },
+        "lib/firmware/rtlwifi/rtl8822befw.bin": {
+          "bytes": 127496,
+          "sha256": "0952522dd0fa8cd226a0394a8092e98cd0bdccb59b31ed00dd682a6c28f60839"
+        },
+        "lib/firmware/rtw88/rtw8703b_fw.bin": {
+          "bytes": 20290,
+          "sha256": "5e32bd891c74a0719c871726b74490cf5e1a05cdcefb8fe2414f80fffdeb9f9d"
+        },
+        "lib/firmware/rtw88/rtw8703b_wow_fw.bin": {
+          "bytes": 23074,
+          "sha256": "7156b0d2b4580e63d11a3a78258c35ff28e840c7c6428953920ae6a1cd5d05ac"
+        },
+        "lib/firmware/rtw88/rtw8723b_fw.bin": {
+          "bytes": 32272,
+          "sha256": "9ed919e9a6977b3d0cb05e7bbf5e8b1bd8edb20db6d4bc1b279273aa333ab9e4"
+        },
+        "lib/firmware/rtw88/rtw8723d_fw.bin": {
+          "bytes": 28884,
+          "sha256": "9c64e079815a333a3f7b731be7cc0be65206ebc883891659dc8ff5ed36a5e2f5"
+        },
+        "lib/firmware/rtw88/rtw8812a_fw.bin": {
+          "bytes": 27030,
+          "sha256": "abdcca4e8bf76ebfba23d433de310ffefebd0ff9d01990639d4cd9602b32b71a"
+        },
+        "lib/firmware/rtw88/rtw8814a_fw.bin": {
+          "bytes": 68320,
+          "sha256": "aa6bf9d62b2d2d8a37254fd6d917ba2839888cdedc21850d4481874cb1d3d7cb"
+        },
+        "lib/firmware/rtw88/rtw8821a_fw.bin": {
+          "bytes": 31898,
+          "sha256": "4693ece655044d96f81bd3f3e8db14dc352b493219c4fd0a75788a6fbd9eac3c"
+        },
+        "lib/firmware/rtw88/rtw8821c_fw.bin": {
+          "bytes": 139472,
+          "sha256": "2ef409bc418549fcf294061dd0cae1fc22fd9da79b60524950b25de18732f3f0"
+        },
+        "lib/firmware/rtw88/rtw8822b_fw.bin": {
+          "bytes": 161240,
+          "sha256": "a72da690597bfa99d8eb6fc2ab090d18d8ad92ac2befd35db1c9e3662d8d8418"
+        },
+        "lib/firmware/rtw88/rtw8822c_fw.bin": {
+          "bytes": 202600,
+          "sha256": "3deecb31210986d98cdbfb000391e08d602a6eee4ffc883969faa2b907ab03ba"
+        },
+        "lib/firmware/rtw88/rtw8822c_wow_fw.bin": {
+          "bytes": 145224,
+          "sha256": "6717fc6ff426a74571ac4f04cd9698fb2f356012c05c58aa64cf21ceb6b958a2"
+        },
+        "lib/firmware/rtw89/rtw8851b_fw-1.bin": {
+          "bytes": 1408706,
+          "sha256": "1c4ccb5fa06bf5649146025e95993db66876a1fbc0bd766ec05686587f69c1b7"
+        },
+        "lib/firmware/rtw89/rtw8851b_fw.bin": {
+          "bytes": 1164440,
+          "sha256": "945c854d7cf69dd97bf1da0181b011787d9b3c5d59c47e8b9dbea4eb4eee170b"
+        },
+        "lib/firmware/rtw89/rtw8852a_fw-1.bin": {
+          "bytes": 1958648,
+          "sha256": "fdb5513cf7372440d7980a61aa4b753b192b056734a978458ae4a4ef7f4b2c1e"
+        },
+        "lib/firmware/rtw89/rtw8852a_fw.bin": {
+          "bytes": 1428272,
+          "sha256": "7eb1fe457f5a704b7a4f05a66c67cfa6af2f1142566b640c8e402445d04b0159"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw-1.bin": {
+          "bytes": 1245944,
+          "sha256": "5b68415e3bfe72715d63a70703d4471b04b5475b8ff69cfdc8cdf48233cd5d3a"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw-2.bin": {
+          "bytes": 1554594,
+          "sha256": "6ff6aeb56bb5b85cba333b755f8cc1dbfe9ff6e5b16e39f6ba01ce7f1eaa7714"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw.bin": {
+          "bytes": 1035232,
+          "sha256": "5b9c224ae014e0aeade8701412d820e213c8880e08615b3905dba89659f21baf"
+        },
+        "lib/firmware/rtw89/rtw8852bt_fw-1.bin": {
+          "bytes": 937688,
+          "sha256": "164e5e2243b1241a23d5e77876aa11be003fb09f5aa7794dc7bbf80957c8c254"
+        },
+        "lib/firmware/rtw89/rtw8852bt_fw.bin": {
+          "bytes": 928714,
+          "sha256": "b75914312181a2cd8a15fe65024d218e875324de9231ce2071e31513bffbffa3"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw-1.bin": {
+          "bytes": 2375560,
+          "sha256": "95e4226f7a4c2a506a5ea2bb8b6247842dd12fc312639750881c5bfdec7bbec5"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw-2.bin": {
+          "bytes": 2644326,
+          "sha256": "916e87d1470bce5400712f53d419ae68a0f44d858670c57e118d4f0b1d89c5b4"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw.bin": {
+          "bytes": 1532656,
+          "sha256": "e05e704911ec5d6523e2951416290cc2189444d48a0420e637de6acf5bf21228"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-1.bin": {
+          "bytes": 1583434,
+          "sha256": "4340bc322912f30f1793bb57a1747c23b15e40db2df628d6687d1ddf722f2828"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-2.bin": {
+          "bytes": 1586954,
+          "sha256": "9ca08cd3098b954cc0d44edd5c0b079877e5dd9b98d55cfec1c302b41475d88c"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-3.bin": {
+          "bytes": 1238542,
+          "sha256": "484f496bc149706b92c7352925fef4155fecb60bc61ec0f5c55a3b651ed915f4"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-4.bin": {
+          "bytes": 1849226,
+          "sha256": "d11927f593c82879bd0437435475d7915a60932374747984b3dc906a23009dea"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw.bin": {
+          "bytes": 1537690,
+          "sha256": "84458f2fa7c9a730fae242d858a82814141421d66a1f672a10121982513daf6d"
+        },
+        "lib/firmware/rtw89/rtw8922d_fw.bin": {
+          "bytes": 5683768,
+          "sha256": "95cbd1630267b6fa6e1736fc3fbc85d9339d0d52dfe71b5042ddb448196bfc5a"
+        },
+        "lib/firmware/rtw89/rtw8922ds_fw.bin": {
+          "bytes": 3768808,
+          "sha256": "e2718524d6808c7c0cd4eea1a9597a9c99c5001ae7e29507bab2b4a4199c5d8f"
+        }
+      },
+      "added_regular_file_bytes": 2892730,
+      "added_squashfs_bytes": 1748992
+    },
+    "combined": {
+      "regular_file_bytes": 95636894,
+      "regular_files": 263,
+      "symlinks": 93,
+      "squashfs_bytes": 45039616,
+      "seconds": 26.392,
+      "inventory": {
+        "lib/firmware/ar7010.fw": {
+          "bytes": 70624,
+          "sha256": "b5a089618861ed242f8101a04e0a9c1d246cf237af5b363567ffbdd9165e994c"
+        },
+        "lib/firmware/ar7010_1_1.fw": {
+          "bytes": 70624,
+          "sha256": "73917b6a4c87cad2da753e497c9a1056b1a14b70f265ea928bb06ac97ac20d67"
+        },
+        "lib/firmware/ar9170-1.fw": {
+          "bytes": 83968,
+          "sha256": "5b45481b87b8b3e4deb8fd54651506cb388f43d893bea323b10d8a273e40a6a7"
+        },
+        "lib/firmware/ar9170-2.fw": {
+          "bytes": 3508,
+          "sha256": "ea0e8fd7202b250b423a368f124eee8d7a9537a15ddaff2e3745065f69a08cfd"
+        },
+        "lib/firmware/ar9271.fw": {
+          "bytes": 51312,
+          "sha256": "89a99f6a73c409065dbef3d7706d089c03d2530003f03fac62cf1d37949b78b9"
+        },
+        "lib/firmware/ath10k/QCA6174/hw2.1/board-2.bin": {
+          "bytes": 263188,
+          "sha256": "fd5cab002d3533b674dfda6ec92d1d705c267c46d0e2e4dc8c917360e9e4913e"
+        },
+        "lib/firmware/ath10k/QCA6174/hw2.1/board.bin": {
+          "bytes": 8124,
+          "sha256": "23c51bdaf0ec685d9ce2ecf08fa91d05dc8c6506f82f0811cd365b55a92cbad1"
+        },
+        "lib/firmware/ath10k/QCA6174/hw2.1/firmware-5.bin": {
+          "bytes": 498172,
+          "sha256": "cc77874b709e26ffcc1cd548a4813e4be8cd523329c1b3ba34e341417d2935c5"
+        },
+        "lib/firmware/ath10k/QCA6174/hw2.1/notice_ath10k_firmware-5.txt": {
+          "bytes": 46087,
+          "sha256": "631065703055d11b099477c508508f20a80b202aad548a7726564bfa59a96c91"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/board-2.bin": {
+          "bytes": 740076,
+          "sha256": "66e83dde1c9af535df1fcd17c72971a96a263357300e921b358d35a353227d60"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/board.bin": {
+          "bytes": 8124,
+          "sha256": "1a8d225818b46986fc4f615594fbe448fa820618590d6902c8f844bb37cda667"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/firmware-4.bin": {
+          "bytes": 733784,
+          "sha256": "dc74ba148cf88f1f99a62854112ec574d8c265d88417a4d969461448b0ab60c5"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/firmware-6.bin": {
+          "bytes": 706360,
+          "sha256": "04d3bad5efa3f9fbe3ba53fd3e25fa9b0585ed227eea8111303b4e08861f979d"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/firmware-sdio-6.bin": {
+          "bytes": 607252,
+          "sha256": "b5fc019e98de2035ae00feb7c7db332c6c417cb763a8007c774cedb2e515eb06"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/notice_ath10k_firmware-4.txt": {
+          "bytes": 79689,
+          "sha256": "3b5eb392b2d9d8c46d6aae26d06c187e5ea3029b12d13bc2b8deb8b3ce6bfa53"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/notice_ath10k_firmware-6.txt": {
+          "bytes": 53425,
+          "sha256": "8ce5c6ea0542bf4aac31fc3ae16a39792ad22d0eae4543063fac56fb3380f021"
+        },
+        "lib/firmware/ath10k/QCA6174/hw3.0/notice_ath10k_firmware-sdio-6.txt": {
+          "bytes": 53425,
+          "sha256": "8ce5c6ea0542bf4aac31fc3ae16a39792ad22d0eae4543063fac56fb3380f021"
+        },
+        "lib/firmware/ath10k/QCA9377/hw1.0/board-2.bin": {
+          "bytes": 304308,
+          "sha256": "0fdcc7838f478da81704de88f7b33e28862110c6d5decf7818543f8e37e6cd98"
+        },
+        "lib/firmware/ath10k/QCA9377/hw1.0/board.bin": {
+          "bytes": 8124,
+          "sha256": "127d35d82edb46278f30c448cbca664d755ff0d5fed57b649959cdbc4208c768"
+        },
+        "lib/firmware/ath10k/QCA9377/hw1.0/firmware-5.bin": {
+          "bytes": 783336,
+          "sha256": "95ed94c24795c31dbdf8c97ab7278dd3a107673ea7330dfe4d01b1c65965f7a8"
+        },
+        "lib/firmware/ath10k/QCA9377/hw1.0/firmware-6.bin": {
+          "bytes": 751436,
+          "sha256": "8f8b002fccfe81d42238f27dd1f56d189604f180bd4772c7c8e75ae1fef16f01"
+        },
+        "lib/firmware/ath10k/QCA9377/hw1.0/firmware-sdio-5.bin": {
+          "bytes": 617852,
+          "sha256": "017b4ae7bdb5821ecb439fbf96d198421a57926918f2513db5fbd6d9c01debe6"
+        },
+        "lib/firmware/ath10k/QCA988X/hw2.0/board.bin": {
+          "bytes": 2116,
+          "sha256": "5b5b380333c2dd3b6ce67f30e2f7008f4020bf594970d3b464fd8d4a80fcd880"
+        },
+        "lib/firmware/ath10k/QCA988X/hw2.0/firmware-4.bin": {
+          "bytes": 241892,
+          "sha256": "208f91dd40b7db5feb645104125338491ca932028c2dd858bb12f07ac6c90cc1"
+        },
+        "lib/firmware/ath10k/QCA988X/hw2.0/firmware-5.bin": {
+          "bytes": 249044,
+          "sha256": "15867031c87f1d7408c1b25fb6419077a1b97de208f2aa58c3266b60e1f8daa2"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/Notice.txt": {
+          "bytes": 152394,
+          "sha256": "770720d03de70ff503c6d9bb6f6932fc7833d078647fe8352c6d5d49d44bbc5f"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/amss.bin": {
+          "bytes": 4988928,
+          "sha256": "e12b23ddc4b8d2d2a10a651a5d6fdcd00f60fcae884d2cf5dad17627211fcdfd"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/board-2.bin": {
+          "bytes": 7237392,
+          "sha256": "9287fa8d14d915892666b03e9403135875d08371fd1438d2c6d9fe96ae71cf68"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/m3.bin": {
+          "bytes": 266684,
+          "sha256": "0c590881870d0e6e98fc7d393ce05690e09287933b1b535e935bf5d98b77713f"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/nfa765/Notice.txt": {
+          "bytes": 152394,
+          "sha256": "770720d03de70ff503c6d9bb6f6932fc7833d078647fe8352c6d5d49d44bbc5f"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/nfa765/amss.bin": {
+          "bytes": 5079040,
+          "sha256": "8cb5e63877c7cfdc5002a7d28bc5d7f7d20368183e6f93b12c977bfd0351c7b7"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/nfa765/m3.bin": {
+          "bytes": 266684,
+          "sha256": "d20460e104b85a7be9cdb5199c4d8b94a9787912e3f920acd845694d4d71f730"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.0/regdb.bin": {
+          "bytes": 24310,
+          "sha256": "e1b774b1feda4cab01f5a26089124059539fc31544ac34129dce45c8ff26d645"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.1/amss.bin": {
+          "link": "../hw2.0/amss.bin"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.1/board-2.bin": {
+          "link": "../hw2.0/board-2.bin"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.1/m3.bin": {
+          "link": "../hw2.0/m3.bin"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.1/nfa765/amss.bin": {
+          "link": "../../hw2.0/nfa765/amss.bin"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.1/nfa765/m3.bin": {
+          "link": "../../hw2.0/nfa765/m3.bin"
+        },
+        "lib/firmware/ath11k/WCN6855/hw2.1/regdb.bin": {
+          "link": "../hw2.0/regdb.bin"
+        },
+        "lib/firmware/ath6k/AR6002/athwlan.bin.z77": {
+          "bytes": 98425,
+          "sha256": "6e08f2c2017182a339d366b387b66d0a79695f1c843362f29ab77e11d3456a71"
+        },
+        "lib/firmware/ath6k/AR6002/data.patch.hw2_0.bin": {
+          "bytes": 1336,
+          "sha256": "706cd9400ecd85035f0834856458adece8ee76718226a640f7732accb4292268"
+        },
+        "lib/firmware/ath6k/AR6002/eeprom.bin": {
+          "bytes": 784,
+          "sha256": "a0754af6dddf6a80fbf96a04be201cf12a46f2eab65495326000acd5c30bf0f9"
+        },
+        "lib/firmware/ath6k/AR6002/eeprom.data": {
+          "bytes": 48,
+          "sha256": "2c8be8370f764cce2210c8198453de0d66be107707ded8577486899a227b33b8"
+        },
+        "lib/firmware/ath6k/AR6003/hw1.0/athwlan.bin.z77": {
+          "bytes": 122209,
+          "sha256": "85b60e36d6beac63d7f7a9723bfab96926fb999d214bccf9a883066a542ed5c9"
+        },
+        "lib/firmware/ath6k/AR6003/hw1.0/bdata.SD31.bin": {
+          "bytes": 1024,
+          "sha256": "a8213ce2b3b8426c6c3173226d64770f3f32179f40f1e1733c20b54f47e235db"
+        },
+        "lib/firmware/ath6k/AR6003/hw1.0/bdata.SD32.bin": {
+          "bytes": 1024,
+          "sha256": "cdbcb99d80caea8ad08a784f9abedef4fad450f4a6e4b285cd120dd307107936"
+        },
+        "lib/firmware/ath6k/AR6003/hw1.0/bdata.WB31.bin": {
+          "bytes": 1024,
+          "sha256": "a8213ce2b3b8426c6c3173226d64770f3f32179f40f1e1733c20b54f47e235db"
+        },
+        "lib/firmware/ath6k/AR6003/hw1.0/data.patch.bin": {
+          "bytes": 5524,
+          "sha256": "690af1aba5e6adfb9f3ad98f6f2d1122bc72cc051a77a604e308943deb127b13"
+        },
+        "lib/firmware/ath6k/AR6003/hw1.0/otp.bin.z77": {
+          "bytes": 1665,
+          "sha256": "36abab469835f5adf8d329bd8ab2374629b21ce3270deb1da9de94cafefb2408"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.0/athwlan.bin.z77": {
+          "bytes": 100694,
+          "sha256": "93f293b68fa67b23137df5e41c2e6a0c633a8c7f2e990ff5c33408a564e6c0b5"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.0/bdata.SD31.bin": {
+          "bytes": 1792,
+          "sha256": "2bd79ecb33d7644702e250cb544c8a4dfcb73f4264b47b445ee94467b1d9d2f2"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.0/bdata.SD32.bin": {
+          "bytes": 1792,
+          "sha256": "cf8b458877eafc3d4f901377d3fedceac1149891343c5ae6bfb3aeca3e78ca7d"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.0/bdata.WB31.bin": {
+          "bytes": 1792,
+          "sha256": "2bd79ecb33d7644702e250cb544c8a4dfcb73f4264b47b445ee94467b1d9d2f2"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.0/data.patch.bin": {
+          "bytes": 6012,
+          "sha256": "a962f1a7268b2df783b34f9f90ebeee1b3fc9fcb6b05685144a48c73f96aad13"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.0/otp.bin.z77": {
+          "bytes": 3689,
+          "sha256": "761b35b0bec5dc7ea27c48691692a96abb10fd653e4fe95450d991168f479638"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/athwlan.bin": {
+          "bytes": 68975,
+          "sha256": "949028942832f7f63f7e3752c82bd0db4a2404fb78801e9322b4f370e281162e"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/bdata.SD31.bin": {
+          "bytes": 1792,
+          "sha256": "2bd79ecb33d7644702e250cb544c8a4dfcb73f4264b47b445ee94467b1d9d2f2"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/bdata.SD32.bin": {
+          "bytes": 1792,
+          "sha256": "cf8b458877eafc3d4f901377d3fedceac1149891343c5ae6bfb3aeca3e78ca7d"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/bdata.WB31.bin": {
+          "bytes": 1792,
+          "sha256": "2bd79ecb33d7644702e250cb544c8a4dfcb73f4264b47b445ee94467b1d9d2f2"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/data.patch.bin": {
+          "bytes": 140,
+          "sha256": "167fe4c11334ae0a2a3c6636d53d10ef9b228ff29af2d3c61a4d3d3dddba858d"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/endpointping.bin": {
+          "bytes": 12810,
+          "sha256": "39416ca2349f1c55cbe60dd34f747e004cd7f903ad4911ee55e1e71d27f5ed85"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/fw-2.bin": {
+          "bytes": 89844,
+          "sha256": "05cbc35708afa22dadef1b4ae7fb8532262565bbbae95faa2c6a93ab12800994"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/fw-3.bin": {
+          "bytes": 104562,
+          "sha256": "b627e9c74010a0947e2ab9a7138344ec2985ba3934e1ab7085fb45a75599645c"
+        },
+        "lib/firmware/ath6k/AR6003/hw2.1.1/otp.bin": {
+          "bytes": 2783,
+          "sha256": "fe81e2ae6e330e1f36162743789809d977335de7d211dd3b87af7d5800d08683"
+        },
+        "lib/firmware/ath6k/AR6004/hw1.2/bdata.bin": {
+          "bytes": 6144,
+          "sha256": "7a8afa2dcc30ba0b59f87c8aca4f9bb819b9e8149495119b0517a8600b1ac915"
+        },
+        "lib/firmware/ath6k/AR6004/hw1.2/fw-2.bin": {
+          "bytes": 53122,
+          "sha256": "0170f161064f412842a09610bd043b3f86fde3cf4f291b366e05e4e4b8773897"
+        },
+        "lib/firmware/ath6k/AR6004/hw1.3/bdata.bin": {
+          "bytes": 6144,
+          "sha256": "3df79508fac33ed7a3f878245f3d76185d7fb79c96fe2a9bb160baac125ae492"
+        },
+        "lib/firmware/ath6k/AR6004/hw1.3/fw-3.bin": {
+          "bytes": 50662,
+          "sha256": "a512d907b00f87581532a8d84a6366e7ffc30c3372ad0b70ef3dc948803538f4"
+        },
+        "lib/firmware/ath9k_htc/htc_7010-1.4.0.fw": {
+          "bytes": 72812,
+          "sha256": "737850aaf66ca13f82e0f5ca5e758f606f840c2f23c291350ab916bbf88e6f75"
+        },
+        "lib/firmware/ath9k_htc/htc_9271-1.4.0.fw": {
+          "bytes": 51008,
+          "sha256": "78f7d592a95b419a02fde7440f30c606fc31a871cf0ce150ced40d4857173eb0"
+        },
+        "lib/firmware/brcm/bcm4329-fullmac-4.bin": {
+          "bytes": 269595,
+          "sha256": "ee87d73bc8b54aa29e343490297ca1294f71a1a4f66c845e6b301770c94082ee"
+        },
+        "lib/firmware/brcm/brcmfmac43012-sdio.bin": {
+          "link": "../cypress/cyfmac43012-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac43012-sdio.clm_blob": {
+          "link": "../cypress/cyfmac43012-sdio.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac43143-sdio.bin": {
+          "bytes": 385067,
+          "sha256": "0c95c5616861856b055209a05270c0cc75cb500daa550a659b275e124ea334aa"
+        },
+        "lib/firmware/brcm/brcmfmac43143.bin": {
+          "bytes": 397312,
+          "sha256": "a0ace23094652c3aa3bcd480906b1a769d0169afcc3b5f074b187a30d8617e03"
+        },
+        "lib/firmware/brcm/brcmfmac43236b.bin": {
+          "bytes": 348160,
+          "sha256": "2138a2edca76a1f808250fd89381b30529938e04b2a9befa138afda71a9c96e4"
+        },
+        "lib/firmware/brcm/brcmfmac43241b0-sdio.bin": {
+          "bytes": 459988,
+          "sha256": "ad8229c94cf516e364d54ff73955049535cfd8214adb839deb39420105f5d8ed"
+        },
+        "lib/firmware/brcm/brcmfmac43241b4-sdio.bin": {
+          "bytes": 403855,
+          "sha256": "0e53e2eadb22610c298df18b631f571d216a3eca3d537812a6f074337fb38eca"
+        },
+        "lib/firmware/brcm/brcmfmac43241b5-sdio.bin": {
+          "bytes": 408682,
+          "sha256": "272838b46ebc04131d44bca4542befa89c808c4fbb5af376df4664b0943a1863"
+        },
+        "lib/firmware/brcm/brcmfmac43242a.bin": {
+          "bytes": 479232,
+          "sha256": "3cb5eccfad59736241d6207322f4aa26505fe6129c957f2742b4168593304487"
+        },
+        "lib/firmware/brcm/brcmfmac4329-sdio.bin": {
+          "bytes": 253748,
+          "sha256": "d61983946b1e733e4c75dbe6841ac0f1250ebed2e3ee9058cdfdbbba3ba37c93"
+        },
+        "lib/firmware/brcm/brcmfmac4330-sdio.Prowise-PT301.txt": {
+          "bytes": 1509,
+          "sha256": "baa957121b4ba54ecabbdfef811143120401f54abd485d3f6bde414f994875ca"
+        },
+        "lib/firmware/brcm/brcmfmac4330-sdio.bin": {
+          "bytes": 223581,
+          "sha256": "69ee0e9b9a4233b320cdfdd935853cdf2fbd84ff6ec42f8ec572f2f0a19975a7"
+        },
+        "lib/firmware/brcm/brcmfmac4334-sdio.bin": {
+          "bytes": 451566,
+          "sha256": "7b4eebe4d3bbc9a8bf3c2d55d9404cf0ed9cce3388b3d5708d2352d0af89eeb3"
+        },
+        "lib/firmware/brcm/brcmfmac43340-sdio.bin": {
+          "link": "../cypress/cyfmac43340-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac43340-sdio.meegopad-t08.txt": {
+          "bytes": 1693,
+          "sha256": "8ae5a78127e583f647789eda9cb869c5480fdd09124786ff818c1acf3a9a52cc"
+        },
+        "lib/firmware/brcm/brcmfmac43340-sdio.pov-tab-p1006w-data.txt": {
+          "bytes": 1724,
+          "sha256": "9a01ead1b4fb7b128b58ba7570a0fd4b5a9d5e07196f06ab01f5e7d16729b93b"
+        },
+        "lib/firmware/brcm/brcmfmac43340-sdio.predia-basic.txt": {
+          "bytes": 1689,
+          "sha256": "4e268a0c4803bac74b55e71b4e08c20c70f2f273b669156d6424bae1b7a1c35c"
+        },
+        "lib/firmware/brcm/brcmfmac4335-sdio.bin": {
+          "bytes": 569291,
+          "sha256": "1551fd7680db31d230c70f55860ca071331a37eeb54c9229307b8fa475f9d6e7"
+        },
+        "lib/firmware/brcm/brcmfmac43362-sdio.bin": {
+          "link": "../cypress/cyfmac43362-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac43362-sdio.cubietech,cubietruck.txt": {
+          "bytes": 803,
+          "sha256": "c17e2913e43c6420a3bfb63d34b5572e60ab038fcb5bc6b401c4200c56c12597"
+        },
+        "lib/firmware/brcm/brcmfmac43362-sdio.lemaker,bananapro.txt": {
+          "link": "brcmfmac43362-sdio.cubietech,cubietruck.txt"
+        },
+        "lib/firmware/brcm/brcmfmac4339-sdio.bin": {
+          "link": "../cypress/cyfmac4339-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.AP6212.txt": {
+          "bytes": 875,
+          "sha256": "fdef0603345dd023ad28c0eff2d5167915c617bee2d6944da9a6da1c4ac87ca5"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.Hampoo-D2D3_Vi8A1.txt": {
+          "bytes": 928,
+          "sha256": "91d701c64b1ea10e38963e893ae64576774178314abb0cf2030b45fd9c4dfd94"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.MUR1DX.txt": {
+          "bytes": 831,
+          "sha256": "c9ee1d910b6f089d60bc9c4b34e7341e69b3e07f98968382469f43384dd7ac9b"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.beagle,beaglev-starlight-jh7100-a1.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.beagle,beaglev-starlight-jh7100-r0.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.bin": {
+          "link": "../cypress/cyfmac43430-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.clm_blob": {
+          "link": "../cypress/cyfmac43430-sdio.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.friendlyarm,nanopi-neo4.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.friendlyarm,nanopi-r1.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.raspberrypi,3-model-b.txt": {
+          "bytes": 874,
+          "sha256": "489c12a33e0fd0899cd27bfb316b30944f0b9dd571c266a0aa3704b35817b788"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.raspberrypi,model-zero-2-w.txt": {
+          "link": "brcmfmac43430-sdio.raspberrypi,3-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.raspberrypi,model-zero-w.txt": {
+          "link": "brcmfmac43430-sdio.raspberrypi,3-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.sinovoip,bananapi-m64.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.sinovoip,bpi-m2-plus.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.sinovoip,bpi-m2-ultra.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.sinovoip,bpi-m2-zero.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.sinovoip,bpi-m3.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430-sdio.starfive,visionfive-v1.txt": {
+          "link": "brcmfmac43430-sdio.AP6212.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43430a0-sdio.bin": {
+          "bytes": 382455,
+          "sha256": "ad85074b7919517d7e1a7e463e0176d46e7b312216bd7aa372e4aee2bfe8e07a"
+        },
+        "lib/firmware/brcm/brcmfmac43430a0-sdio.ilife-S806.txt": {
+          "bytes": 908,
+          "sha256": "63dc7f254f3e7a8ccb5d6246488d1a18ca548eefeee622b8e5b62a997b53ee87"
+        },
+        "lib/firmware/brcm/brcmfmac43430a0-sdio.jumper-ezpad-mini3.txt": {
+          "bytes": 951,
+          "sha256": "b07a8148015d6f09dca935c8841ca9df462d7eb6eba6e8ff9f03fd399eb9760a"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.Raspberry Pi Foundation-Raspberry Pi 4 Model B.txt": {
+          "link": "brcmfmac43455-sdio.raspberrypi,4-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.Raspberry Pi Foundation-Raspberry Pi Compute Module 4.txt": {
+          "link": "brcmfmac43455-sdio.raspberrypi,4-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.bin": {
+          "link": "../cypress/cyfmac43455-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.clm_blob": {
+          "link": "../cypress/cyfmac43455-sdio.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.raspberrypi,3-model-a-plus.txt": {
+          "link": "brcmfmac43455-sdio.raspberrypi,3-model-b-plus.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.raspberrypi,3-model-b-plus.txt": {
+          "bytes": 1884,
+          "sha256": "ae2f9e43c609766036cd7d82d709e62135fc266cbe8f40fb10f782114d585658"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.raspberrypi,4-compute-module.txt": {
+          "link": "brcmfmac43455-sdio.raspberrypi,4-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.raspberrypi,4-model-b.txt": {
+          "bytes": 1883,
+          "sha256": "edb6f4e4fb19e18940004124feb4ffe160d72fc607243a07a4480338a28b2748"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.raspberrypi,5-compute-module.txt": {
+          "link": "brcmfmac43455-sdio.raspberrypi,4-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.raspberrypi,5-model-b.txt": {
+          "link": "brcmfmac43455-sdio.raspberrypi,4-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43455-sdio.raspberrypi,500.txt": {
+          "link": "brcmfmac43455-sdio.raspberrypi,4-model-b.txt"
+        },
+        "lib/firmware/brcm/brcmfmac4350-pcie.bin": {
+          "bytes": 626140,
+          "sha256": "5691d1e0ceb70baf18efb7a0ec6cb84feb9edd2d0700c525b42930c4e7e4b845"
+        },
+        "lib/firmware/brcm/brcmfmac4350c2-pcie.bin": {
+          "bytes": 623304,
+          "sha256": "423c2373faf403ce39c822312f8f4810e63f5b67ea62bfd60552af119591b115"
+        },
+        "lib/firmware/brcm/brcmfmac4354-sdio.bin": {
+          "link": "../cypress/cyfmac4354-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac4354-sdio.clm_blob": {
+          "link": "../cypress/cyfmac4354-sdio.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac4356-pcie.bin": {
+          "link": "../cypress/cyfmac4356-pcie.bin"
+        },
+        "lib/firmware/brcm/brcmfmac4356-pcie.clm_blob": {
+          "link": "../cypress/cyfmac4356-pcie.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac4356-pcie.gpd-win-pocket.txt": {
+          "bytes": 2515,
+          "sha256": "7c6d8e0b1a1fba2c100833b99a585f9b69c8719c260932ca76bed2647bb7af00"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.AP6356S.txt": {
+          "bytes": 2610,
+          "sha256": "bdc88ecb0289973d1c784550fa540223bb41f49213b20af59f2267359e0c5a09"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.bin": {
+          "link": "../cypress/cyfmac4356-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.clm_blob": {
+          "link": "../cypress/cyfmac4356-sdio.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.firefly,firefly-rk3399.txt": {
+          "link": "brcmfmac4356-sdio.AP6356S.txt"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.friendlyarm,nanopc-t4.txt": {
+          "link": "brcmfmac4356-sdio.AP6356S.txt"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.friendlyarm,nanopi-m4.txt": {
+          "link": "brcmfmac4356-sdio.AP6356S.txt"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.khadas,vim2.txt": {
+          "link": "brcmfmac4356-sdio.AP6356S.txt"
+        },
+        "lib/firmware/brcm/brcmfmac4356-sdio.vamrs,rock960.txt": {
+          "link": "brcmfmac4356-sdio.AP6356S.txt"
+        },
+        "lib/firmware/brcm/brcmfmac43569.bin": {
+          "bytes": 557056,
+          "sha256": "0a57d51cd676b98e3313463dccf7fa9aadafe52a45216b7a919a379cd8f07f1d"
+        },
+        "lib/firmware/brcm/brcmfmac43570-pcie.bin": {
+          "link": "../cypress/cyfmac43570-pcie.bin"
+        },
+        "lib/firmware/brcm/brcmfmac43570-pcie.clm_blob": {
+          "link": "../cypress/cyfmac43570-pcie.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac4358-pcie.bin": {
+          "bytes": 634361,
+          "sha256": "f04d8fdc0a0a301ccbbf543a2b470108c64ee341360f3450ed4fa9bbee04337c"
+        },
+        "lib/firmware/brcm/brcmfmac43602-pcie.ap.bin": {
+          "bytes": 595472,
+          "sha256": "7f735b7254527ce7cae84a854211879a4b85d6a77a92210c4d92bcf12a35618b"
+        },
+        "lib/firmware/brcm/brcmfmac43602-pcie.bin": {
+          "bytes": 635449,
+          "sha256": "bf4cfc23ee952a3d82ef33a0f5f87853201c98f1bed034876a910f354f37862d"
+        },
+        "lib/firmware/brcm/brcmfmac4366b-pcie.bin": {
+          "bytes": 1105361,
+          "sha256": "ab4d5012393aed59dc76e27d6e11d1c8f821ab24c3005436dee8d799b6298224"
+        },
+        "lib/firmware/brcm/brcmfmac4366c-pcie.bin": {
+          "bytes": 1120971,
+          "sha256": "a250275c81c626de4379591d367624b7d9da99a665a946738e657217a9d9e53e"
+        },
+        "lib/firmware/brcm/brcmfmac4371-pcie.bin": {
+          "bytes": 623448,
+          "sha256": "ffb7180db84dfa77171ab920412f68bfc801b4c5d0f89252b9effdedafb3ff7c"
+        },
+        "lib/firmware/brcm/brcmfmac4373-sdio.bin": {
+          "link": "../cypress/cyfmac4373-sdio.bin"
+        },
+        "lib/firmware/brcm/brcmfmac4373-sdio.clm_blob": {
+          "link": "../cypress/cyfmac4373-sdio.clm_blob"
+        },
+        "lib/firmware/brcm/brcmfmac4373.bin": {
+          "bytes": 479232,
+          "sha256": "5ad7af8a9605a23bf714e612313b55b8cf8b152cea19ad49d8744f6c602dcc5a"
+        },
+        "lib/firmware/carl9170-1.fw": {
+          "bytes": 13388,
+          "sha256": "e1695dbfbc6aa7bb3182615bd47905e2df808317e4050878e50bb24285b37068"
+        },
+        "lib/firmware/cypress/cyfmac43012-sdio.bin": {
+          "bytes": 490686,
+          "sha256": "f9e2c5a6ce50ab37f3e6557e03bbd18ea6766257d28b7aff608d47b02bbf1d91"
+        },
+        "lib/firmware/cypress/cyfmac43012-sdio.clm_blob": {
+          "bytes": 4692,
+          "sha256": "47cf9e8647d3c3f1b924324ebbbeabd2a6659cfda62cbf8351e5fe965e3e5413"
+        },
+        "lib/firmware/cypress/cyfmac43340-sdio.bin": {
+          "bytes": 409717,
+          "sha256": "4c76b2a161fc65d91db50b461e16e3e9c003305682c35c083faa65cd232e8496"
+        },
+        "lib/firmware/cypress/cyfmac43362-sdio.bin": {
+          "bytes": 202623,
+          "sha256": "24e9c2eb18628f855e8d9453cdef2cf66ba06ee0dcfa9c664adce144e7ca2c5f"
+        },
+        "lib/firmware/cypress/cyfmac4339-sdio.bin": {
+          "bytes": 574096,
+          "sha256": "c366f88569dab307dc04aca88dabca74b5333fcf5968f5b36ab96a154fb7718e"
+        },
+        "lib/firmware/cypress/cyfmac43430-sdio.bin": {
+          "bytes": 419798,
+          "sha256": "93f3c40c94340c29a40714cb04e3e89974870fcae42a844b8a4544750159f40d"
+        },
+        "lib/firmware/cypress/cyfmac43430-sdio.clm_blob": {
+          "bytes": 4733,
+          "sha256": "3376b9c9b32d16bf762e21c7fafb665365070ae240d092498d0d1987c22022aa"
+        },
+        "lib/firmware/cypress/cyfmac43455-sdio.bin": {
+          "bytes": 643651,
+          "sha256": "d408faa9d0d5b1a2f9912dcea53ab0be48217288e398406d117f0edafe7c3edd"
+        },
+        "lib/firmware/cypress/cyfmac43455-sdio.clm_blob": {
+          "bytes": 4733,
+          "sha256": "15f50a27020b263d1bea215c8f68d0550d912932d1d9ef19ffd59f18d82dd460"
+        },
+        "lib/firmware/cypress/cyfmac4354-sdio.bin": {
+          "bytes": 601704,
+          "sha256": "f6b4164c50c4406573f3671d50c2d19b370ed079035a7d76a38535e244ae41d8"
+        },
+        "lib/firmware/cypress/cyfmac4354-sdio.clm_blob": {
+          "bytes": 5750,
+          "sha256": "a72cbbaea17415d99be5c747d719cb22e6787471d047cf72fd66f9e07ab12dbd"
+        },
+        "lib/firmware/cypress/cyfmac4356-pcie.bin": {
+          "bytes": 616174,
+          "sha256": "ce4ed5a7389634c37c1920b0d70e12c4be17e43cc6f191800240c3aa02e20ca2"
+        },
+        "lib/firmware/cypress/cyfmac4356-pcie.clm_blob": {
+          "bytes": 5750,
+          "sha256": "8107aa3926c7a4ec35d8a0c508d5b563fa8b0b4a146aa912d6f3b2b4c06c1e4f"
+        },
+        "lib/firmware/cypress/cyfmac4356-sdio.bin": {
+          "bytes": 580258,
+          "sha256": "be355bcc2226930d2d8aa3833d63c29cfd93ed7ed279a33d1a315fb3fc5dc3cc"
+        },
+        "lib/firmware/cypress/cyfmac4356-sdio.clm_blob": {
+          "bytes": 5750,
+          "sha256": "b093951c75a4a47fe0c02ee92231edce4bbe4f0b77a192fa3ac4105a200d9929"
+        },
+        "lib/firmware/cypress/cyfmac43570-pcie.bin": {
+          "bytes": 558388,
+          "sha256": "5aeb8c18d6eca4ad1df580fdd97bb7a0ce0a286c109cab81532aca768ef9a560"
+        },
+        "lib/firmware/cypress/cyfmac43570-pcie.clm_blob": {
+          "bytes": 5750,
+          "sha256": "3b170fa97e3f03f9527904abab70af3551874e2a0b4e5bb399285dc0c77732c8"
+        },
+        "lib/firmware/cypress/cyfmac4373-sdio.bin": {
+          "bytes": 563834,
+          "sha256": "00ea58a5a27d7184a488409e5b2e7ba99c55ecab0da7e4673549f1716e2707ea"
+        },
+        "lib/firmware/cypress/cyfmac4373-sdio.clm_blob": {
+          "bytes": 4684,
+          "sha256": "a54ae6e7e7dcf42f09809ab4ad471895e115b21a9b4c12c8bff4e4edb36afe41"
+        },
+        "lib/firmware/htc_7010.fw": {
+          "bytes": 72684,
+          "sha256": "45cc9e5e9450f0b494bbff81c382b080885d6dd86d816b22d322c58eb1b47114"
+        },
+        "lib/firmware/htc_9271.fw": {
+          "bytes": 50980,
+          "sha256": "b5c123f9a8f2b0388eddd630860c100b4fe889ccdb4fcf24bc88b0fe2df3e59e"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-100-5.ucode.xz": {
+          "bytes": 115956,
+          "sha256": "ca1f3942b3e492b6566c8fa39f0408638f9894473f4832a36d2da54eb8dcd444"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-1000-5.ucode.xz": {
+          "bytes": 116068,
+          "sha256": "eca1eb04373c7a6a8e73a2f7ed6dd5adf42bb131e66aa6cbcd2907dcec022645"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-105-6.ucode.xz": {
+          "bytes": 196948,
+          "sha256": "b3c946392eeae1572dab48cb1cb084edacf04bc7b94a93afedc7a37979b64fdb"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-135-6.ucode.xz": {
+          "bytes": 205632,
+          "sha256": "f6d5b66ccbf867b45144c31582d5837430d17f8b9ba739ce862761c9fb5d0b74"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-2000-6.ucode.xz": {
+          "bytes": 199376,
+          "sha256": "1111b842d88057b47f29e15b6515e4555ef5ccc3626aaf483a1d15f4e19737b1"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-2030-6.ucode.xz": {
+          "bytes": 207776,
+          "sha256": "604a802c0feb60ceec50d490c849a19e01bc87f55f951d0a4b4f873aef8a3e07"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-3160-17.ucode.xz": {
+          "bytes": 218056,
+          "sha256": "aa01b2e5d5f35042d3c2cf4a7caa1c13882b19cc943595b8060ea31c4150aa2f"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-3168-29.ucode.xz": {
+          "bytes": 262648,
+          "sha256": "a1d8b0a895c78c725cbefe0f6096302db7de1ff786449ace253b0d18bc3c531d"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-3945-2.ucode.xz": {
+          "bytes": 55432,
+          "sha256": "8d798f2b32b3884e1b7ee5c2a5f7e25a99bf2fa43f022a0517c757412b2e5cda"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-4965-2.ucode.xz": {
+          "bytes": 68592,
+          "sha256": "dbff56561f763a10cd45677336be4489778c1a4ca98244ac07db0ae9489d22cd"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-5000-5.ucode.xz": {
+          "bytes": 113208,
+          "sha256": "71d73c69d9b113c33306d64642e6ab25c8365c1aec9fafb870a5718cdf2d4642"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-6000g2a-6.ucode.xz": {
+          "bytes": 182732,
+          "sha256": "2097e2cf9f5bf209a2132a7c477d1f8715c29a5e19c524cc0c7bfdb118e184a7"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-6000g2b-6.ucode.xz": {
+          "bytes": 184324,
+          "sha256": "084fcddab6f5ba015260d2133caf8f85db9659239b2a7792ce94f493687bc565"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-7260-17.ucode.xz": {
+          "bytes": 243044,
+          "sha256": "62f75b944fd79fdd495946fbb33e7b9481ee48a64fc9847aae9ff0e5b124803e"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-7265-17.ucode.xz": {
+          "bytes": 258968,
+          "sha256": "c5982d66a47b1e563ae9edc36ae4c6301fb30c4d2f5f5f483d290f9f51e07b12"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-7265D-29.ucode.xz": {
+          "bytes": 269452,
+          "sha256": "0049d3700584e19f24b87da5109af4adc0ce21cdf8a76c7614e68d5df0d2bba8"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-8000C-36.ucode.xz": {
+          "bytes": 380392,
+          "sha256": "fa63713c71ba876d63b3e2bf7176764a2712d7a26aee2ab8a53dae7721d30466"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-8265-36.ucode.xz": {
+          "bytes": 384552,
+          "sha256": "ba5e602b8b646246cce94e6abd713a916ac33d6c8442f4d3d93abadb04de949a"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-9000-pu-b0-jf-b0-46.ucode.xz": {
+          "bytes": 435052,
+          "sha256": "50f7c056ad3cb3a3026170ae67d255cb6462765fb5f7cd2192e2c8c5fb30446a"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-9260-th-b0-jf-b0-46.ucode.xz": {
+          "bytes": 430948,
+          "sha256": "aa38ba2fe1247f8a13bd13922d7e7278369ed22c696667b6db112cc892c2f11a"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-Qu-b0-hr-b0-77.ucode.xz": {
+          "bytes": 483792,
+          "sha256": "aa4c22fe8f0c1c4d6dbe438e124ecf94f2164818adfd228646a96dc7b260aeec"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-Qu-b0-jf-b0-77.ucode.xz": {
+          "bytes": 450200,
+          "sha256": "50944f4aac48bdaf05fd29b36fdc7da8deb6b60fca544e3c0e704841ff4555aa"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-Qu-c0-hr-b0-77.ucode.xz": {
+          "bytes": 483852,
+          "sha256": "f2d2bb313513ca8633b88f167138884aee8b63d5771ec59aa2934f120da8ba60"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-Qu-c0-jf-b0-77.ucode.xz": {
+          "bytes": 450296,
+          "sha256": "f881479907062d02a14f063f020177af3d73bc8283f8d1516d7a7546d4edcffc"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-QuZ-a0-hr-b0-77.ucode.xz": {
+          "bytes": 483868,
+          "sha256": "9d75ee2df33304b9d2f0fcf66289c3d3563234c65efe276690bf0282ba53f594"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-QuZ-a0-jf-b0-77.ucode.xz": {
+          "bytes": 450260,
+          "sha256": "5faa7caed1b595886825602ef8741b460053e7a922a2d7b0bf1c3c16b5110a2c"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-cc-a0-77.ucode.xz": {
+          "bytes": 477108,
+          "sha256": "8ffa2b4ef0c1715b3d04b3da0ef3c7bf14a16421cd995fa95db8bd09000fcf65"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-gl-c0-fm-c0-101.ucode.xz": {
+          "bytes": 628096,
+          "sha256": "e2363c54f127288feb5686be295434cc22c911d4a594aecdd2c396f1c2bcca0e"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-gl-c0-fm-c0.pnvm.xz": {
+          "bytes": 42740,
+          "sha256": "b14f4f0088e694038abbb87319047cea7e6419beb7868b15c73ede2f4e94fa7e"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-so-a0-gf-a0-89.ucode.xz": {
+          "bytes": 569940,
+          "sha256": "86cc00b50b0e0478b3924ef9b826fa39f3f473a56169540de7ee744a3ad8a95b"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-so-a0-gf-a0.pnvm.xz": {
+          "bytes": 7184,
+          "sha256": "4dfe9a7aea038d64f8e1b7ce8efae414368ac4076357fb0378863ecffb2f86f6"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-so-a0-jf-b0-77.ucode.xz": {
+          "bytes": 460920,
+          "sha256": "917baceed07b9e7ca3b1085c3063d70d690043a8be0909f66c07c8a0784e077e"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-ty-a0-gf-a0-89.ucode.xz": {
+          "bytes": 560816,
+          "sha256": "ee9f4b1795d20ef4c1014e9492b67b0416c45edbb0383695a9326d4d352b938d"
+        },
+        "lib/firmware/intel/iwlwifi/iwlwifi-ty-a0-gf-a0.pnvm.xz": {
+          "bytes": 6808,
+          "sha256": "ac31770ed23e873db9bead67bdc443c77c9d4d4a1de1bc62b0858e75f6c012a6"
+        },
+        "lib/firmware/iwlwifi-100-5.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-100-5.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-1000-5.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-1000-5.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-105-6.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-105-6.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-135-6.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-135-6.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-2000-6.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-2000-6.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-2030-6.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-2030-6.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-3160-17.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-3160-17.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-3168-29.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-3168-29.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-3945-2.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-3945-2.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-4965-2.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-4965-2.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-5000-5.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-5000-5.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-6000g2a-6.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-6000g2a-6.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-6000g2b-6.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-6000g2b-6.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-7260-17.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-7260-17.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-7265-17.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-7265-17.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-7265D-29.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-7265D-29.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-8000C-36.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-8000C-36.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-8265-36.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-8265-36.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-9000-pu-b0-jf-b0-46.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-9000-pu-b0-jf-b0-46.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-9260-th-b0-jf-b0-46.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-9260-th-b0-jf-b0-46.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-Qu-b0-hr-b0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-Qu-b0-hr-b0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-Qu-b0-jf-b0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-Qu-b0-jf-b0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-Qu-c0-hr-b0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-Qu-c0-hr-b0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-Qu-c0-jf-b0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-Qu-c0-jf-b0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-QuZ-a0-hr-b0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-QuZ-a0-hr-b0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-QuZ-a0-jf-b0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-QuZ-a0-jf-b0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-cc-a0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-cc-a0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-gl-c0-fm-c0-101.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-gl-c0-fm-c0-101.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-gl-c0-fm-c0.pnvm.xz": {
+          "link": "intel/iwlwifi/iwlwifi-gl-c0-fm-c0.pnvm.xz"
+        },
+        "lib/firmware/iwlwifi-so-a0-gf-a0-89.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-so-a0-gf-a0-89.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-so-a0-gf-a0.pnvm.xz": {
+          "link": "intel/iwlwifi/iwlwifi-so-a0-gf-a0.pnvm.xz"
+        },
+        "lib/firmware/iwlwifi-so-a0-jf-b0-77.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-so-a0-jf-b0-77.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-ty-a0-gf-a0-89.ucode.xz": {
+          "link": "intel/iwlwifi/iwlwifi-ty-a0-gf-a0-89.ucode.xz"
+        },
+        "lib/firmware/iwlwifi-ty-a0-gf-a0.pnvm.xz": {
+          "link": "intel/iwlwifi/iwlwifi-ty-a0-gf-a0.pnvm.xz"
+        },
+        "lib/firmware/mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin": {
+          "bytes": 137632,
+          "sha256": "7fc9075d6d54b31e0539734614ca971fa52caf41b642a3000c8a4501591a4d98"
+        },
+        "lib/firmware/mediatek/WIFI_MT7961_patch_mcu_1_2_hdr.bin": {
+          "bytes": 92192,
+          "sha256": "a276c06c2b772adb50b86639d33c82824ff4c21d617feb78caea74c040b873f6"
+        },
+        "lib/firmware/mediatek/WIFI_RAM_CODE_MT7922_1.bin": {
+          "bytes": 1231252,
+          "sha256": "d100e5e04c324fc8da6302112d1e0b4fac952286447d2419eabcd8fb0a1f5b93"
+        },
+        "lib/firmware/mediatek/WIFI_RAM_CODE_MT7961_1.bin": {
+          "bytes": 792036,
+          "sha256": "b94217a951518a9c14095765f367bc5dd7698f2dc033941d6f18fc2ebd6a2ab9"
+        },
+        "lib/firmware/mediatek/mt7601u.bin": {
+          "bytes": 45412,
+          "sha256": "4511b1d840e22aea2bf5fdca419c91c0d94cbfb291b9ac4f8be6d9100d1a7046"
+        },
+        "lib/firmware/mediatek/mt7610e.bin": {
+          "bytes": 80680,
+          "sha256": "538d08c08f8fb5aa05cacf34e49aeb307e8b2dc094407fc655fbf3580c893953"
+        },
+        "lib/firmware/mediatek/mt7610u.bin": {
+          "bytes": 80288,
+          "sha256": "5a4268e9021bb587426ba624b425f1e660bfc82cd63b36ad3ce6fb9ce6751760"
+        },
+        "lib/firmware/mediatek/mt7650e.bin": {
+          "bytes": 382212,
+          "sha256": "7eecb7cd7637aed35d8f0e6b898a06d6e0b901e3b4e1d8ef3dae537a832efed2"
+        },
+        "lib/firmware/mediatek/mt7662.bin": {
+          "bytes": 81908,
+          "sha256": "f7e52492f58088cae50e51a54cca68e4abc5b74f7d0b6b731dbb4c04465a94b6"
+        },
+        "lib/firmware/mediatek/mt7662_rom_patch.bin": {
+          "bytes": 26350,
+          "sha256": "6f0e871268f6e4d99196d90d89bcc09fe493d010366260a2cfcaa5dd66095f8c"
+        },
+        "lib/firmware/mediatek/mt7663_n9_rebb.bin": {
+          "bytes": 335072,
+          "sha256": "5e1a65036ccf9f53a6f69d9d8f75a07f546f9a7cec83ca89f24907925c54f079"
+        },
+        "lib/firmware/mediatek/mt7663_n9_v3.bin": {
+          "bytes": 441688,
+          "sha256": "d8b8488f37f65e41ded9a911950afb000d236b36e5aa94ad9650ad0c3a86fd45"
+        },
+        "lib/firmware/mediatek/mt7663pr2h.bin": {
+          "bytes": 278558,
+          "sha256": "534f2152f9b0f48dfcec9c1727b0bab9a3727a655d76d5ec818cc39a55602336"
+        },
+        "lib/firmware/mediatek/mt7663pr2h_rebb.bin": {
+          "bytes": 209230,
+          "sha256": "e812442fd631ecbea7d2898c3168cb5780377378a0eed74c14fe8d8057fe547c"
+        },
+        "lib/firmware/mt7601u.bin": {
+          "link": "mediatek/mt7601u.bin"
+        },
+        "lib/firmware/mt7662.bin": {
+          "link": "mediatek/mt7662.bin"
+        },
+        "lib/firmware/mt7662_rom_patch.bin": {
+          "link": "mediatek/mt7662_rom_patch.bin"
+        },
+        "lib/firmware/rt2561.bin": {
+          "bytes": 8192,
+          "sha256": "955792180c61929abc63b8b01cc1eb67f75f67e3b4f4fc4c9b29ee74f7e029b7"
+        },
+        "lib/firmware/rt2561s.bin": {
+          "bytes": 8192,
+          "sha256": "248154ae562ea7e310aac323baa5c9ee723709848ae8e88650f15b43f85a6165"
+        },
+        "lib/firmware/rt2661.bin": {
+          "bytes": 8192,
+          "sha256": "b01b17c7ec9832567a4a23abe750e66b339636a5eccf1e596ee780e479aa3b7f"
+        },
+        "lib/firmware/rt2860.bin": {
+          "bytes": 8192,
+          "sha256": "67d5e8b32293cc2f31f67ebb112d4dabf1e23019a11c517036ba42cb48e4159c"
+        },
+        "lib/firmware/rt2870.bin": {
+          "bytes": 8192,
+          "sha256": "251b8918391eac6415d60dca239e415aad0177e885376f2a17782e64fcbbe317"
+        },
+        "lib/firmware/rt3070.bin": {
+          "link": "rt2870.bin"
+        },
+        "lib/firmware/rt3071.bin": {
+          "bytes": 4096,
+          "sha256": "b94fcb60065735d18709096cbe0e5345833fc15832e950669e2c9a2d838ae1b9"
+        },
+        "lib/firmware/rt3090.bin": {
+          "link": "rt2860.bin"
+        },
+        "lib/firmware/rt73.bin": {
+          "bytes": 2048,
+          "sha256": "a57745fa55b7700ff410bc69f3630c889e46d771ac17f6c48bda1c02908116bc"
+        },
+        "lib/firmware/rtl_nic/rtl8105e-1.fw": {
+          "bytes": 2076,
+          "sha256": "03f7ee92f1a7c1723ac7a7447ae006930c9bb07e1d77c3d12bc70cc0d855bb00"
+        },
+        "lib/firmware/rtl_nic/rtl8106e-1.fw": {
+          "bytes": 1856,
+          "sha256": "b249074519d87ff8bde17185894333c993f25f747f221305cf69a5d7b4519674"
+        },
+        "lib/firmware/rtl_nic/rtl8106e-2.fw": {
+          "bytes": 832,
+          "sha256": "ba4f7ed4bac4768810ba8a6c118457f5912f61a0380aa4fb322093caf52de0ef"
+        },
+        "lib/firmware/rtl_nic/rtl8107e-1.fw": {
+          "bytes": 992,
+          "sha256": "da3b9939538376c0dd1a97cdfead9fedba1213146bbdda31ef12b87fd616b831"
+        },
+        "lib/firmware/rtl_nic/rtl8107e-2.fw": {
+          "bytes": 976,
+          "sha256": "edc3a14a76852c411c4af5514dae5d55be37873f56a7563f80db7a76f2dc1ba7"
+        },
+        "lib/firmware/rtl_nic/rtl8125a-3.fw": {
+          "bytes": 3456,
+          "sha256": "3f6c328af0ceff5969c729edf0f535e8bb2a9b9e05d15b6be3199a3e6d421b99"
+        },
+        "lib/firmware/rtl_nic/rtl8125b-2.fw": {
+          "bytes": 3328,
+          "sha256": "529bf1c25c97ff52b401090d00ff89cc22351012336e5a0c9662728a3ee909ef"
+        },
+        "lib/firmware/rtl_nic/rtl8125d-1.fw": {
+          "bytes": 17168,
+          "sha256": "bc3c82939f02df2f58a17e7354096375001a80a5c1ca3f459c555d5a7d42bf1b"
+        },
+        "lib/firmware/rtl_nic/rtl8125d-2.fw": {
+          "bytes": 6800,
+          "sha256": "c1cb0d358ca985b0d45584612143fd93613d567064702e265bfb370e99c90e35"
+        },
+        "lib/firmware/rtl_nic/rtl8168d-1.fw": {
+          "bytes": 1492,
+          "sha256": "ded779f55b3fc5bb8576b2d2b6c724581c72160b3c2f88e33b42dc6c2c4e70b0"
+        },
+        "lib/firmware/rtl_nic/rtl8168d-2.fw": {
+          "bytes": 1324,
+          "sha256": "35dd68c01a7b24f6e554bd2c0b9cf57cf962a826651f66e75ffcea37cf2c3bb9"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-1.fw": {
+          "bytes": 5500,
+          "sha256": "c38d6818a99336c8e43883bbc136f9fab3b1b470ec0e86c61bf5dac617fe94bd"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-2.fw": {
+          "bytes": 3920,
+          "sha256": "0a489929b270df1533645a75d55ff357fd66e42057aa4e198ab738930de39386"
+        },
+        "lib/firmware/rtl_nic/rtl8168e-3.fw": {
+          "bytes": 3872,
+          "sha256": "1287fdd82ff2f60d75c9970c108b49cfd11456ad3fe29c9666b8539a35777dbf"
+        },
+        "lib/firmware/rtl_nic/rtl8168f-1.fw": {
+          "bytes": 3424,
+          "sha256": "ed3794c651d38b807168c7c49431bb8036922b16766588c520a20287f277615d"
+        },
+        "lib/firmware/rtl_nic/rtl8168f-2.fw": {
+          "bytes": 1232,
+          "sha256": "5586b2093502f7dec762f23091fa90d6d8731e7d873509072ce2eae23ab8ee99"
+        },
+        "lib/firmware/rtl_nic/rtl8168fp-3.fw": {
+          "bytes": 336,
+          "sha256": "c526c06aa0ab8d9b57ba2b730bb1e40a1c3513f8591e238dceb2e0f45210ed27"
+        },
+        "lib/firmware/rtl_nic/rtl8168g-2.fw": {
+          "bytes": 4896,
+          "sha256": "f878ec719f78e0b104bc73362a9862611858bec893f58a1b3b289a0a57d71d25"
+        },
+        "lib/firmware/rtl_nic/rtl8168g-3.fw": {
+          "bytes": 832,
+          "sha256": "e4d5e62b0a5a097af34c7aa3c55f634fd5be2c232e02c6b983ebd7e699cb27e9"
+        },
+        "lib/firmware/rtl_nic/rtl8168h-1.fw": {
+          "bytes": 992,
+          "sha256": "4ef963690f3a7b25a9bc97fb12c58922c02886699933ed6297636cc15aad9d8d"
+        },
+        "lib/firmware/rtl_nic/rtl8168h-2.fw": {
+          "bytes": 976,
+          "sha256": "0b4beab008e308f28296c13188ee23edfeff7d865e398a7ade170495c8cec7e6"
+        },
+        "lib/firmware/rtl_nic/rtl8402-1.fw": {
+          "bytes": 1824,
+          "sha256": "a14adee93b7c7ecc738137d910334761ecf9c64d3addeccbd024a2f902f7f808"
+        },
+        "lib/firmware/rtl_nic/rtl8411-1.fw": {
+          "bytes": 2112,
+          "sha256": "e66a3183787c80987e1e36c9f7d4b2c3cd5d976640b83f462702f914febc4b38"
+        },
+        "lib/firmware/rtl_nic/rtl8411-2.fw": {
+          "bytes": 1040,
+          "sha256": "80dbdacba4d5dfee46b6c2b4e433f6f2eeb756d29ad46bf2362ba20c8ec594b1"
+        },
+        "lib/firmware/rtlwifi/rtl8188efw.bin": {
+          "bytes": 11216,
+          "sha256": "ca778610db58042c395141918b319c76df10a83dbd0aa9b3db6a9bb01c477cce"
+        },
+        "lib/firmware/rtlwifi/rtl8188eufw.bin": {
+          "bytes": 15262,
+          "sha256": "2ff74315287529dec2e50eb57d6e0c97d2116f28ae166773ccdf93b6360000c4"
+        },
+        "lib/firmware/rtlwifi/rtl8188fufw.bin": {
+          "bytes": 21020,
+          "sha256": "e6189d6d7032b83f0ed4284629c43db66262449a866f33fd329e611239f62e1f"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfw.bin": {
+          "bytes": 16192,
+          "sha256": "1f4fae583e47e28b208a955a55e187e07ec44a0efcf0e0d357a7462d1f135618"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfwU.bin": {
+          "bytes": 14818,
+          "sha256": "2d6ad600581c5792d2de9c2bd31617563dbbe50f2ba709acf35ea36158586f01"
+        },
+        "lib/firmware/rtlwifi/rtl8192cfwU_B.bin": {
+          "bytes": 16332,
+          "sha256": "a5a32fcb5c9876b63472aafaab4b6ec37104f23c48becb52e0b57c7a326d755b"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw.bin": {
+          "bytes": 16014,
+          "sha256": "6327de71c544c27fe909d509a3d5605d46b94c102a3c27700f812b95cbe74254"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_A.bin": {
+          "bytes": 16126,
+          "sha256": "32846065b017c8b1d2d448e8c0ea2f5e741424809be49f2c6a6261339cd0b0cf"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_B.bin": {
+          "bytes": 16096,
+          "sha256": "479e5e6732b0e07cfcab4cc190b8c30465c0b7f8c0ed22d742bedd4412cbcf2a"
+        },
+        "lib/firmware/rtlwifi/rtl8192cufw_TMSC.bin": {
+          "bytes": 16126,
+          "sha256": "c083f2db36ef33d0ffffc979aba1d40f55fa9dc38dce50f26e0108a21c080286"
+        },
+        "lib/firmware/rtlwifi/rtl8192defw.bin": {
+          "bytes": 31376,
+          "sha256": "618a5c9fbf96d60a9340abd740d75224ba47cd08dd4fbed05aae47a082155e78"
+        },
+        "lib/firmware/rtlwifi/rtl8192eefw.bin": {
+          "link": "rtl8192eu_nic.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_ap_wowlan.bin": {
+          "bytes": 25264,
+          "sha256": "52ba57df842c97b38b8108e53577911efb9da29dc352499c149564a08827db60"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_nic.bin": {
+          "bytes": 32286,
+          "sha256": "b15bc955fba2fc3abc093affe62c9f7284a0b84d4f13f8ce55366488dc9aad8b"
+        },
+        "lib/firmware/rtlwifi/rtl8192eu_wowlan.bin": {
+          "bytes": 29008,
+          "sha256": "4caf9e99e31b059a6c6f42e11554f14b5413eadde20dba1c66476d284a5e52f7"
+        },
+        "lib/firmware/rtlwifi/rtl8192sefw.bin": {
+          "bytes": 80208,
+          "sha256": "a24d1c61251321b94943f8bd65b4110658cc4c94e61e2e643946d6e5008e4c5b"
+        },
+        "lib/firmware/rtlwifi/rtl8712u.bin": {
+          "bytes": 122328,
+          "sha256": "6e84ec69c300b0182c9bc8fa41e88281eeb04013c4a34c341748052c3c6a9d3d"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_A.bin": {
+          "bytes": 22172,
+          "sha256": "d63e39f41dd726b3a833e64fea44696c7b74ad595d31dcaae509b17d247f125c"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_B.bin": {
+          "bytes": 24118,
+          "sha256": "850374b96076ab4b854ee9dc42ef57f9bd6b24493b74ba6b609c690d17f1c552"
+        },
+        "lib/firmware/rtlwifi/rtl8723aufw_B_NoBT.bin": {
+          "bytes": 19200,
+          "sha256": "a24af5491dbfa3937633049fc66576ed478dec60e7676263f00a2ce9dd22c25b"
+        },
+        "lib/firmware/rtlwifi/rtl8723befw.bin": {
+          "bytes": 30746,
+          "sha256": "1bfa6d0910e072ed26d793ccf27889ebd774851be95d2d2543fd8de7cf31b969"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_ap_wowlan.bin": {
+          "link": "rtl8723bu_ap_wowlan.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_bt.bin": {
+          "bytes": 9120,
+          "sha256": "774f6628ae2cd7d6d8563cbf88f67f9a95e895cb44b55fb26ffdf895fdf26aea"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_nic.bin": {
+          "link": "rtl8723bu_nic.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bs_wowlan.bin": {
+          "link": "rtl8723bu_wowlan.bin"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_ap_wowlan.bin": {
+          "bytes": 20886,
+          "sha256": "957707c7d6e01564685a801da1084a60b6b726c3d756d54dbe56ce064110e288"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_nic.bin": {
+          "bytes": 32108,
+          "sha256": "a52b5a7be4841b4b2839eddf5122b3300a3610866abe4bb3c3c9e444c8ab7969"
+        },
+        "lib/firmware/rtlwifi/rtl8723bu_wowlan.bin": {
+          "bytes": 26398,
+          "sha256": "534f6c4ad8a8068f7888db7af83408f0d2ef04e5d4fc8514e07522a4b0bab3a7"
+        },
+        "lib/firmware/rtlwifi/rtl8723fw.bin": {
+          "bytes": 11662,
+          "sha256": "9b6d8f2546834b69abc675fe4450e5d92f6ecbeaa22619d9047b8e5f27909d4e"
+        },
+        "lib/firmware/rtlwifi/rtl8723fw_B.bin": {
+          "bytes": 22996,
+          "sha256": "a8d1b37e7585445f599de24f4b655b194857e2c836f450798be04f67b3898305"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw.bin": {
+          "bytes": 28984,
+          "sha256": "025c13f2e7f7526e1f932049bed2146467318f547ffa8481804ecfd911cda695"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw_29.bin": {
+          "bytes": 28348,
+          "sha256": "11e7ea00504fa2fa6f5216bb59403c4f2f20eec5b676c0add0695db3b0c4a335"
+        },
+        "lib/firmware/rtlwifi/rtl8821aefw_wowlan.bin": {
+          "bytes": 19858,
+          "sha256": "df6fe0f14f6c7755da351b8d02282dde1c190133c118a5ca9627b6fd87dfd5da"
+        },
+        "lib/firmware/rtlwifi/rtl8822befw.bin": {
+          "bytes": 127496,
+          "sha256": "0952522dd0fa8cd226a0394a8092e98cd0bdccb59b31ed00dd682a6c28f60839"
+        },
+        "lib/firmware/rtw88/rtw8703b_fw.bin": {
+          "bytes": 20290,
+          "sha256": "5e32bd891c74a0719c871726b74490cf5e1a05cdcefb8fe2414f80fffdeb9f9d"
+        },
+        "lib/firmware/rtw88/rtw8703b_wow_fw.bin": {
+          "bytes": 23074,
+          "sha256": "7156b0d2b4580e63d11a3a78258c35ff28e840c7c6428953920ae6a1cd5d05ac"
+        },
+        "lib/firmware/rtw88/rtw8723b_fw.bin": {
+          "bytes": 32272,
+          "sha256": "9ed919e9a6977b3d0cb05e7bbf5e8b1bd8edb20db6d4bc1b279273aa333ab9e4"
+        },
+        "lib/firmware/rtw88/rtw8723d_fw.bin": {
+          "bytes": 28884,
+          "sha256": "9c64e079815a333a3f7b731be7cc0be65206ebc883891659dc8ff5ed36a5e2f5"
+        },
+        "lib/firmware/rtw88/rtw8812a_fw.bin": {
+          "bytes": 27030,
+          "sha256": "abdcca4e8bf76ebfba23d433de310ffefebd0ff9d01990639d4cd9602b32b71a"
+        },
+        "lib/firmware/rtw88/rtw8814a_fw.bin": {
+          "bytes": 68320,
+          "sha256": "aa6bf9d62b2d2d8a37254fd6d917ba2839888cdedc21850d4481874cb1d3d7cb"
+        },
+        "lib/firmware/rtw88/rtw8821a_fw.bin": {
+          "bytes": 31898,
+          "sha256": "4693ece655044d96f81bd3f3e8db14dc352b493219c4fd0a75788a6fbd9eac3c"
+        },
+        "lib/firmware/rtw88/rtw8821c_fw.bin": {
+          "bytes": 139472,
+          "sha256": "2ef409bc418549fcf294061dd0cae1fc22fd9da79b60524950b25de18732f3f0"
+        },
+        "lib/firmware/rtw88/rtw8822b_fw.bin": {
+          "bytes": 161240,
+          "sha256": "a72da690597bfa99d8eb6fc2ab090d18d8ad92ac2befd35db1c9e3662d8d8418"
+        },
+        "lib/firmware/rtw88/rtw8822c_fw.bin": {
+          "bytes": 202600,
+          "sha256": "3deecb31210986d98cdbfb000391e08d602a6eee4ffc883969faa2b907ab03ba"
+        },
+        "lib/firmware/rtw88/rtw8822c_wow_fw.bin": {
+          "bytes": 145224,
+          "sha256": "6717fc6ff426a74571ac4f04cd9698fb2f356012c05c58aa64cf21ceb6b958a2"
+        },
+        "lib/firmware/rtw89/rtw8851b_fw-1.bin": {
+          "bytes": 1408706,
+          "sha256": "1c4ccb5fa06bf5649146025e95993db66876a1fbc0bd766ec05686587f69c1b7"
+        },
+        "lib/firmware/rtw89/rtw8851b_fw.bin": {
+          "bytes": 1164440,
+          "sha256": "945c854d7cf69dd97bf1da0181b011787d9b3c5d59c47e8b9dbea4eb4eee170b"
+        },
+        "lib/firmware/rtw89/rtw8852a_fw-1.bin": {
+          "bytes": 1958648,
+          "sha256": "fdb5513cf7372440d7980a61aa4b753b192b056734a978458ae4a4ef7f4b2c1e"
+        },
+        "lib/firmware/rtw89/rtw8852a_fw.bin": {
+          "bytes": 1428272,
+          "sha256": "7eb1fe457f5a704b7a4f05a66c67cfa6af2f1142566b640c8e402445d04b0159"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw-1.bin": {
+          "bytes": 1245944,
+          "sha256": "5b68415e3bfe72715d63a70703d4471b04b5475b8ff69cfdc8cdf48233cd5d3a"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw-2.bin": {
+          "bytes": 1554594,
+          "sha256": "6ff6aeb56bb5b85cba333b755f8cc1dbfe9ff6e5b16e39f6ba01ce7f1eaa7714"
+        },
+        "lib/firmware/rtw89/rtw8852b_fw.bin": {
+          "bytes": 1035232,
+          "sha256": "5b9c224ae014e0aeade8701412d820e213c8880e08615b3905dba89659f21baf"
+        },
+        "lib/firmware/rtw89/rtw8852bt_fw-1.bin": {
+          "bytes": 937688,
+          "sha256": "164e5e2243b1241a23d5e77876aa11be003fb09f5aa7794dc7bbf80957c8c254"
+        },
+        "lib/firmware/rtw89/rtw8852bt_fw.bin": {
+          "bytes": 928714,
+          "sha256": "b75914312181a2cd8a15fe65024d218e875324de9231ce2071e31513bffbffa3"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw-1.bin": {
+          "bytes": 2375560,
+          "sha256": "95e4226f7a4c2a506a5ea2bb8b6247842dd12fc312639750881c5bfdec7bbec5"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw-2.bin": {
+          "bytes": 2644326,
+          "sha256": "916e87d1470bce5400712f53d419ae68a0f44d858670c57e118d4f0b1d89c5b4"
+        },
+        "lib/firmware/rtw89/rtw8852c_fw.bin": {
+          "bytes": 1532656,
+          "sha256": "e05e704911ec5d6523e2951416290cc2189444d48a0420e637de6acf5bf21228"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-1.bin": {
+          "bytes": 1583434,
+          "sha256": "4340bc322912f30f1793bb57a1747c23b15e40db2df628d6687d1ddf722f2828"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-2.bin": {
+          "bytes": 1586954,
+          "sha256": "9ca08cd3098b954cc0d44edd5c0b079877e5dd9b98d55cfec1c302b41475d88c"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-3.bin": {
+          "bytes": 1238542,
+          "sha256": "484f496bc149706b92c7352925fef4155fecb60bc61ec0f5c55a3b651ed915f4"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw-4.bin": {
+          "bytes": 1849226,
+          "sha256": "d11927f593c82879bd0437435475d7915a60932374747984b3dc906a23009dea"
+        },
+        "lib/firmware/rtw89/rtw8922a_fw.bin": {
+          "bytes": 1537690,
+          "sha256": "84458f2fa7c9a730fae242d858a82814141421d66a1f672a10121982513daf6d"
+        },
+        "lib/firmware/rtw89/rtw8922d_fw.bin": {
+          "bytes": 5683768,
+          "sha256": "95cbd1630267b6fa6e1736fc3fbc85d9339d0d52dfe71b5042ddb448196bfc5a"
+        },
+        "lib/firmware/rtw89/rtw8922ds_fw.bin": {
+          "bytes": 3768808,
+          "sha256": "e2718524d6808c7c0cd4eea1a9597a9c99c5001ae7e29507bab2b4a4199c5d8f"
+        }
+      },
+      "added_regular_file_bytes": 56949484,
+      "added_squashfs_bytes": 30351360
+    }
+  }
+}
