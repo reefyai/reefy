@@ -5,6 +5,78 @@ changing Buildroot, kernel configuration, package selection or packaging.
 Keep exact byte counts and immutable build references so later comparisons
 remain useful after CI artifacts expire. MiB means 1,048,576 bytes.
 
+## Additional Wi-Fi firmware payload
+
+The expanded Wi-Fi selections add **217,020,188 bytes unpacked** (217.02 MB,
+206.97 MiB) and **80,678,912 bytes compressed** (80.68 MB, 76.94 MiB).
+There are 263 additional regular files. The table measures each family
+relative to the same original selection; compression across the combined
+tree means the individual compressed deltas need not sum exactly.
+
+| Added firmware family | Unpacked bytes | Compressed bytes | Compressed MB |
+| --- | ---: | ---: | ---: |
+| Intel iwlwifi, including legacy adapters | 170,155,740 | 60,420,096 | 60.42 |
+| Atheros/Qualcomm, including AR9271 and WCN6855 | 26,213,944 | 8,744,960 | 8.74 |
+| Broadcom/Cypress FullMAC | 17,757,774 | 9,797,632 | 9.80 |
+| MediaTek/Ralink, including USB-specific files | 2,892,730 | 1,748,992 | 1.75 |
+| **Combined** | **217,020,188** | **80,678,912** | **80.68** |
+
+The original firmware-only filesystem is 14,688,256 bytes compressed; the
+expanded one is 95,367,168 bytes. Both contain the same existing Realtek,
+MediaTek MT7922 and Ethernet firmware. XE GPU firmware is excluded from both
+measurements because `post_build.sh` removes it from the OS into the separate
+Intel provider. Bluetooth firmware and kernel driver selections are unchanged.
+
+### Method and limits
+
+This is a **firmware-payload measurement, not a completed release build**.
+It uses Buildroot's native Kconfig, firmware archive construction, install
+macro and WHENCE symlink handling, followed by SquashFS XZ with 128 KiB
+blocks, matching our rootfs compression settings. It measures the size
+contribution to one rootfs; the exact complete EFI delta can vary with
+filesystem metadata and fragment packing. A raw image containing two EFI
+copies carries the addition twice, while its fixed partitioned file length
+does not grow. ZIP size has not been remeasured for this change.
+
+Provenance:
+
+- Original source: `b8a43402ca98997a21d7f6d078fd1886ec100b4f`.
+- Buildroot: `d6061d653d7fb215c2409c59e4bfad1b9d677215`.
+- Firmware archive: `linux-firmware-20260810.tar.xz`.
+- Archive SHA-256, verified against Buildroot's hash file:
+  `ac17c34fe73756926a961fbafadf8d8f07a3bd2dd2f4ea31a0fb5d50c714a49a`.
+- SquashFS tools: 4.6.1, four compression workers, deterministic timestamps.
+- [Machine-readable sizes, configuration hashes and per-file hashes](measurements/wifi-firmware-size.json).
+- [Native configuration, package-install and compression log](measurements/wifi-firmware-size.log).
+
+All 45 requested additional firmware selections survived Kconfig resolution.
+Every original installed file and symlink was preserved byte-for-byte; the
+installer produced no broken or escaping symlinks. Selected package license
+files exist in the verified source. A separate `printvars` check using the
+complete Buildroot makefiles confirmed that the production package sees all
+six extra MediaTek files from our package override.
+
+The additions cover the previously missing common Intel, Atheros, Broadcom
+FullMAC, MediaTek and Ralink selections. They do not make every wireless chip
+supported. For example, MT7921 USB remains disabled in the kernel, and legacy
+Broadcom b43 firmware is not provided by these linux-firmware selections.
+AP/client capability and physical-adapter qualification remain separate checks.
+
+Repeat on Linux using an existing, matching Buildroot checkout and a verified
+upstream archive. The tool does not download files or build a kernel and
+requires a fresh scratch directory:
+
+```sh
+git show b8a43402ca98997a21d7f6d078fd1886ec100b4f:configs/reefy_defconfig \
+  > /tmp/wifi-baseline-defconfig
+python3 tools/ci/measure-wifi-firmware.py \
+  --buildroot "$BUILDROOT_SOURCE" \
+  --archive "$FIRMWARE_ARCHIVE" \
+  --baseline-defconfig /tmp/wifi-baseline-defconfig \
+  --mksquashfs "$BUILDROOT_OUTPUT/host/bin/mksquashfs" \
+  --scratch /tmp/wifi-firmware-measurement
+```
+
 ## Recorded builds
 
 | Firmware version | Buildroot | Source commit | Build |
