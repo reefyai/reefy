@@ -77,6 +77,81 @@ python3 tools/ci/measure-wifi-firmware.py \
   --scratch /tmp/wifi-firmware-measurement
 ```
 
+## Intel firmware size-reduction research
+
+The broad Intel Buildroot selections include historical firmware API versions
+for many kernel generations: 120 regular files (117 ucode images and three
+PNVM calibration files), covering 31 firmware prefixes. For example, the
+AX210 `ty-a0-gf-a0` prefix includes 13 API versions, but our pinned Linux
+v6.18.60 requires API 89. AX200 and AX201 use API 77. Retaining older chip
+families does not require retaining all obsolete APIs for newer chips.
+
+An Intel-only comparison, preserving root-level firmware aliases, measured:
+
+| Experimental packaging | Files | Unpacked/stored bytes before SquashFS | SquashFS bytes | MB |
+| --- | ---: | ---: | ---: | ---: |
+| All selected API versions | 120 | 170,155,740 | 60,416,000 | 60.42 |
+| One kernel-compatible API per prefix, plus PNVM | 34 | 35,627,836 | 13,418,496 | 13.42 |
+| Also retain a second compatible API where available | 39 | 47,770,320 | 17,797,120 | 17.80 |
+| All versions, individually XZ-compressed | 120 | 51,677,584 | 51,683,328 | 51.68 |
+| Kernel-compatible selection, individually XZ-compressed | 34 | 10,085,036 | 10,088,448 | 10.09 |
+| All versions, 1 MiB SquashFS blocks | 120 | 170,155,740 | 55,738,368 | 55.74 |
+
+All options retain the 31 prefixes and all three existing PNVM files. The
+kernel-compatible selection removes 86 superseded ucode files, saving about
+47 MB compressed (78%). Combining pruning with per-file XZ saves about
+50.3 MB (83%). This would bring the total additional Wi-Fi firmware payload
+from approximately 80.7 MB to approximately 30.4 MB. Complete EFI and ZIP
+deltas still require a full build. The Intel-only baseline differs by one
+4 KiB metadata block from the earlier full-payload subtraction.
+
+The lowest-risk first optimization is pruning API versions against the
+exact compiled kernel, without dropping chip families. This must be tied to
+kernel upgrades and fail if an expected firmware prefix has no compatible
+file. Never select the largest filename blindly: this kernel's Wi-Fi 7 loader
+can fall back from core `c99` to API 101, while newer `c101`/`c106` files in
+the archive are outside its supported range. MAC and RF API constraints must
+both be considered.
+
+Per-file compression is a second, independent option. The existing kernel
+enables `CONFIG_FW_LOADER_COMPRESS_XZ` and `CONFIG_FW_LOADER_COMPRESS_ZSTD`.
+The experiment uses standard XZ with CRC32 and preset 6, verifies every file's
+decompressed content, and retains `.xz` aliases for the kernel's compressed
+lookup. The further reduction comes from compressing whole firmware files
+instead of only independent 128 KiB filesystem blocks. Production adoption
+would also need boot/loading checks and integration with both package install
+destinations and the existing package cache.
+
+Downloading firmware on demand would defeat offline Wi-Fi setup. Dropping
+old Intel adapters is unnecessary for the main savings demonstrated here.
+Changing the entire rootfs to 1 MiB blocks affects all boot/read behavior and
+saves less than pruning, so it is not the recommended first change.
+
+These are research results. Production selections remain the broad bundle;
+neither pruning nor per-file compression has been applied or hardware-tested.
+The compatible-name selection is based on source inspection, not physical
+adapter qualification. Every input file matches the SHA-256 from the original
+verified `linux-firmware-20260810` inventory. The Intel subtree was retrieved
+from the same release tag through the kernel.org Google mirror.
+
+- [Machine-readable comparison and retained API names](measurements/intel-firmware-options.json).
+- [Repeatable experiment](measurements/intel-firmware-research.py).
+- [Exact kernel source URLs and hashes](measurements/intel-kernel-source-provenance.json).
+- [Pinned AX210 API limits](https://github.com/gregkh/linux/blob/v6.18.60/drivers/net/wireless/intel/iwlwifi/cfg/ax210.c).
+- [Pinned AX200 MAC API limits](https://github.com/gregkh/linux/blob/v6.18.60/drivers/net/wireless/intel/iwlwifi/cfg/22000.c).
+- [Firmware request and fallback rules](https://github.com/gregkh/linux/blob/v6.18.60/drivers/net/wireless/intel/iwlwifi/iwl-drv.c).
+
+Repeat on Linux with the saved original inventory and an Intel-only subtree
+archive from `https://kernel.googlesource.com/pub/scm/linux/kernel/git/firmware/linux-firmware/+archive/refs/tags/20260810/intel/iwlwifi.tar.gz`:
+
+```sh
+python3 docs/measurements/intel-firmware-research.py \
+  --inventory docs/measurements/wifi-firmware-size.json \
+  --archive "$INTEL_FIRMWARE_ARCHIVE" \
+  --mksquashfs "$BUILDROOT_OUTPUT/host/bin/mksquashfs" \
+  --scratch /tmp/intel-firmware-measurement
+```
+
 ## Recorded builds
 
 | Firmware version | Buildroot | Source commit | Build |
