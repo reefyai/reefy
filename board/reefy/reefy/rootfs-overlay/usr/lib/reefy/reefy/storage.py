@@ -536,11 +536,13 @@ class Storage:
         # bytes, regardless of whether the partition was just created
         # or had degraded contents from a partial wipe.
         if not os.path.exists(key_part):
+            from reefy.boot_slots import next_partition_start
+            key_start = next_partition_start(disk, (1, 2))
             if _log:
                 _log('Creating key partition...')
             _repair_boot_gpt(disk)
             subprocess.run(
-                ['sgdisk', '--new=3:2049M:+1M', '--typecode=3:0c01', disk],
+                ['sgdisk', f'--new=3:{key_start}:+1M', '--typecode=3:0c01', disk],
                 capture_output=True, timeout=BOOT_GPT_TIMEOUT_SECONDS, check=True)
             subprocess.run(['partprobe', disk], capture_output=True, timeout=10)
             time.sleep(1)
@@ -625,9 +627,11 @@ class Storage:
             _log('Creating USB data partition...')
         data_part = _part_dev(disk, 4)
         if not os.path.exists(data_part):
+            from reefy.boot_slots import next_partition_start
+            data_start = next_partition_start(disk, (1, 2, 3))
             _repair_boot_gpt(disk)
             subprocess.run(
-                ['sgdisk', '--new=4:2050M:0', '--typecode=4:8300',
+                ['sgdisk', f'--new=4:{data_start}:0', '--typecode=4:8300',
                  '--change-name=4:reefy-data', disk],
                 capture_output=True, timeout=BOOT_GPT_TIMEOUT_SECONDS, check=True)
             subprocess.run(['partprobe', disk], capture_output=True, timeout=10)

@@ -165,11 +165,15 @@ class ConfirmCommandFreshEntryTests(unittest.TestCase):
 
 
 class ConfirmCommandFunctionalTests(unittest.TestCase):
-    def _run_confirm_with_fake_efi(self, active_label):
+    def _run_confirm_with_fake_efi(self, active_label, *, reused_current=False, already_default=False):
         old_a = '0000'
         old_b = '0001'
         current = old_a if active_label == 'reefy-a' else old_b
         default = old_b if active_label == 'reefy-a' else old_a
+        if reused_current:
+            current = old_b if active_label == 'reefy-a' else old_a
+        if already_default:
+            default = old_a if active_label == 'reefy-a' else old_b
 
         with tempfile.TemporaryDirectory() as td:
             bin_dir = os.path.join(td, 'bin')
@@ -188,7 +192,8 @@ class ConfirmCommandFunctionalTests(unittest.TestCase):
             with open(current_path, 'w') as f:
                 f.write(current)
             with open(order_path, 'w') as f:
-                f.write(f'{default},{current}')
+                other = old_b if default == old_a else old_a
+                f.write(f'{default},{other}')
             with open(next_path, 'w') as f:
                 f.write('0002')
             with open(state_path, 'w') as f:
@@ -327,8 +332,12 @@ exit 2
             os.makedirs(os.path.dirname(env['REEFY_EFI_TEST_DISK']))
 
             shell = shutil.which('dash') or 'sh'
+            source = os.path.join(td, 'reefy-efi')
+            with open(source, 'w') as f:
+                f.write(_source().replace('/usr/lib/reefy/boot-slot-state.sh',
+                    os.path.join(BOARD_DIR, 'rootfs-overlay/usr/lib/reefy/boot-slot-state.sh')))
             proc = subprocess.run(
-                [shell, REEFY_EFI, 'confirm'],
+                [shell, source, 'confirm'],
                 env=env,
                 text=True,
                 capture_output=True,
@@ -341,8 +350,10 @@ exit 2
                 order = f.read().strip()
             with open(state_path) as f:
                 entries = [line.strip().split('|') for line in f if line.strip()]
-            with open(calls_path) as f:
-                calls = [line.strip() for line in f if line.strip()]
+            calls = []
+            if os.path.exists(calls_path):
+                with open(calls_path) as f:
+                    calls = [line.strip() for line in f if line.strip()]
 
             return order, entries, calls, proc.stdout
 
@@ -379,6 +390,19 @@ exit 2
             'delete:0001',
         ])
         self.assertIn('Committed reefy-b as default with fresh entries', stdout)
+
+    def test_confirm_does_not_skip_reused_current_number(self):
+        order, entries, calls, stdout = self._run_confirm_with_fake_efi(
+            'reefy-a', reused_current=True)
+        self.assertEqual(order, '0002,0003')
+        self.assertEqual(len(calls), 5)
+        self.assertIn('Committed reefy-a as default', stdout)
+
+    def test_confirm_preserves_already_default_partition_with_stale_current(self):
+        order, entries, calls, stdout = self._run_confirm_with_fake_efi(
+            'reefy-a', reused_current=True, already_default=True)
+        self.assertEqual(order, '0000,0001')
+        self.assertEqual(calls, [])
 
 
 if __name__ == '__main__':

@@ -11,6 +11,13 @@ from reefy import wifi_bootstrap as wifi
 
 
 class BootstrapTests(unittest.TestCase):
+    def setUp(self):
+        for name, value in [('command', types.SimpleNamespace(returncode=0, stdout='')),
+                            ('ethernet_ready', False)]:
+            patch = mock.patch.object(wifi, name, return_value=value)
+            patch.start()
+            self.addCleanup(patch.stop)
+
     def test_networkd_can_read_configuration_under_private_service_mask(self):
         import os
         with tempfile.TemporaryDirectory() as directory:
@@ -96,11 +103,63 @@ class BootstrapTests(unittest.TestCase):
                 self.assertEqual(wifi.read_credentials(), candidate)
                 self.assertEqual(setup.stop_children.call_count, 1)
 
-    def test_adopted_device_does_not_start_setup(self):
-        with mock.patch.object(wifi, 'IDENTITY') as identity, mock.patch.object(wifi, 'command') as command:
-            identity.exists.return_value = True
+    def test_ready_ethernet_skips_setup_for_any_identity(self):
+        with mock.patch.object(wifi, 'ethernet_ready', return_value=True), mock.patch.object(wifi, 'Setup') as setup:
             wifi.main()
-            command.assert_not_called()
+            setup.assert_not_called()
+
+    def test_failed_replacement_preserves_previous_ram_credentials(self):
+        candidate = {'ssid': 'synthetic-old', 'password': 'synthetic-old-password'}
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(wifi, 'RUNTIME', Path(directory)), \
+                mock.patch.object(wifi, 'CREDENTIALS', Path(directory) / 'credentials.json'):
+            wifi.private_write(wifi.CREDENTIALS, json.dumps(candidate))
+            setup = object.__new__(wifi.Setup)
+            setup.interface = 'wlan-test'
+            setup.stop_children = mock.Mock()
+            setup.configure_network = mock.Mock()
+            setup.stop = mock.Mock()
+            setup.stop.wait.return_value = False
+            setup.spawn = mock.Mock(return_value=types.SimpleNamespace(poll=lambda: 1))
+            self.assertFalse(setup.connect({'ssid': 'synthetic-new', 'password': 'synthetic-new-password'}))
+            self.assertEqual(wifi.read_credentials(), candidate)
+
+    def test_ap_capability_requires_actual_phy_ap_mode(self):
+        for modes, expected in [('* managed\n* AP\n', True),
+                                ('* managed\n* AP/VLAN\n', False)]:
+            with mock.patch.object(wifi, 'command', side_effect=[
+                    types.SimpleNamespace(returncode=0, stdout=' wiphy 7\n'),
+                    types.SimpleNamespace(returncode=0, stdout=modes)]):
+                self.assertEqual(wifi.ap_supported('wlan-test'), expected)
+
+    def test_retry_schedule_and_station_grace(self):
+        policy = wifi.RetryPolicy(0)
+        self.assertFalse(policy.eligible(0, 0))
+        self.assertFalse(policy.eligible(0, 299))
+        self.assertTrue(policy.eligible(0, 300))
+        self.assertFalse(policy.eligible(1, 301))
+        self.assertFalse(policy.eligible(0, 302))
+        self.assertFalse(policy.eligible(0, 361))
+        self.assertTrue(policy.eligible(0, 362))
+        self.assertFalse(policy.eligible(None, 363))
+        self.assertFalse(policy.eligible(0, 364))
+        self.assertFalse(policy.eligible(0, 424, activity=True))
+        self.assertFalse(policy.eligible(0, 425))
+        self.assertTrue(policy.eligible(0, 485))
+        policy.attempted(485)
+        self.assertFalse(policy.eligible(0, 486))
+        self.assertFalse(policy.eligible(0, 784))
+        self.assertTrue(policy.eligible(0, 785))
+
+    def test_usable_ip_does_not_require_default_route_or_backend(self):
+        with mock.patch.object(wifi, 'command', return_value=types.SimpleNamespace(
+                returncode=0, stdout=json.dumps([{'addr_info': [
+                    {'scope': 'global', 'local': '192.0.2.17'}]}]))) as command:
+            self.assertTrue(wifi.usable_address('wlan-test'))
+            self.assertEqual(command.call_count, 1)
+        with mock.patch.object(wifi, 'command', return_value=types.SimpleNamespace(
+                returncode=0, stdout=json.dumps([{'addr_info': [
+                    {'scope': 'link', 'local': 'fe80::17'}]}]))):
+            self.assertFalse(wifi.usable_address('wlan-test'))
 
 
 class HandoffTests(unittest.TestCase):
@@ -122,6 +181,46 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(json.loads(args[1]), {'id': 'synthetic-request', 'status': 'success', 'wifi': candidate})
         self.assertEqual(options, {'qos': 1, 'retain': False})
         plane._claim_command.assert_not_called()
+
+    def test_adopted_repair_is_bound_to_identity_and_acknowledged_only_on_match(self):
+        candidate = {'ssid': 'Synthetic moved network', 'password': 'synthetic-moved-password'}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            identity = root / 'device-uuid'
+            pending = root / 'wifi-portal-pending.json'
+            ram = root / 'ram.json'
+            identity.write_text('synthetic-device')
+            with mock.patch.object(wifi, 'IDENTITY', identity), \
+                    mock.patch.object(wifi, 'PENDING_WIFI', pending), \
+                    mock.patch.object(wifi, 'CREDENTIALS', ram):
+                wifi.private_write(pending, json.dumps({'device_uuid': 'synthetic-device', 'wifi': candidate}))
+                self.assertEqual(wifi.read_credentials(), candidate)
+                self.assertEqual(wifi.saved_credentials(), candidate)
+                self.assertEqual(pending.stat().st_mode & 0o777, 0o600)
+                wifi.acknowledge_credentials({'ssid': 'wrong'})
+                self.assertTrue(pending.exists())
+                identity.write_text('synthetic-different-device')
+                wifi.private_write(ram, json.dumps(candidate))
+                self.assertIsNone(wifi.read_credentials())
+                self.assertTrue(pending.exists())
+                identity.write_text('synthetic-device')
+                wifi.acknowledge_credentials(candidate)
+                self.assertFalse(pending.exists())
+
+    def test_old_backend_cannot_revert_pending_network_or_interrupt_attempt(self):
+        from reefy.dataplane import DataPlane
+        plane = object.__new__(DataPlane)
+        candidate = {'ssid': 'SyntheticNew', 'password': 'synthetic-new-password'}
+        old = {'ssid': 'SyntheticOld', 'password': 'synthetic-old-password'}
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(wifi, 'RUNTIME', Path(directory)), \
+                mock.patch.object(wifi, 'pending_credentials', return_value=candidate), \
+                mock.patch('subprocess.run') as run:
+            plane._apply_wifi(old, old)
+            run.assert_not_called()
+            (Path(directory) / 'connecting').touch()
+            plane._apply_wifi(candidate, old)
+            run.assert_not_called()
 
 
 @unittest.skipUnless(__import__('sys').platform == 'linux' and __import__('os').geteuid() == 0,

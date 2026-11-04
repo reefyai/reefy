@@ -3106,8 +3106,15 @@ class DataPlane:
         ssid = wifi.get('ssid', '') if wifi else ''
         old_ssid = old_wifi.get('ssid', '') if old_wifi else ''
 
-        from reefy.wifi_bootstrap import CREDENTIALS
-        bootstrap_pending = CREDENTIALS.exists()
+        from reefy.wifi_bootstrap import CREDENTIALS, RUNTIME, pending_credentials, acknowledge_credentials
+        if (RUNTIME / 'connecting').exists():
+            log('mqtt', 'Portal connection attempt owns the WiFi radio')
+            return
+        pending = pending_credentials()
+        if pending and wifi != pending:
+            log('mqtt', 'Keeping tested portal WiFi until authenticated configuration handoff')
+            return
+        bootstrap_pending = CREDENTIALS.exists() or bool(pending)
         if ssid:
             # Transfer radio ownership only after desired state is persisted.
             if ssid != old_ssid or bootstrap_pending:
@@ -3125,6 +3132,7 @@ class DataPlane:
                     if result.returncode == 0:
                         if bootstrap_pending:
                             CREDENTIALS.unlink(missing_ok=True)
+                            acknowledge_credentials(wifi)
                         print("[mqtt] WiFi configured successfully")
                     else:
                         log('mqtt',

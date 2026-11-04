@@ -2299,7 +2299,8 @@ class BootGptRepairTests(unittest.TestCase):
             if args[0] == 'findmnt':
                 return types.SimpleNamespace(stdout='tmpfs\n', returncode=0)
             raise subprocess.CalledProcessError(1, args)
-        with mock.patch.object(storage.subprocess, 'run', side_effect=command), \
+        with mock.patch('reefy.boot_slots.next_partition_start', return_value=4196352), \
+                mock.patch.object(storage.subprocess, 'run', side_effect=command), \
                 mock.patch.object(storage, '_boot_gpt_identity', return_value=('synthetic-guid', b'entries')), \
                 mock.patch.object(storage.Storage, '_find_reefy_disk',
                                   return_value=('/dev/synthetic', None)), \

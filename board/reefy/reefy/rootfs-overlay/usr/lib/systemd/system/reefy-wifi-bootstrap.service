@@ -2,7 +2,6 @@
 Description=Reefy local WiFi bootstrap
 After=reefy-storage.service reefy-wifi-early.service reefy-hostname.service
 Wants=reefy-storage.service
-ConditionPathExists=!/mnt/reefy-data/state/device-uuid
 
 [Service]
 Type=simple

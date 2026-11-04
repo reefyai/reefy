@@ -1,0 +1,289 @@
+make: Entering directory '/build/reefy/buildroot'
+mkdir -p /tmp/reefy-wifi-firmware-size/measurement/baseline/config/build/buildroot-config/lxdialog
+PKG_CONFIG_PATH="" make CC="/usr/bin/gcc" HOSTCC="/usr/bin/gcc" \
+    obj=/tmp/reefy-wifi-firmware-size/measurement/baseline/config/build/buildroot-config -C support/kconfig -f Makefile.br conf
+make[1]: Entering directory '/build/reefy/buildroot/support/kconfig'
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/baseline/config/build/buildroot-config -DCONFIG_=\"\"  -MM *.c > /tmp/reefy-wifi-firmware-size/measurement/baseline/config/build/buildroot-config/.depend 2>/dev/null || :
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/baseline/config/build/buildroot-config -DCONFIG_=\"\"   -c conf.c -o /tmp/reefy-wifi-firmware-size/measurement/baseline/config/build/buildroot-config/conf.o
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/baseline/config/build/buildroot-config -DCONFIG_=\"\"  -I. -c /tmp/reefy-wifi-firmware-size/measurement/baseline/config/build/buildroot-config/zconf.tab.c -o /tmp/reefy-wifi-firmware-size/measurement/baseline/config/build/buildroot-config/zconf.tab.o
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/baseline/config/build/buildroot-config -DCONFIG_=\"\"   /tmp/reefy-wifi-firmware-size/measurement/baseline/config/build/buildroot-config/conf.o /tmp/reefy-wifi-firmware-size/measurement/baseline/config/build/buildroot-config/zconf.tab.o  -o /tmp/reefy-wifi-firmware-size/measurement/baseline/config/build/buildroot-config/conf
+rm /tmp/reefy-wifi-firmware-size/measurement/baseline/config/build/buildroot-config/zconf.tab.c
+make[1]: Leaving directory '/build/reefy/buildroot/support/kconfig'
+  GEN     /tmp/reefy-wifi-firmware-size/measurement/baseline/config/Makefile
+#
+# configuration written to /tmp/reefy-wifi-firmware-size/measurement/baseline/config/.config
+#
+make: Leaving directory '/build/reefy/buildroot'
+cd /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810 && tar cf br-firmware.tar mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin mediatek/WIFI_RAM_CODE_MT7922_1.bin rtl_nic/rtl8105e-1.fw rtl_nic/rtl8106e-1.fw rtl_nic/rtl8106e-2.fw rtl_nic/rtl8107e-1.fw rtl_nic/rtl8107e-2.fw rtl_nic/rtl8125a-3.fw rtl_nic/rtl8125b-2.fw rtl_nic/rtl8125d-1.fw rtl_nic/rtl8125d-2.fw rtl_nic/rtl8168d-1.fw rtl_nic/rtl8168d-2.fw rtl_nic/rtl8168e-1.fw rtl_nic/rtl8168e-2.fw rtl_nic/rtl8168e-3.fw rtl_nic/rtl8168f-1.fw rtl_nic/rtl8168f-2.fw rtl_nic/rtl8168fp-3.fw rtl_nic/rtl8168g-2.fw rtl_nic/rtl8168g-3.fw rtl_nic/rtl8168h-1.fw rtl_nic/rtl8168h-2.fw rtl_nic/rtl8402-1.fw rtl_nic/rtl8411-1.fw rtl_nic/rtl8411-2.fw rtlwifi/rtl8188efw.bin rtlwifi/rtl8188eufw.bin rtlwifi/rtl8188fufw.bin rtlwifi/rtl8192cfw.bin rtlwifi/rtl8192cfwU.bin rtlwifi/rtl8192cfwU_B.bin rtlwifi/rtl8192cufw.bin rtlwifi/rtl8192cufw_A.bin rtlwifi/rtl8192cufw_B.bin rtlwifi/rtl8192cufw_TMSC.bin rtlwifi/rtl8192defw.bin rtlwifi/rtl8192eu_ap_wowlan.bin rtlwifi/rtl8192eu_nic.bin rtlwifi/rtl8192eu_wowlan.bin rtlwifi/rtl8192sefw.bin rtlwifi/rtl8712u.bin rtlwifi/rtl8723aufw_A.bin rtlwifi/rtl8723aufw_B.bin rtlwifi/rtl8723aufw_B_NoBT.bin rtlwifi/rtl8723befw.bin rtlwifi/rtl8723bs_bt.bin rtlwifi/rtl8723bu_ap_wowlan.bin rtlwifi/rtl8723bu_nic.bin rtlwifi/rtl8723bu_wowlan.bin rtlwifi/rtl8723fw.bin rtlwifi/rtl8723fw_B.bin rtlwifi/rtl8821aefw.bin rtlwifi/rtl8821aefw_29.bin rtlwifi/rtl8821aefw_wowlan.bin rtlwifi/rtl8822befw.bin rtw88/rtw*.bin rtw89/rtw*.bin
+mkdir -p /tmp/reefy-wifi-firmware-size/measurement/baseline/target/lib/firmware
+tar xf /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810/br-firmware.tar -C /tmp/reefy-wifi-firmware-size/measurement/baseline/target/lib/firmware
+cd /tmp/reefy-wifi-firmware-size/measurement/baseline/target/lib/firmware ; sed -r -e '/^Link: (.+) -> (.+)$/!d; s//\1 \2/' /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810/WHENCE | while read f d; do if test -f $(readlink -m $(dirname "$f")/$d); then mkdir -p $(dirname "$f") || exit 1; ln -sf $d "$f" || exit 1; fi ; done
+Parallel mksquashfs: Using 4 processors
+Creating 4.0 filesystem on /tmp/reefy-wifi-firmware-size/measurement/baseline/firmware.squashfs, block size 131072.
+
+Exportable Squashfs 4.0 filesystem, xz compressed, data block size 131072
+	compressed data, compressed metadata, compressed fragments,
+	compressed xattrs, compressed ids
+	duplicates are removed
+Filesystem size 14341.65 Kbytes (14.01 Mbytes)
+	37.95% of uncompressed filesystem size (37788.31 Kbytes)
+Inode table size 1570 bytes (1.53 Kbytes)
+	35.82% of uncompressed inode table size (4383 bytes)
+Directory table size 870 bytes (0.85 Kbytes)
+	37.02% of uncompressed directory table size (2350 bytes)
+Number of duplicate files found 0
+Number of inodes 98
+Number of files 86
+Number of fragments 11
+Number of symbolic links 4
+Number of device nodes 0
+Number of fifo nodes 0
+Number of socket nodes 0
+Number of directories 8
+Number of hard-links 0
+Number of ids (unique uids + gids) 1
+Number of uids 1
+	root (0)
+Number of gids 1
+	root (0)
+make: Entering directory '/build/reefy/buildroot'
+mkdir -p /tmp/reefy-wifi-firmware-size/measurement/intel/config/build/buildroot-config/lxdialog
+PKG_CONFIG_PATH="" make CC="/usr/bin/gcc" HOSTCC="/usr/bin/gcc" \
+    obj=/tmp/reefy-wifi-firmware-size/measurement/intel/config/build/buildroot-config -C support/kconfig -f Makefile.br conf
+make[1]: Entering directory '/build/reefy/buildroot/support/kconfig'
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/intel/config/build/buildroot-config -DCONFIG_=\"\"  -MM *.c > /tmp/reefy-wifi-firmware-size/measurement/intel/config/build/buildroot-config/.depend 2>/dev/null || :
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/intel/config/build/buildroot-config -DCONFIG_=\"\"   -c conf.c -o /tmp/reefy-wifi-firmware-size/measurement/intel/config/build/buildroot-config/conf.o
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/intel/config/build/buildroot-config -DCONFIG_=\"\"  -I. -c /tmp/reefy-wifi-firmware-size/measurement/intel/config/build/buildroot-config/zconf.tab.c -o /tmp/reefy-wifi-firmware-size/measurement/intel/config/build/buildroot-config/zconf.tab.o
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/intel/config/build/buildroot-config -DCONFIG_=\"\"   /tmp/reefy-wifi-firmware-size/measurement/intel/config/build/buildroot-config/conf.o /tmp/reefy-wifi-firmware-size/measurement/intel/config/build/buildroot-config/zconf.tab.o  -o /tmp/reefy-wifi-firmware-size/measurement/intel/config/build/buildroot-config/conf
+rm /tmp/reefy-wifi-firmware-size/measurement/intel/config/build/buildroot-config/zconf.tab.c
+make[1]: Leaving directory '/build/reefy/buildroot/support/kconfig'
+  GEN     /tmp/reefy-wifi-firmware-size/measurement/intel/config/Makefile
+#
+# configuration written to /tmp/reefy-wifi-firmware-size/measurement/intel/config/.config
+#
+make: Leaving directory '/build/reefy/buildroot'
+cd /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810 && tar cf br-firmware.tar intel/iwlwifi/iwlwifi-100-*.ucode intel/iwlwifi/iwlwifi-1000-*.ucode intel/iwlwifi/iwlwifi-105-*.ucode intel/iwlwifi/iwlwifi-135-*.ucode intel/iwlwifi/iwlwifi-2000-*.ucode intel/iwlwifi/iwlwifi-2030-*.ucode intel/iwlwifi/iwlwifi-3160-*.ucode intel/iwlwifi/iwlwifi-3168-*.ucode intel/iwlwifi/iwlwifi-3945-2.ucode intel/iwlwifi/iwlwifi-4965-2.ucode intel/iwlwifi/iwlwifi-5000-5.ucode intel/iwlwifi/iwlwifi-6000g2a-6.ucode intel/iwlwifi/iwlwifi-6000g2b-6.ucode intel/iwlwifi/iwlwifi-7260-*.ucode intel/iwlwifi/iwlwifi-7265-*.ucode intel/iwlwifi/iwlwifi-7265D-*.ucode intel/iwlwifi/iwlwifi-8000C-*.ucode intel/iwlwifi/iwlwifi-8265-*.ucode intel/iwlwifi/iwlwifi-9???-*.ucode intel/iwlwifi/iwlwifi-Qu-*.ucode intel/iwlwifi/iwlwifi-QuZ-*.ucode intel/iwlwifi/iwlwifi-cc-a0-*.ucode intel/iwlwifi/iwlwifi-gl-c0-fm-c0*.{ucode,pnvm} intel/iwlwifi/iwlwifi-so-a0-jf-b0*.ucode intel/iwlwifi/iwlwifi-{so,ty}-a0-gf-a0*.{ucode,pnvm} mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin mediatek/WIFI_RAM_CODE_MT7922_1.bin rtl_nic/rtl8105e-1.fw rtl_nic/rtl8106e-1.fw rtl_nic/rtl8106e-2.fw rtl_nic/rtl8107e-1.fw rtl_nic/rtl8107e-2.fw rtl_nic/rtl8125a-3.fw rtl_nic/rtl8125b-2.fw rtl_nic/rtl8125d-1.fw rtl_nic/rtl8125d-2.fw rtl_nic/rtl8168d-1.fw rtl_nic/rtl8168d-2.fw rtl_nic/rtl8168e-1.fw rtl_nic/rtl8168e-2.fw rtl_nic/rtl8168e-3.fw rtl_nic/rtl8168f-1.fw rtl_nic/rtl8168f-2.fw rtl_nic/rtl8168fp-3.fw rtl_nic/rtl8168g-2.fw rtl_nic/rtl8168g-3.fw rtl_nic/rtl8168h-1.fw rtl_nic/rtl8168h-2.fw rtl_nic/rtl8402-1.fw rtl_nic/rtl8411-1.fw rtl_nic/rtl8411-2.fw rtlwifi/rtl8188efw.bin rtlwifi/rtl8188eufw.bin rtlwifi/rtl8188fufw.bin rtlwifi/rtl8192cfw.bin rtlwifi/rtl8192cfwU.bin rtlwifi/rtl8192cfwU_B.bin rtlwifi/rtl8192cufw.bin rtlwifi/rtl8192cufw_A.bin rtlwifi/rtl8192cufw_B.bin rtlwifi/rtl8192cufw_TMSC.bin rtlwifi/rtl8192defw.bin rtlwifi/rtl8192eu_ap_wowlan.bin rtlwifi/rtl8192eu_nic.bin rtlwifi/rtl8192eu_wowlan.bin rtlwifi/rtl8192sefw.bin rtlwifi/rtl8712u.bin rtlwifi/rtl8723aufw_A.bin rtlwifi/rtl8723aufw_B.bin rtlwifi/rtl8723aufw_B_NoBT.bin rtlwifi/rtl8723befw.bin rtlwifi/rtl8723bs_bt.bin rtlwifi/rtl8723bu_ap_wowlan.bin rtlwifi/rtl8723bu_nic.bin rtlwifi/rtl8723bu_wowlan.bin rtlwifi/rtl8723fw.bin rtlwifi/rtl8723fw_B.bin rtlwifi/rtl8821aefw.bin rtlwifi/rtl8821aefw_29.bin rtlwifi/rtl8821aefw_wowlan.bin rtlwifi/rtl8822befw.bin rtw88/rtw*.bin rtw89/rtw*.bin
+mkdir -p /tmp/reefy-wifi-firmware-size/measurement/intel/target/lib/firmware
+tar xf /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810/br-firmware.tar -C /tmp/reefy-wifi-firmware-size/measurement/intel/target/lib/firmware
+cd /tmp/reefy-wifi-firmware-size/measurement/intel/target/lib/firmware ; sed -r -e '/^Link: (.+) -> (.+)$/!d; s//\1 \2/' /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810/WHENCE | while read f d; do if test -f $(readlink -m $(dirname "$f")/$d); then mkdir -p $(dirname "$f") || exit 1; ln -sf $d "$f" || exit 1; fi ; done
+Parallel mksquashfs: Using 4 processors
+Creating 4.0 filesystem on /tmp/reefy-wifi-firmware-size/measurement/intel/firmware.squashfs, block size 131072.
+
+Exportable Squashfs 4.0 filesystem, xz compressed, data block size 131072
+	compressed data, compressed metadata, compressed fragments,
+	compressed xattrs, compressed ids
+	duplicates are removed
+Filesystem size 73344.75 Kbytes (71.63 Mbytes)
+	35.96% of uncompressed filesystem size (203982.86 Kbytes)
+Inode table size 6130 bytes (5.99 Kbytes)
+	28.53% of uncompressed inode table size (21486 bytes)
+Directory table size 2476 bytes (2.42 Kbytes)
+	22.97% of uncompressed directory table size (10778 bytes)
+Number of duplicate files found 0
+Number of inodes 340
+Number of files 206
+Number of fragments 12
+Number of symbolic links 124
+Number of device nodes 0
+Number of fifo nodes 0
+Number of socket nodes 0
+Number of directories 10
+Number of hard-links 0
+Number of ids (unique uids + gids) 1
+Number of uids 1
+	root (0)
+Number of gids 1
+	root (0)
+make: Entering directory '/build/reefy/buildroot'
+mkdir -p /tmp/reefy-wifi-firmware-size/measurement/atheros/config/build/buildroot-config/lxdialog
+PKG_CONFIG_PATH="" make CC="/usr/bin/gcc" HOSTCC="/usr/bin/gcc" \
+    obj=/tmp/reefy-wifi-firmware-size/measurement/atheros/config/build/buildroot-config -C support/kconfig -f Makefile.br conf
+make[1]: Entering directory '/build/reefy/buildroot/support/kconfig'
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/atheros/config/build/buildroot-config -DCONFIG_=\"\"  -MM *.c > /tmp/reefy-wifi-firmware-size/measurement/atheros/config/build/buildroot-config/.depend 2>/dev/null || :
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/atheros/config/build/buildroot-config -DCONFIG_=\"\"   -c conf.c -o /tmp/reefy-wifi-firmware-size/measurement/atheros/config/build/buildroot-config/conf.o
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/atheros/config/build/buildroot-config -DCONFIG_=\"\"  -I. -c /tmp/reefy-wifi-firmware-size/measurement/atheros/config/build/buildroot-config/zconf.tab.c -o /tmp/reefy-wifi-firmware-size/measurement/atheros/config/build/buildroot-config/zconf.tab.o
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/atheros/config/build/buildroot-config -DCONFIG_=\"\"   /tmp/reefy-wifi-firmware-size/measurement/atheros/config/build/buildroot-config/conf.o /tmp/reefy-wifi-firmware-size/measurement/atheros/config/build/buildroot-config/zconf.tab.o  -o /tmp/reefy-wifi-firmware-size/measurement/atheros/config/build/buildroot-config/conf
+rm /tmp/reefy-wifi-firmware-size/measurement/atheros/config/build/buildroot-config/zconf.tab.c
+make[1]: Leaving directory '/build/reefy/buildroot/support/kconfig'
+  GEN     /tmp/reefy-wifi-firmware-size/measurement/atheros/config/Makefile
+#
+# configuration written to /tmp/reefy-wifi-firmware-size/measurement/atheros/config/.config
+#
+make: Leaving directory '/build/reefy/buildroot'
+cd /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810 && tar cf br-firmware.tar ar7010.fw ar7010_1_1.fw ar9170-1.fw ar9170-2.fw ar9271.fw ath10k/QCA6174 ath10k/QCA9377/hw1.0/board-2.bin ath10k/QCA9377/hw1.0/board.bin ath10k/QCA9377/hw1.0/firmware-5.bin ath10k/QCA9377/hw1.0/firmware-6.bin ath10k/QCA9377/hw1.0/firmware-sdio-5.bin ath10k/QCA988X/hw2.0/board.bin ath10k/QCA988X/hw2.0/firmware-4.bin ath10k/QCA988X/hw2.0/firmware-5.bin ath11k/WCN6855/hw2.0 ath6k/AR6002 ath6k/AR6003 ath6k/AR6004 ath9k_htc/htc_7010-1.4.0.fw ath9k_htc/htc_9271-1.4.0.fw carl9170-1.fw htc_7010.fw htc_9271.fw mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin mediatek/WIFI_RAM_CODE_MT7922_1.bin rtl_nic/rtl8105e-1.fw rtl_nic/rtl8106e-1.fw rtl_nic/rtl8106e-2.fw rtl_nic/rtl8107e-1.fw rtl_nic/rtl8107e-2.fw rtl_nic/rtl8125a-3.fw rtl_nic/rtl8125b-2.fw rtl_nic/rtl8125d-1.fw rtl_nic/rtl8125d-2.fw rtl_nic/rtl8168d-1.fw rtl_nic/rtl8168d-2.fw rtl_nic/rtl8168e-1.fw rtl_nic/rtl8168e-2.fw rtl_nic/rtl8168e-3.fw rtl_nic/rtl8168f-1.fw rtl_nic/rtl8168f-2.fw rtl_nic/rtl8168fp-3.fw rtl_nic/rtl8168g-2.fw rtl_nic/rtl8168g-3.fw rtl_nic/rtl8168h-1.fw rtl_nic/rtl8168h-2.fw rtl_nic/rtl8402-1.fw rtl_nic/rtl8411-1.fw rtl_nic/rtl8411-2.fw rtlwifi/rtl8188efw.bin rtlwifi/rtl8188eufw.bin rtlwifi/rtl8188fufw.bin rtlwifi/rtl8192cfw.bin rtlwifi/rtl8192cfwU.bin rtlwifi/rtl8192cfwU_B.bin rtlwifi/rtl8192cufw.bin rtlwifi/rtl8192cufw_A.bin rtlwifi/rtl8192cufw_B.bin rtlwifi/rtl8192cufw_TMSC.bin rtlwifi/rtl8192defw.bin rtlwifi/rtl8192eu_ap_wowlan.bin rtlwifi/rtl8192eu_nic.bin rtlwifi/rtl8192eu_wowlan.bin rtlwifi/rtl8192sefw.bin rtlwifi/rtl8712u.bin rtlwifi/rtl8723aufw_A.bin rtlwifi/rtl8723aufw_B.bin rtlwifi/rtl8723aufw_B_NoBT.bin rtlwifi/rtl8723befw.bin rtlwifi/rtl8723bs_bt.bin rtlwifi/rtl8723bu_ap_wowlan.bin rtlwifi/rtl8723bu_nic.bin rtlwifi/rtl8723bu_wowlan.bin rtlwifi/rtl8723fw.bin rtlwifi/rtl8723fw_B.bin rtlwifi/rtl8821aefw.bin rtlwifi/rtl8821aefw_29.bin rtlwifi/rtl8821aefw_wowlan.bin rtlwifi/rtl8822befw.bin rtw88/rtw*.bin rtw89/rtw*.bin
+mkdir -p /tmp/reefy-wifi-firmware-size/measurement/atheros/target/lib/firmware
+tar xf /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810/br-firmware.tar -C /tmp/reefy-wifi-firmware-size/measurement/atheros/target/lib/firmware
+cd /tmp/reefy-wifi-firmware-size/measurement/atheros/target/lib/firmware ; sed -r -e '/^Link: (.+) -> (.+)$/!d; s//\1 \2/' /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810/WHENCE | while read f d; do if test -f $(readlink -m $(dirname "$f")/$d); then mkdir -p $(dirname "$f") || exit 1; ln -sf $d "$f" || exit 1; fi ; done
+Parallel mksquashfs: Using 4 processors
+Creating 4.0 filesystem on /tmp/reefy-wifi-firmware-size/measurement/atheros/firmware.squashfs, block size 131072.
+
+Exportable Squashfs 4.0 filesystem, xz compressed, data block size 131072
+	compressed data, compressed metadata, compressed fragments,
+	compressed xattrs, compressed ids
+	duplicates are removed
+Filesystem size 22884.00 Kbytes (22.35 Mbytes)
+	36.10% of uncompressed filesystem size (63394.82 Kbytes)
+Inode table size 2832 bytes (2.77 Kbytes)
+	33.90% of uncompressed inode table size (8355 bytes)
+Directory table size 1622 bytes (1.58 Kbytes)
+	36.15% of uncompressed directory table size (4487 bytes)
+Number of duplicate files found 7
+Number of inodes 195
+Number of files 153
+Number of fragments 26
+Number of symbolic links 10
+Number of device nodes 0
+Number of fifo nodes 0
+Number of socket nodes 0
+Number of directories 32
+Number of hard-links 0
+Number of ids (unique uids + gids) 1
+Number of uids 1
+	root (0)
+Number of gids 1
+	root (0)
+make: Entering directory '/build/reefy/buildroot'
+mkdir -p /tmp/reefy-wifi-firmware-size/measurement/broadcom/config/build/buildroot-config/lxdialog
+PKG_CONFIG_PATH="" make CC="/usr/bin/gcc" HOSTCC="/usr/bin/gcc" \
+    obj=/tmp/reefy-wifi-firmware-size/measurement/broadcom/config/build/buildroot-config -C support/kconfig -f Makefile.br conf
+make[1]: Entering directory '/build/reefy/buildroot/support/kconfig'
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/broadcom/config/build/buildroot-config -DCONFIG_=\"\"  -MM *.c > /tmp/reefy-wifi-firmware-size/measurement/broadcom/config/build/buildroot-config/.depend 2>/dev/null || :
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/broadcom/config/build/buildroot-config -DCONFIG_=\"\"   -c conf.c -o /tmp/reefy-wifi-firmware-size/measurement/broadcom/config/build/buildroot-config/conf.o
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/broadcom/config/build/buildroot-config -DCONFIG_=\"\"  -I. -c /tmp/reefy-wifi-firmware-size/measurement/broadcom/config/build/buildroot-config/zconf.tab.c -o /tmp/reefy-wifi-firmware-size/measurement/broadcom/config/build/buildroot-config/zconf.tab.o
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/broadcom/config/build/buildroot-config -DCONFIG_=\"\"   /tmp/reefy-wifi-firmware-size/measurement/broadcom/config/build/buildroot-config/conf.o /tmp/reefy-wifi-firmware-size/measurement/broadcom/config/build/buildroot-config/zconf.tab.o  -o /tmp/reefy-wifi-firmware-size/measurement/broadcom/config/build/buildroot-config/conf
+rm /tmp/reefy-wifi-firmware-size/measurement/broadcom/config/build/buildroot-config/zconf.tab.c
+make[1]: Leaving directory '/build/reefy/buildroot/support/kconfig'
+  GEN     /tmp/reefy-wifi-firmware-size/measurement/broadcom/config/Makefile
+#
+# configuration written to /tmp/reefy-wifi-firmware-size/measurement/broadcom/config/.config
+#
+make: Leaving directory '/build/reefy/buildroot'
+cd /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810 && tar cf br-firmware.tar brcm/bcm4329-fullmac-4.bin brcm/brcmfmac43143-sdio.bin brcm/brcmfmac43143.bin brcm/brcmfmac43236b.bin brcm/brcmfmac43241b0-sdio.bin brcm/brcmfmac43241b4-sdio.bin brcm/brcmfmac43241b5-sdio.bin brcm/brcmfmac43242a.bin brcm/brcmfmac4329-sdio.bin brcm/brcmfmac4330-sdio.Prowise-PT301.txt brcm/brcmfmac4330-sdio.bin brcm/brcmfmac4334-sdio.bin brcm/brcmfmac43340-sdio.meegopad-t08.txt brcm/brcmfmac43340-sdio.pov-tab-p1006w-data.txt brcm/brcmfmac43340-sdio.predia-basic.txt brcm/brcmfmac4335-sdio.bin brcm/brcmfmac43362-sdio.cubietech,cubietruck.txt brcm/brcmfmac43430-sdio.AP6212.txt brcm/brcmfmac43430-sdio.Hampoo-D2D3_Vi8A1.txt brcm/brcmfmac43430-sdio.MUR1DX.txt brcm/brcmfmac43430-sdio.raspberrypi,3-model-b.txt brcm/brcmfmac43430a0-sdio.bin brcm/brcmfmac43430a0-sdio.ilife-S806.txt brcm/brcmfmac43430a0-sdio.jumper-ezpad-mini3.txt brcm/brcmfmac43455-sdio.raspberrypi,3-model-b-plus.txt brcm/brcmfmac43455-sdio.raspberrypi,4-model-b.txt brcm/brcmfmac4350-pcie.bin brcm/brcmfmac4350c2-pcie.bin brcm/brcmfmac4356-pcie.gpd-win-pocket.txt brcm/brcmfmac4356-sdio.AP6356S.txt brcm/brcmfmac43569.bin brcm/brcmfmac4358-pcie.bin brcm/brcmfmac43602-pcie.ap.bin brcm/brcmfmac43602-pcie.bin brcm/brcmfmac4366b-pcie.bin brcm/brcmfmac4366c-pcie.bin brcm/brcmfmac4371-pcie.bin brcm/brcmfmac4373.bin cypress/cyfmac43012-sdio.bin cypress/cyfmac43012-sdio.clm_blob cypress/cyfmac43340-sdio.bin cypress/cyfmac43362-sdio.bin cypress/cyfmac4339-sdio.bin cypress/cyfmac43430-sdio.bin cypress/cyfmac43430-sdio.clm_blob cypress/cyfmac43455-sdio.bin cypress/cyfmac43455-sdio.clm_blob cypress/cyfmac4354-sdio.bin cypress/cyfmac4354-sdio.clm_blob cypress/cyfmac4356-pcie.bin cypress/cyfmac4356-pcie.clm_blob cypress/cyfmac4356-sdio.bin cypress/cyfmac4356-sdio.clm_blob cypress/cyfmac43570-pcie.bin cypress/cyfmac43570-pcie.clm_blob cypress/cyfmac4373-sdio.bin cypress/cyfmac4373-sdio.clm_blob mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin mediatek/WIFI_RAM_CODE_MT7922_1.bin rtl_nic/rtl8105e-1.fw rtl_nic/rtl8106e-1.fw rtl_nic/rtl8106e-2.fw rtl_nic/rtl8107e-1.fw rtl_nic/rtl8107e-2.fw rtl_nic/rtl8125a-3.fw rtl_nic/rtl8125b-2.fw rtl_nic/rtl8125d-1.fw rtl_nic/rtl8125d-2.fw rtl_nic/rtl8168d-1.fw rtl_nic/rtl8168d-2.fw rtl_nic/rtl8168e-1.fw rtl_nic/rtl8168e-2.fw rtl_nic/rtl8168e-3.fw rtl_nic/rtl8168f-1.fw rtl_nic/rtl8168f-2.fw rtl_nic/rtl8168fp-3.fw rtl_nic/rtl8168g-2.fw rtl_nic/rtl8168g-3.fw rtl_nic/rtl8168h-1.fw rtl_nic/rtl8168h-2.fw rtl_nic/rtl8402-1.fw rtl_nic/rtl8411-1.fw rtl_nic/rtl8411-2.fw rtlwifi/rtl8188efw.bin rtlwifi/rtl8188eufw.bin rtlwifi/rtl8188fufw.bin rtlwifi/rtl8192cfw.bin rtlwifi/rtl8192cfwU.bin rtlwifi/rtl8192cfwU_B.bin rtlwifi/rtl8192cufw.bin rtlwifi/rtl8192cufw_A.bin rtlwifi/rtl8192cufw_B.bin rtlwifi/rtl8192cufw_TMSC.bin rtlwifi/rtl8192defw.bin rtlwifi/rtl8192eu_ap_wowlan.bin rtlwifi/rtl8192eu_nic.bin rtlwifi/rtl8192eu_wowlan.bin rtlwifi/rtl8192sefw.bin rtlwifi/rtl8712u.bin rtlwifi/rtl8723aufw_A.bin rtlwifi/rtl8723aufw_B.bin rtlwifi/rtl8723aufw_B_NoBT.bin rtlwifi/rtl8723befw.bin rtlwifi/rtl8723bs_bt.bin rtlwifi/rtl8723bu_ap_wowlan.bin rtlwifi/rtl8723bu_nic.bin rtlwifi/rtl8723bu_wowlan.bin rtlwifi/rtl8723fw.bin rtlwifi/rtl8723fw_B.bin rtlwifi/rtl8821aefw.bin rtlwifi/rtl8821aefw_29.bin rtlwifi/rtl8821aefw_wowlan.bin rtlwifi/rtl8822befw.bin rtw88/rtw*.bin rtw89/rtw*.bin
+mkdir -p /tmp/reefy-wifi-firmware-size/measurement/broadcom/target/lib/firmware
+tar xf /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810/br-firmware.tar -C /tmp/reefy-wifi-firmware-size/measurement/broadcom/target/lib/firmware
+cd /tmp/reefy-wifi-firmware-size/measurement/broadcom/target/lib/firmware ; sed -r -e '/^Link: (.+) -> (.+)$/!d; s//\1 \2/' /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810/WHENCE | while read f d; do if test -f $(readlink -m $(dirname "$f")/$d); then mkdir -p $(dirname "$f") || exit 1; ln -sf $d "$f" || exit 1; fi ; done
+Parallel mksquashfs: Using 4 processors
+Creating 4.0 filesystem on /tmp/reefy-wifi-firmware-size/measurement/broadcom/firmware.squashfs, block size 131072.
+
+Exportable Squashfs 4.0 filesystem, xz compressed, data block size 131072
+	compressed data, compressed metadata, compressed fragments,
+	compressed xattrs, compressed ids
+	duplicates are removed
+Filesystem size 23911.05 Kbytes (23.35 Mbytes)
+	43.36% of uncompressed filesystem size (55139.51 Kbytes)
+Inode table size 2972 bytes (2.90 Kbytes)
+	31.51% of uncompressed inode table size (9432 bytes)
+Directory table size 2066 bytes (2.02 Kbytes)
+	32.69% of uncompressed directory table size (6320 bytes)
+Number of duplicate files found 0
+Number of inodes 201
+Number of files 143
+Number of fragments 12
+Number of symbolic links 48
+Number of device nodes 0
+Number of fifo nodes 0
+Number of socket nodes 0
+Number of directories 10
+Number of hard-links 0
+Number of ids (unique uids + gids) 1
+Number of uids 1
+	root (0)
+Number of gids 1
+	root (0)
+make: Entering directory '/build/reefy/buildroot'
+mkdir -p /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/build/buildroot-config/lxdialog
+PKG_CONFIG_PATH="" make CC="/usr/bin/gcc" HOSTCC="/usr/bin/gcc" \
+    obj=/tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/build/buildroot-config -C support/kconfig -f Makefile.br conf
+make[1]: Entering directory '/build/reefy/buildroot/support/kconfig'
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/build/buildroot-config -DCONFIG_=\"\"  -MM *.c > /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/build/buildroot-config/.depend 2>/dev/null || :
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/build/buildroot-config -DCONFIG_=\"\"   -c conf.c -o /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/build/buildroot-config/conf.o
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/build/buildroot-config -DCONFIG_=\"\"  -I. -c /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/build/buildroot-config/zconf.tab.c -o /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/build/buildroot-config/zconf.tab.o
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/build/buildroot-config -DCONFIG_=\"\"   /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/build/buildroot-config/conf.o /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/build/buildroot-config/zconf.tab.o  -o /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/build/buildroot-config/conf
+rm /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/build/buildroot-config/zconf.tab.c
+make[1]: Leaving directory '/build/reefy/buildroot/support/kconfig'
+  GEN     /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/Makefile
+#
+# configuration written to /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/config/.config
+#
+make: Leaving directory '/build/reefy/buildroot'
+cd /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810 && tar cf br-firmware.tar mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin mediatek/WIFI_MT7961_patch_mcu_1_2_hdr.bin mediatek/WIFI_RAM_CODE_MT7922_1.bin mediatek/WIFI_RAM_CODE_MT7961_1.bin mediatek/mt7601u.bin mediatek/mt7610e.bin mediatek/mt7610u.bin mediatek/mt7650e.bin mediatek/mt7662.bin mediatek/mt7662_rom_patch.bin mediatek/mt7663_n9_rebb.bin mediatek/mt7663_n9_v3.bin mediatek/mt7663pr2h.bin mediatek/mt7663pr2h_rebb.bin rt2561.bin rt2561s.bin rt2661.bin rt2860.bin rt2870.bin rt3071.bin rt73.bin rtl_nic/rtl8105e-1.fw rtl_nic/rtl8106e-1.fw rtl_nic/rtl8106e-2.fw rtl_nic/rtl8107e-1.fw rtl_nic/rtl8107e-2.fw rtl_nic/rtl8125a-3.fw rtl_nic/rtl8125b-2.fw rtl_nic/rtl8125d-1.fw rtl_nic/rtl8125d-2.fw rtl_nic/rtl8168d-1.fw rtl_nic/rtl8168d-2.fw rtl_nic/rtl8168e-1.fw rtl_nic/rtl8168e-2.fw rtl_nic/rtl8168e-3.fw rtl_nic/rtl8168f-1.fw rtl_nic/rtl8168f-2.fw rtl_nic/rtl8168fp-3.fw rtl_nic/rtl8168g-2.fw rtl_nic/rtl8168g-3.fw rtl_nic/rtl8168h-1.fw rtl_nic/rtl8168h-2.fw rtl_nic/rtl8402-1.fw rtl_nic/rtl8411-1.fw rtl_nic/rtl8411-2.fw rtlwifi/rtl8188efw.bin rtlwifi/rtl8188eufw.bin rtlwifi/rtl8188fufw.bin rtlwifi/rtl8192cfw.bin rtlwifi/rtl8192cfwU.bin rtlwifi/rtl8192cfwU_B.bin rtlwifi/rtl8192cufw.bin rtlwifi/rtl8192cufw_A.bin rtlwifi/rtl8192cufw_B.bin rtlwifi/rtl8192cufw_TMSC.bin rtlwifi/rtl8192defw.bin rtlwifi/rtl8192eu_ap_wowlan.bin rtlwifi/rtl8192eu_nic.bin rtlwifi/rtl8192eu_wowlan.bin rtlwifi/rtl8192sefw.bin rtlwifi/rtl8712u.bin rtlwifi/rtl8723aufw_A.bin rtlwifi/rtl8723aufw_B.bin rtlwifi/rtl8723aufw_B_NoBT.bin rtlwifi/rtl8723befw.bin rtlwifi/rtl8723bs_bt.bin rtlwifi/rtl8723bu_ap_wowlan.bin rtlwifi/rtl8723bu_nic.bin rtlwifi/rtl8723bu_wowlan.bin rtlwifi/rtl8723fw.bin rtlwifi/rtl8723fw_B.bin rtlwifi/rtl8821aefw.bin rtlwifi/rtl8821aefw_29.bin rtlwifi/rtl8821aefw_wowlan.bin rtlwifi/rtl8822befw.bin rtw88/rtw*.bin rtw89/rtw*.bin
+mkdir -p /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/target/lib/firmware
+tar xf /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810/br-firmware.tar -C /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/target/lib/firmware
+cd /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/target/lib/firmware ; sed -r -e '/^Link: (.+) -> (.+)$/!d; s//\1 \2/' /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810/WHENCE | while read f d; do if test -f $(readlink -m $(dirname "$f")/$d); then mkdir -p $(dirname "$f") || exit 1; ln -sf $d "$f" || exit 1; fi ; done
+Parallel mksquashfs: Using 4 processors
+Creating 4.0 filesystem on /tmp/reefy-wifi-firmware-size/measurement/mediatek_ralink/firmware.squashfs, block size 131072.
+
+Exportable Squashfs 4.0 filesystem, xz compressed, data block size 131072
+	compressed data, compressed metadata, compressed fragments,
+	compressed xattrs, compressed ids
+	duplicates are removed
+Filesystem size 16050.80 Kbytes (15.67 Mbytes)
+	39.52% of uncompressed filesystem size (40614.88 Kbytes)
+Inode table size 1842 bytes (1.80 Kbytes)
+	34.84% of uncompressed inode table size (5287 bytes)
+Directory table size 1054 bytes (1.03 Kbytes)
+	36.70% of uncompressed directory table size (2872 bytes)
+Number of duplicate files found 0
+Number of inodes 122
+Number of files 105
+Number of fragments 15
+Number of symbolic links 9
+Number of device nodes 0
+Number of fifo nodes 0
+Number of socket nodes 0
+Number of directories 8
+Number of hard-links 0
+Number of ids (unique uids + gids) 1
+Number of uids 1
+	root (0)
+Number of gids 1
+	root (0)
+make: Entering directory '/build/reefy/buildroot'
+mkdir -p /tmp/reefy-wifi-firmware-size/measurement/combined/config/build/buildroot-config/lxdialog
+PKG_CONFIG_PATH="" make CC="/usr/bin/gcc" HOSTCC="/usr/bin/gcc" \
+    obj=/tmp/reefy-wifi-firmware-size/measurement/combined/config/build/buildroot-config -C support/kconfig -f Makefile.br conf
+make[1]: Entering directory '/build/reefy/buildroot/support/kconfig'
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/combined/config/build/buildroot-config -DCONFIG_=\"\"  -MM *.c > /tmp/reefy-wifi-firmware-size/measurement/combined/config/build/buildroot-config/.depend 2>/dev/null || :
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/combined/config/build/buildroot-config -DCONFIG_=\"\"   -c conf.c -o /tmp/reefy-wifi-firmware-size/measurement/combined/config/build/buildroot-config/conf.o
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/combined/config/build/buildroot-config -DCONFIG_=\"\"  -I. -c /tmp/reefy-wifi-firmware-size/measurement/combined/config/build/buildroot-config/zconf.tab.c -o /tmp/reefy-wifi-firmware-size/measurement/combined/config/build/buildroot-config/zconf.tab.o
+/usr/bin/gcc -I/usr/include/ncursesw -DCURSES_LOC="<curses.h>"  -DNCURSES_WIDECHAR=1 -DLOCALE  -I/tmp/reefy-wifi-firmware-size/measurement/combined/config/build/buildroot-config -DCONFIG_=\"\"   /tmp/reefy-wifi-firmware-size/measurement/combined/config/build/buildroot-config/conf.o /tmp/reefy-wifi-firmware-size/measurement/combined/config/build/buildroot-config/zconf.tab.o  -o /tmp/reefy-wifi-firmware-size/measurement/combined/config/build/buildroot-config/conf
+rm /tmp/reefy-wifi-firmware-size/measurement/combined/config/build/buildroot-config/zconf.tab.c
+make[1]: Leaving directory '/build/reefy/buildroot/support/kconfig'
+  GEN     /tmp/reefy-wifi-firmware-size/measurement/combined/config/Makefile
+#
+# configuration written to /tmp/reefy-wifi-firmware-size/measurement/combined/config/.config
+#
+make: Leaving directory '/build/reefy/buildroot'
+cd /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810 && tar cf br-firmware.tar ar7010.fw ar7010_1_1.fw ar9170-1.fw ar9170-2.fw ar9271.fw ath10k/QCA6174 ath10k/QCA9377/hw1.0/board-2.bin ath10k/QCA9377/hw1.0/board.bin ath10k/QCA9377/hw1.0/firmware-5.bin ath10k/QCA9377/hw1.0/firmware-6.bin ath10k/QCA9377/hw1.0/firmware-sdio-5.bin ath10k/QCA988X/hw2.0/board.bin ath10k/QCA988X/hw2.0/firmware-4.bin ath10k/QCA988X/hw2.0/firmware-5.bin ath11k/WCN6855/hw2.0 ath6k/AR6002 ath6k/AR6003 ath6k/AR6004 ath9k_htc/htc_7010-1.4.0.fw ath9k_htc/htc_9271-1.4.0.fw brcm/bcm4329-fullmac-4.bin brcm/brcmfmac43143-sdio.bin brcm/brcmfmac43143.bin brcm/brcmfmac43236b.bin brcm/brcmfmac43241b0-sdio.bin brcm/brcmfmac43241b4-sdio.bin brcm/brcmfmac43241b5-sdio.bin brcm/brcmfmac43242a.bin brcm/brcmfmac4329-sdio.bin brcm/brcmfmac4330-sdio.Prowise-PT301.txt brcm/brcmfmac4330-sdio.bin brcm/brcmfmac4334-sdio.bin brcm/brcmfmac43340-sdio.meegopad-t08.txt brcm/brcmfmac43340-sdio.pov-tab-p1006w-data.txt brcm/brcmfmac43340-sdio.predia-basic.txt brcm/brcmfmac4335-sdio.bin brcm/brcmfmac43362-sdio.cubietech,cubietruck.txt brcm/brcmfmac43430-sdio.AP6212.txt brcm/brcmfmac43430-sdio.Hampoo-D2D3_Vi8A1.txt brcm/brcmfmac43430-sdio.MUR1DX.txt brcm/brcmfmac43430-sdio.raspberrypi,3-model-b.txt brcm/brcmfmac43430a0-sdio.bin brcm/brcmfmac43430a0-sdio.ilife-S806.txt brcm/brcmfmac43430a0-sdio.jumper-ezpad-mini3.txt brcm/brcmfmac43455-sdio.raspberrypi,3-model-b-plus.txt brcm/brcmfmac43455-sdio.raspberrypi,4-model-b.txt brcm/brcmfmac4350-pcie.bin brcm/brcmfmac4350c2-pcie.bin brcm/brcmfmac4356-pcie.gpd-win-pocket.txt brcm/brcmfmac4356-sdio.AP6356S.txt brcm/brcmfmac43569.bin brcm/brcmfmac4358-pcie.bin brcm/brcmfmac43602-pcie.ap.bin brcm/brcmfmac43602-pcie.bin brcm/brcmfmac4366b-pcie.bin brcm/brcmfmac4366c-pcie.bin brcm/brcmfmac4371-pcie.bin brcm/brcmfmac4373.bin carl9170-1.fw cypress/cyfmac43012-sdio.bin cypress/cyfmac43012-sdio.clm_blob cypress/cyfmac43340-sdio.bin cypress/cyfmac43362-sdio.bin cypress/cyfmac4339-sdio.bin cypress/cyfmac43430-sdio.bin cypress/cyfmac43430-sdio.clm_blob cypress/cyfmac43455-sdio.bin cypress/cyfmac43455-sdio.clm_blob cypress/cyfmac4354-sdio.bin cypress/cyfmac4354-sdio.clm_blob cypress/cyfmac4356-pcie.bin cypress/cyfmac4356-pcie.clm_blob cypress/cyfmac4356-sdio.bin cypress/cyfmac4356-sdio.clm_blob cypress/cyfmac43570-pcie.bin cypress/cyfmac43570-pcie.clm_blob cypress/cyfmac4373-sdio.bin cypress/cyfmac4373-sdio.clm_blob htc_7010.fw htc_9271.fw intel/iwlwifi/iwlwifi-100-*.ucode intel/iwlwifi/iwlwifi-1000-*.ucode intel/iwlwifi/iwlwifi-105-*.ucode intel/iwlwifi/iwlwifi-135-*.ucode intel/iwlwifi/iwlwifi-2000-*.ucode intel/iwlwifi/iwlwifi-2030-*.ucode intel/iwlwifi/iwlwifi-3160-*.ucode intel/iwlwifi/iwlwifi-3168-*.ucode intel/iwlwifi/iwlwifi-3945-2.ucode intel/iwlwifi/iwlwifi-4965-2.ucode intel/iwlwifi/iwlwifi-5000-5.ucode intel/iwlwifi/iwlwifi-6000g2a-6.ucode intel/iwlwifi/iwlwifi-6000g2b-6.ucode intel/iwlwifi/iwlwifi-7260-*.ucode intel/iwlwifi/iwlwifi-7265-*.ucode intel/iwlwifi/iwlwifi-7265D-*.ucode intel/iwlwifi/iwlwifi-8000C-*.ucode intel/iwlwifi/iwlwifi-8265-*.ucode intel/iwlwifi/iwlwifi-9???-*.ucode intel/iwlwifi/iwlwifi-Qu-*.ucode intel/iwlwifi/iwlwifi-QuZ-*.ucode intel/iwlwifi/iwlwifi-cc-a0-*.ucode intel/iwlwifi/iwlwifi-gl-c0-fm-c0*.{ucode,pnvm} intel/iwlwifi/iwlwifi-so-a0-jf-b0*.ucode intel/iwlwifi/iwlwifi-{so,ty}-a0-gf-a0*.{ucode,pnvm} mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin mediatek/WIFI_MT7961_patch_mcu_1_2_hdr.bin mediatek/WIFI_RAM_CODE_MT7922_1.bin mediatek/WIFI_RAM_CODE_MT7961_1.bin mediatek/mt7601u.bin mediatek/mt7610e.bin mediatek/mt7610u.bin mediatek/mt7650e.bin mediatek/mt7662.bin mediatek/mt7662_rom_patch.bin mediatek/mt7663_n9_rebb.bin mediatek/mt7663_n9_v3.bin mediatek/mt7663pr2h.bin mediatek/mt7663pr2h_rebb.bin rt2561.bin rt2561s.bin rt2661.bin rt2860.bin rt2870.bin rt3071.bin rt73.bin rtl_nic/rtl8105e-1.fw rtl_nic/rtl8106e-1.fw rtl_nic/rtl8106e-2.fw rtl_nic/rtl8107e-1.fw rtl_nic/rtl8107e-2.fw rtl_nic/rtl8125a-3.fw rtl_nic/rtl8125b-2.fw rtl_nic/rtl8125d-1.fw rtl_nic/rtl8125d-2.fw rtl_nic/rtl8168d-1.fw rtl_nic/rtl8168d-2.fw rtl_nic/rtl8168e-1.fw rtl_nic/rtl8168e-2.fw rtl_nic/rtl8168e-3.fw rtl_nic/rtl8168f-1.fw rtl_nic/rtl8168f-2.fw rtl_nic/rtl8168fp-3.fw rtl_nic/rtl8168g-2.fw rtl_nic/rtl8168g-3.fw rtl_nic/rtl8168h-1.fw rtl_nic/rtl8168h-2.fw rtl_nic/rtl8402-1.fw rtl_nic/rtl8411-1.fw rtl_nic/rtl8411-2.fw rtlwifi/rtl8188efw.bin rtlwifi/rtl8188eufw.bin rtlwifi/rtl8188fufw.bin rtlwifi/rtl8192cfw.bin rtlwifi/rtl8192cfwU.bin rtlwifi/rtl8192cfwU_B.bin rtlwifi/rtl8192cufw.bin rtlwifi/rtl8192cufw_A.bin rtlwifi/rtl8192cufw_B.bin rtlwifi/rtl8192cufw_TMSC.bin rtlwifi/rtl8192defw.bin rtlwifi/rtl8192eu_ap_wowlan.bin rtlwifi/rtl8192eu_nic.bin rtlwifi/rtl8192eu_wowlan.bin rtlwifi/rtl8192sefw.bin rtlwifi/rtl8712u.bin rtlwifi/rtl8723aufw_A.bin rtlwifi/rtl8723aufw_B.bin rtlwifi/rtl8723aufw_B_NoBT.bin rtlwifi/rtl8723befw.bin rtlwifi/rtl8723bs_bt.bin rtlwifi/rtl8723bu_ap_wowlan.bin rtlwifi/rtl8723bu_nic.bin rtlwifi/rtl8723bu_wowlan.bin rtlwifi/rtl8723fw.bin rtlwifi/rtl8723fw_B.bin rtlwifi/rtl8821aefw.bin rtlwifi/rtl8821aefw_29.bin rtlwifi/rtl8821aefw_wowlan.bin rtlwifi/rtl8822befw.bin rtw88/rtw*.bin rtw89/rtw*.bin
+mkdir -p /tmp/reefy-wifi-firmware-size/measurement/combined/target/lib/firmware
+tar xf /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810/br-firmware.tar -C /tmp/reefy-wifi-firmware-size/measurement/combined/target/lib/firmware
+cd /tmp/reefy-wifi-firmware-size/measurement/combined/target/lib/firmware ; sed -r -e '/^Link: (.+) -> (.+)$/!d; s//\1 \2/' /tmp/reefy-wifi-firmware-size/measurement/linux-firmware-20260810/WHENCE | while read f d; do if test -f $(readlink -m $(dirname "$f")/$d); then mkdir -p $(dirname "$f") || exit 1; ln -sf $d "$f" || exit 1; fi ; done
+Parallel mksquashfs: Using 4 processors
+Creating 4.0 filesystem on /tmp/reefy-wifi-firmware-size/measurement/combined/firmware.squashfs, block size 131072.
+
+Exportable Squashfs 4.0 filesystem, xz compressed, data block size 131072
+	compressed data, compressed metadata, compressed fragments,
+	compressed xattrs, compressed ids
+	duplicates are removed
+Filesystem size 93130.68 Kbytes (90.95 Mbytes)
+	37.29% of uncompressed filesystem size (249767.15 Kbytes)
+Inode table size 8992 bytes (8.78 Kbytes)
+	28.63% of uncompressed inode table size (31409 bytes)
+Directory table size 4830 bytes (4.72 Kbytes)
+	27.74% of uncompressed directory table size (17409 bytes)
+Number of duplicate files found 7
+Number of inodes 564
+Number of files 349
+Number of fragments 32
+Number of symbolic links 179
+Number of device nodes 0
+Number of fifo nodes 0
+Number of socket nodes 0
+Number of directories 36
+Number of hard-links 0
+Number of ids (unique uids + gids) 1
+Number of uids 1
+	root (0)
+Number of gids 1
+	root (0)
+LINUX_FIRMWARE_FILES=rt2561.bin rt2561s.bin rt2661.bin rt73.bin rt2860.bin rt2870.bin rt3071.bin rtlwifi/rtl8192cfw.bin rtlwifi/rtl8192cfwU.bin rtlwifi/rtl8192cfwU_B.bin rtlwifi/rtl8192cufw.bin rtlwifi/rtl8192defw.bin rtlwifi/rtl8192sefw.bin rtlwifi/rtl8188efw.bin rtlwifi/rtl8188eufw.bin rtlwifi/rtl8188fufw.bin rtlwifi/rtl8192cufw_A.bin rtlwifi/rtl8192cufw_B.bin rtlwifi/rtl8192cufw_TMSC.bin rtlwifi/rtl8192eu_ap_wowlan.bin rtlwifi/rtl8192eu_nic.bin rtlwifi/rtl8192eu_wowlan.bin rtlwifi/rtl8712u.bin rtlwifi/rtl8723fw.bin rtlwifi/rtl8723fw_B.bin rtlwifi/rtl8723befw.bin rtlwifi/rtl8723aufw_A.bin rtlwifi/rtl8723aufw_B.bin rtlwifi/rtl8723aufw_B_NoBT.bin rtlwifi/rtl8723befw.bin rtlwifi/rtl8723bs_bt.bin rtlwifi/rtl8723bu_ap_wowlan.bin rtlwifi/rtl8723bu_nic.bin rtlwifi/rtl8723bu_wowlan.bin rtlwifi/rtl8821aefw.bin rtlwifi/rtl8821aefw_wowlan.bin rtlwifi/rtl8821aefw_29.bin rtlwifi/rtl8822befw.bin rtw88/rtw*.bin rtw89/rtw*.bin ath6k/AR6002 ath6k/AR6003 ath6k/AR6004 ar7010.fw ar7010_1_1.fw htc_7010.fw ath9k_htc/htc_7010-1.4.0.fw ar9170-1.fw ar9170-2.fw carl9170-1.fw ar9271.fw htc_9271.fw ath9k_htc/htc_9271-1.4.0.fw ath10k/QCA9377/hw1.0/board-2.bin ath10k/QCA9377/hw1.0/board.bin ath10k/QCA9377/hw1.0/firmware-5.bin ath10k/QCA9377/hw1.0/firmware-6.bin ath10k/QCA9377/hw1.0/firmware-sdio-5.bin ath10k/QCA988X/hw2.0/board.bin ath10k/QCA988X/hw2.0/firmware-4.bin ath10k/QCA988X/hw2.0/firmware-5.bin mediatek/mt7601u.bin mediatek/mt7610e.bin mediatek/mt7662.bin mediatek/mt7662_rom_patch.bin mediatek/WIFI_MT7961_patch_mcu_1_2_hdr.bin mediatek/WIFI_RAM_CODE_MT7961_1.bin mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin mediatek/WIFI_RAM_CODE_MT7922_1.bin ath10k/QCA6174 intel/iwlwifi/iwlwifi-100-*.ucode intel/iwlwifi/iwlwifi-105-*.ucode intel/iwlwifi/iwlwifi-135-*.ucode intel/iwlwifi/iwlwifi-1000-*.ucode intel/iwlwifi/iwlwifi-2000-*.ucode intel/iwlwifi/iwlwifi-2030-*.ucode intel/iwlwifi/iwlwifi-QuZ-*.ucode intel/iwlwifi/iwlwifi-Qu-*.ucode intel/iwlwifi/iwlwifi-cc-a0-*.ucode intel/iwlwifi/iwlwifi-3160-*.ucode intel/iwlwifi/iwlwifi-3168-*.ucode intel/iwlwifi/iwlwifi-3945-2.ucode intel/iwlwifi/iwlwifi-4965-2.ucode intel/iwlwifi/iwlwifi-5000-5.ucode intel/iwlwifi/iwlwifi-6000g2a-6.ucode intel/iwlwifi/iwlwifi-6000g2b-6.ucode intel/iwlwifi/iwlwifi-7260-*.ucode intel/iwlwifi/iwlwifi-7265-*.ucode intel/iwlwifi/iwlwifi-7265D-*.ucode intel/iwlwifi/iwlwifi-8000C-*.ucode intel/iwlwifi/iwlwifi-8265-*.ucode intel/iwlwifi/iwlwifi-9???-*.ucode intel/iwlwifi/iwlwifi-so-a0-jf-b0*.ucode intel/iwlwifi/iwlwifi-{so,ty}-a0-gf-a0*.{ucode,pnvm} intel/iwlwifi/iwlwifi-gl-c0-fm-c0*.{ucode,pnvm} intel/iwlwifi/iwlwifi-QuZ-*.ucode rtl_nic/rtl8105e-1.fw rtl_nic/rtl8106e-1.fw rtl_nic/rtl8106e-2.fw rtl_nic/rtl8107e-1.fw rtl_nic/rtl8107e-2.fw rtl_nic/rtl8125a-3.fw rtl_nic/rtl8125b-2.fw rtl_nic/rtl8125d-1.fw rtl_nic/rtl8125d-2.fw rtl_nic/rtl8168d-1.fw rtl_nic/rtl8168d-2.fw rtl_nic/rtl8168e-1.fw rtl_nic/rtl8168e-2.fw rtl_nic/rtl8168e-3.fw rtl_nic/rtl8168f-1.fw rtl_nic/rtl8168f-2.fw rtl_nic/rtl8168fp-3.fw rtl_nic/rtl8168g-2.fw rtl_nic/rtl8168g-3.fw rtl_nic/rtl8168h-1.fw rtl_nic/rtl8168h-2.fw rtl_nic/rtl8402-1.fw rtl_nic/rtl8411-1.fw rtl_nic/rtl8411-2.fw brcm/bcm4329-fullmac-4.bin brcm/brcmfmac4329-sdio.bin brcm/brcmfmac4330-sdio.bin brcm/brcmfmac4334-sdio.bin brcm/brcmfmac4335-sdio.bin brcm/brcmfmac4350c2-pcie.bin brcm/brcmfmac4350-pcie.bin brcm/brcmfmac4358-pcie.bin brcm/brcmfmac4371-pcie.bin brcm/brcmfmac4373.bin brcm/brcmfmac4330-sdio.Prowise-PT301.txt brcm/brcmfmac4356-pcie.gpd-win-pocket.txt brcm/brcmfmac4356-sdio.AP6356S.txt brcm/brcmfmac43143.bin brcm/brcmfmac43143-sdio.bin brcm/brcmfmac43236b.bin brcm/brcmfmac43241b0-sdio.bin brcm/brcmfmac43241b4-sdio.bin brcm/brcmfmac43241b5-sdio.bin brcm/brcmfmac43242a.bin brcm/brcmfmac43430a0-sdio.bin brcm/brcmfmac43569.bin brcm/brcmfmac43602-pcie.ap.bin brcm/brcmfmac43602-pcie.bin brcm/brcmfmac43340-sdio.meegopad-t08.txt brcm/brcmfmac43340-sdio.pov-tab-p1006w-data.txt brcm/brcmfmac43340-sdio.predia-basic.txt brcm/brcmfmac43362-sdio.cubietech,cubietruck.txt brcm/brcmfmac43430a0-sdio.ilife-S806.txt brcm/brcmfmac43430a0-sdio.jumper-ezpad-mini3.txt brcm/brcmfmac43430-sdio.AP6212.txt brcm/brcmfmac43430-sdio.Hampoo-D2D3_Vi8A1.txt brcm/brcmfmac43430-sdio.MUR1DX.txt brcm/brcmfmac43430-sdio.raspberrypi,3-model-b.txt brcm/brcmfmac43455-sdio.raspberrypi,3-model-b-plus.txt brcm/brcmfmac43455-sdio.raspberrypi,4-model-b.txt brcm/brcmfmac4366b-pcie.bin brcm/brcmfmac4366c-pcie.bin cypress/cyfmac4339-sdio.bin cypress/cyfmac4354-sdio.bin cypress/cyfmac4354-sdio.clm_blob cypress/cyfmac4356-pcie.bin cypress/cyfmac4356-pcie.clm_blob cypress/cyfmac4356-sdio.bin cypress/cyfmac4356-sdio.clm_blob cypress/cyfmac4373-sdio.bin cypress/cyfmac4373-sdio.clm_blob cypress/cyfmac43012-sdio.bin cypress/cyfmac43012-sdio.clm_blob cypress/cyfmac43340-sdio.bin cypress/cyfmac43362-sdio.bin cypress/cyfmac43430-sdio.bin cypress/cyfmac43430-sdio.clm_blob cypress/cyfmac43455-sdio.bin cypress/cyfmac43455-sdio.clm_blob cypress/cyfmac43570-pcie.bin cypress/cyfmac43570-pcie.clm_blob mediatek/mt7610u.bin mediatek/mt7650e.bin mediatek/mt7663pr2h.bin mediatek/mt7663_n9_v3.bin mediatek/mt7663pr2h_rebb.bin mediatek/mt7663_n9_rebb.bin

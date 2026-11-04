@@ -24,7 +24,7 @@ class ReflashGptTests(unittest.TestCase):
                 raise copy_error
             return subprocess.CompletedProcess(args, 0)
 
-        with mock.patch.object(control.os, 'statvfs', return_value=mock.Mock(f_bavail=1000, f_frsize=4096)), mock.patch.object(control.subprocess, 'run', side_effect=run), mock.patch.object(control, '_boot_gpt_identity', side_effect=identities) as read:
+        with mock.patch('reefy.image_download.normalize'), mock.patch.object(control.os, 'statvfs', return_value=mock.Mock(f_bavail=1000, f_frsize=4096)), mock.patch.object(control.subprocess, 'run', side_effect=run), mock.patch.object(control, '_boot_gpt_identity', side_effect=identities) as read:
             plane._reset_to_bootstrap({'reflash': True, 'image_url': 'https://download.invalid/image'})
         return plane, calls, read
 

@@ -535,5 +535,6 @@ if ! mountpoint -q "${REEFY_MNT}" 2>/dev/null; then
     exit 0
 fi
 
+PYTHONPATH=/usr/lib/reefy python3 -m reefy.boot_slots
 ensure_boot_entries
 exec env PYTHONPATH=/usr/lib/reefy python3 -m reefy.storage_boot
