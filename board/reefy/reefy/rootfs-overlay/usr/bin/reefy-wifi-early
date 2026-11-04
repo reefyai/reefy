@@ -5,6 +5,10 @@
 
 STATE_FILE="/mnt/reefy-data/state/desired-state-v2.json"
 [ -f "$STATE_FILE" ] || STATE_FILE="/mnt/reefy-data/state/desired-state.json"
+# A tested local repair survives reboot until the backend acknowledges it.
+if [ -f /mnt/reefy-data/state/wifi-portal-pending.json ] && PYTHONPATH=/usr/lib/reefy python3 -c 'from reefy.wifi_bootstrap import pending_credentials; raise SystemExit(0 if pending_credentials() else 1)'; then
+    STATE_FILE="/mnt/reefy-data/state/wifi-portal-pending.json"
+fi
 
 if [ ! -f "$STATE_FILE" ]; then
     echo "[wifi-early] No saved desired state, skipping"

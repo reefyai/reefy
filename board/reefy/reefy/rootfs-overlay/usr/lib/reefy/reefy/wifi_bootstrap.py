@@ -1,4 +1,4 @@
-"""Local, RAM-only WiFi setup for devices awaiting adoption."""
+"""Boot-only WiFi setup and recovery using local link and address state."""
 
 import hashlib
 import html
@@ -21,7 +21,141 @@ IDENTITY = Path('/mnt/reefy-data/state/device-uuid')
 NETWORK = Path('/run/systemd/network/10-reefy-wifi-bootstrap.network')
 ADDRESS = '192.168.73.1'
 PAGE = Path('/usr/share/reefy/wifi-setup.html')
-CONNECT_TIMEOUT = 45
+CONNECT_TIMEOUT = 60
+RETRY_INTERVAL = 5 * 60
+CLIENT_FREE_GRACE = 60
+STATE = Path('/mnt/reefy-data/state')
+PENDING_WIFI = STATE / 'wifi-portal-pending.json'
+
+
+def pending_credentials():
+    try:
+        value = json.loads(PENDING_WIFI.read_text())
+        identity = IDENTITY.read_text().strip()
+        if identity and isinstance(value, dict) and value.get('device_uuid') == identity:
+            return validate_credentials(value.get('wifi'))
+    except (OSError, ValueError, TypeError, KeyError):
+        pass
+    return None
+
+
+def acknowledge_credentials(wifi):
+    if pending_credentials() == wifi:
+        PENDING_WIFI.unlink(missing_ok=True)
+
+
+def saved_credentials():
+    pending = pending_credentials()
+    if pending:
+        return pending
+    for name in ('desired-state-v2.json', 'desired-state.json'):
+        try:
+            state = json.loads((STATE / name).read_text())
+            if not isinstance(state, dict):
+                return None
+            host = state.get('host', {}) if state.get('schema_version') == 2 else state
+            return validate_credentials(host.get('wifi', {})) if isinstance(host, dict) else None
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError, TypeError, KeyError):
+            return None
+    return None
+
+
+def usable_address(interface):
+    try:
+        result = command(['ip', '-j', 'addr', 'show', 'dev', interface])
+        return result.returncode == 0 and any(
+            address.get('scope') == 'global'
+            and address.get('local') != ADDRESS
+            and not address.get('tentative', False)
+            and not address.get('dadfailed', False)
+            and address.get('preferred_life_time', 1) != 0
+            for device in json.loads(result.stdout)
+            for address in device.get('addr_info', []))
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+        return False
+
+
+def ap_supported(interface):
+    info = command(['iw', 'dev', interface, 'info'])
+    match = re.search(r'^\s*wiphy (\d+)\s*$', info.stdout, re.MULTILINE)
+    if info.returncode or not match:
+        return False
+    modes = command(['iw', 'phy', 'phy' + match[1], 'info'])
+    return modes.returncode == 0 and bool(re.search(r'^\s*\* AP\s*$', modes.stdout, re.MULTILINE))
+
+
+def ethernet_ready():
+    for device in Path('/sys/class/net').iterdir():
+        try:
+            if ((device / 'wireless').exists() or not (device / 'device').exists()
+                    or (device / 'type').read_text().strip() != '1'):
+                continue
+            if (device / 'carrier').read_text().strip() == '1' and usable_address(device.name):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+class RetryPolicy:
+    def __init__(self, now):
+        self.next_attempt = now + RETRY_INTERVAL
+        self.free_since = None
+
+    def eligible(self, stations, now, activity=False):
+        if stations is None or stations or activity:
+            self.free_since = None
+            return False
+        if self.free_since is None:
+            self.free_since = now
+        return now >= self.next_attempt and now - self.free_since >= CLIENT_FREE_GRACE
+
+    def attempted(self, now):
+        self.next_attempt = now + RETRY_INTERVAL
+        self.free_since = None
+
+
+class StationMonitor:
+    def __init__(self, interface):
+        self.interface = interface
+        self.path = RUNTIME / ('station-' + os.urandom(6).hex())
+        self.socket = None
+
+    def presence(self):
+        activity = False
+        try:
+            if self.socket is None:
+                self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+                self.socket.bind(str(self.path))
+                self.socket.settimeout(1)
+                self.socket.connect(str(RUNTIME / 'hostapd-control' / self.interface))
+                self.socket.send(b'ATTACH')
+                if self.socket.recv(4096).strip() != b'OK':
+                    raise OSError('Station events unavailable')
+                self.socket.setblocking(False)
+                activity = True
+            while True:
+                try:
+                    event = self.socket.recv(4096)
+                    activity |= b'AP-STA-CONNECTED' in event or b'AP-STA-DISCONNECTED' in event
+                except BlockingIOError:
+                    break
+            result = command(['iw', 'dev', self.interface, 'station', 'dump'])
+            if result.returncode:
+                return None, activity
+            return len(re.findall(r'^Station ', result.stdout, re.MULTILINE)), activity
+        except (OSError, subprocess.SubprocessError):
+            self.close()
+            return None, True
+
+    def close(self):
+        if self.socket:
+            self.socket.close()
+            self.socket = None
+        self.path.unlink(missing_ok=True)
+
 
 
 def command(args, **kwargs):
@@ -33,11 +167,21 @@ def private_write(path, value):
     temporary = path.with_suffix('.tmp')
     fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, 'w') as stream:
+        os.fchmod(stream.fileno(), 0o600)
         stream.write(value)
+        stream.flush()
+        os.fsync(stream.fileno())
     os.replace(temporary, path)
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
 
 
 def read_credentials():
+    if IDENTITY.exists():
+        return pending_credentials()
     try:
         value = json.loads(CREDENTIALS.read_text())
         return validate_credentials(value)
@@ -143,40 +287,47 @@ class Setup:
 
     def connected(self):
         link = command(['iw', 'dev', self.interface, 'link'])
-        addresses = command(['ip', '-j', '-4', 'addr', 'show', 'dev', self.interface])
-        routes = command(['ip', '-4', 'route', 'show', 'default', 'dev', self.interface])
-        try:
-            has_address = any(a.get('scope') == 'global' and a.get('local') != ADDRESS
-                              for d in json.loads(addresses.stdout) for a in d.get('addr_info', []))
-        except (ValueError, TypeError):
-            has_address = False
-        return 'Connected to ' in link.stdout and has_address and bool(routes.stdout.strip())
+        return link.returncode == 0 and 'Connected to ' in link.stdout and usable_address(self.interface)
 
     def connect(self, wifi):
-        self.stop_children()
-        self.configure_network(False)
-        # Keep secrets out of argv, journals and persistent storage.
-        ssid = wifi['ssid'].encode('utf-8').hex()
-        password = wifi['password']
-        network = 'network={\nssid=' + ssid + '\nscan_ssid=1\n'
-        if password:
-            psk = password if len(password) == 64 else hashlib.pbkdf2_hmac(
-                'sha1', password.encode('utf-8'), wifi['ssid'].encode('utf-8'), 4096, 32).hex()
-            network += 'psk=' + psk + '\n'
-        else:
-            network += 'key_mgmt=NONE\n'
-        private_write(RUNTIME / 'client.conf', 'ctrl_interface=/run/wpa_supplicant\n' + network + '}\n')
-        process = self.spawn(['wpa_supplicant', '-i', self.interface, '-D', 'nl80211', '-c', str(RUNTIME / 'client.conf')])
-        deadline = time.monotonic() + CONNECT_TIMEOUT
-        while not self.stop.wait(1) and time.monotonic() < deadline:
-            if process.poll() is not None:
-                break
-            if self.connected():
-                private_write(CREDENTIALS, json.dumps(wifi))
-                return True
-        self.stop_children()
-        CREDENTIALS.unlink(missing_ok=True)
-        return False
+        provisioned = IDENTITY.is_file()
+        private_write(RUNTIME / 'connecting', '')
+        try:
+            self.stop_children()
+            command(['systemctl', 'stop', 'wpa_supplicant@' + self.interface])
+            self.configure_network(False)
+            # Keep secrets out of argv, journals and persistent storage.
+            ssid = wifi['ssid'].encode('utf-8').hex()
+            password = wifi['password']
+            network = 'network={\nssid=' + ssid + '\nscan_ssid=1\n'
+            if password:
+                psk = password if len(password) == 64 else hashlib.pbkdf2_hmac(
+                    'sha1', password.encode('utf-8'), wifi['ssid'].encode('utf-8'), 4096, 32).hex()
+                network += 'psk=' + psk + '\n'
+            else:
+                network += 'key_mgmt=NONE\n'
+            private_write(RUNTIME / 'client.conf', 'ctrl_interface=/run/wpa_supplicant\n' + network + '}\n')
+            process = self.spawn(['wpa_supplicant', '-i', self.interface, '-D', 'nl80211', '-c', str(RUNTIME / 'client.conf')])
+            deadline = time.monotonic() + CONNECT_TIMEOUT
+            while not self.stop.wait(1) and time.monotonic() < deadline:
+                if process.poll() is not None or ethernet_ready():
+                    break
+                if self.connected():
+                    if IDENTITY.is_file():
+                        private_write(PENDING_WIFI, json.dumps({
+                            'device_uuid': IDENTITY.read_text().strip(), 'wifi': wifi}))
+                    private_write(CREDENTIALS, json.dumps(wifi))
+                    (RUNTIME / 'connecting').unlink(missing_ok=True)
+                    if provisioned:
+                        # A fresh authenticated status must follow the tested
+                        # repair, even if MQTT connected just before DHCP did.
+                        command(['systemctl', 'try-restart', '--no-block', 'reefy-control'])
+                    return True
+            self.stop_children()
+            # Keep the previously successful credentials when a replacement fails.
+            return False
+        finally:
+            (RUNTIME / 'connecting').unlink(missing_ok=True)
 
     def serve(self):
         setup = self
@@ -257,6 +408,7 @@ class Setup:
         self.configure_network(True)
         private_write(RUNTIME / 'hostapd.conf',
                       'interface=' + self.interface + '\ndriver=nl80211\nssid=' + self.ssid
+                      + '\nctrl_interface=' + str(RUNTIME / 'hostapd-control')
                       + '\nhw_mode=g\nchannel=6\nwpa=0\nap_isolate=1\n')
         private_write(RUNTIME / 'dnsmasq.conf',
                       'interface=' + self.interface + '\nexcept-interface=lo\nbind-interfaces\n'
@@ -278,42 +430,73 @@ class Setup:
             raise RuntimeError('Setup address unavailable')
         self.spawn(['dnsmasq', '--keep-in-foreground', '--conf-file=' + str(RUNTIME / 'dnsmasq.conf')])
         print('[wifi-bootstrap] Setup AP ready', flush=True)
+        monitor = self.monitor = StationMonitor(self.interface)
+        automatic = False
         while not self.stop.is_set():
             if any(p.poll() is not None for p in self.children):
                 raise RuntimeError('Setup AP service stopped')
+            if ethernet_ready():
+                break
             self.server.handle_request()
+            stations, activity = monitor.presence()
+            if self.previous and self.retry.eligible(stations, time.monotonic(), activity):
+                stations, activity = monitor.presence()
+                if self.retry.eligible(stations, time.monotonic(), activity):
+                    automatic = True
+                    self.retry.attempted(time.monotonic())
+                    break
             with self.lock:
                 pending, refresh = self.pending, self.refresh
             if pending or refresh:
                 # Let the browser receive the response before the radio switches.
                 self.stop.wait(2)
                 break
+        monitor.close()
+        self.monitor = None
         self.server.server_close()
         self.server = None
         self.stop_children()
         with self.lock:
-            wifi = self.pending
+            wifi = self.previous if automatic else self.pending
             self.pending, self.refresh = None, False
-        if wifi and not self.stop.is_set():
-            return self.connect(wifi)
+        if wifi and not self.stop.is_set() and not ethernet_ready():
+            self.retry.attempted(time.monotonic())
+            result = self.connect(wifi)
+            if result:
+                self.previous = wifi
+            return result
         return False
 
     def run(self):
         try:
-            previous = read_credentials()
-            connected = bool(previous and self.connect(previous))
+            self.previous = saved_credentials() or read_credentials()
+            self.retry = RetryPolicy(time.monotonic())
+            if ethernet_ready():
+                return
+            connected = bool(IDENTITY.exists() and self.connected())
+            if connected:
+                return
+            if IDENTITY.exists() and self.previous and not connected:
+                connected = self.connect(self.previous)
             while not self.stop.is_set():
+                if not connected and ethernet_ready():
+                    return
                 if connected:
                     self.stop.wait(2)
                 else:
                     connected = self.access_point()
         finally:
+            if getattr(self, 'monitor', None):
+                self.monitor.close()
             if self.server:
                 self.server.server_close()
             self.stop_children()
             NETWORK.unlink(missing_ok=True)
             command(['networkctl', 'reload'])
             command(['networkctl', 'reconfigure', self.interface])
+            config = Path('/etc/wpa_supplicant') / ('wpa_supplicant-' + self.interface + '.conf')
+            if config.is_file():
+                command(['systemctl', 'start', 'wpa_supplicant@' + self.interface])
             # Credentials remain in RAM until successful desired-state handoff
             # or cleanup. A process restart must not destroy an adoption retry.
             for name in ('client.conf', 'hostapd.conf', 'dnsmasq.conf', 'leases'):
@@ -321,17 +504,16 @@ class Setup:
 
 
 def main():
-    if IDENTITY.exists():
+    (RUNTIME / 'connecting').unlink(missing_ok=True)
+    if ethernet_ready():
         return
-    # Allow existing Ethernet and early WiFi DHCP to finish first.
-    for _ in range(15):
-        if command(['ip', '-4', 'route', 'show', 'default']).stdout.strip():
-            return
-        time.sleep(1)
     from reefy.shared import find_wireless_iface
     interface = find_wireless_iface()
     if not interface:
         print('[wifi-bootstrap] No WiFi adapter', flush=True)
+        return
+    if not ap_supported(interface):
+        print('[wifi-bootstrap] WiFi adapter cannot offer setup AP', flush=True)
         return
     setup = Setup(interface)
     signal.signal(signal.SIGTERM, lambda *args: setup.stop.set())

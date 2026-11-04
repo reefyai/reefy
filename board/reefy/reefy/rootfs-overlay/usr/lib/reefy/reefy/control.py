@@ -909,9 +909,10 @@ class ControlPlane:
     def _handle_wifi_bootstrap_credentials(self, payload, cmd_id=None):
         if cmd_id is None:
             return
-        from reefy.wifi_bootstrap import read_credentials
-        response = {'id': cmd_id, 'status': 'success',
-                    'wifi': read_credentials() if self.mode == 'bootstrap' else None}
+        from reefy.wifi_bootstrap import read_credentials, RUNTIME
+        busy = (RUNTIME / 'connecting').exists()
+        response = {'id': cmd_id, 'status': 'error' if busy else 'success',
+                    'wifi': None if busy else read_credentials()}
         topic = f"{self.topic_prefix}/devices/{self.current_uuid}/commands/response"
         self.client.publish(topic, json.dumps(response), qos=1, retain=False)
 
