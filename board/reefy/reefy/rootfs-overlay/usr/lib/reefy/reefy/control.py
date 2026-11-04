@@ -1097,11 +1097,13 @@ class ControlPlane:
             # Check free space
             stat = os.statvfs(data_dir)
             free = stat.f_bavail * stat.f_frsize
-            if expected_size and free < expected_size * 1.1:
+            if expected_size and free < expected_size * 2.1:
                 log('mqtt', f'Not enough space for reflash: {free} free, need {expected_size}')
                 self._publish_stage('error', 'Not enough space for reflash download')
                 return
             download_path = os.path.join(data_dir, 'reefy-reflash.raw')
+            from reefy.image_download import zip_url, normalize
+            image_url = zip_url(image_url)
 
             # Download. `--retry-all-errors` is critical: bare `--retry`
             # ignores mid-stream errors (e.g. TLS bad-record-mac) which
@@ -1114,6 +1116,8 @@ class ControlPlane:
                      '--retry', '5',
                      '--retry-all-errors',
                      '--retry-delay', '5',
+                     '--dump-header', '/run/reefy-reflash-headers',
+                     '--write-out', '{"starttransfer_s":%{time_starttransfer},"total_s":%{time_total},"wire_bytes":%{size_download}}',
                      '-o', download_path, image_url],
                     capture_output=True, text=True, timeout=3600)
             except subprocess.TimeoutExpired:
@@ -1130,6 +1134,26 @@ class ControlPlane:
                     f'Reflash download failed (curl exit '
                     f'{result.returncode})')
                 self._publish_stage('error', 'Reflash download failed')
+                return
+            try:
+                from pathlib import Path
+                receipt = json.loads(result.stdout)
+                request_id = ''
+                for header in Path('/run/reefy-reflash-headers').read_text().splitlines():
+                    if header.lower().startswith('x-amz-cf-id:'):
+                        request_id = header.partition(':')[2].strip()
+                receipt['request_id'] = request_id if re.fullmatch(r'[A-Za-z0-9_=/+-]{1,512}', request_id) else None
+                receipt['wire_bytes'] = os.path.getsize(download_path)
+                with open(download_path, 'rb') as image:
+                    receipt['image_format'] = 'zip' if image.read(4) == b'PK\x03\x04' else 'raw'
+                log('mqtt', 'REEFY_REFLASH_RECEIPT:' + json.dumps(receipt, sort_keys=True))
+            except (OSError, ValueError, TypeError):
+                log('mqtt', 'Reflash download timing unavailable')
+            try:
+                normalize(download_path, expected_size)
+            except Exception as error:
+                log('mqtt', f'Reflash image validation failed ({type(error).__name__})')
+                self._publish_stage('error', 'Reflash image validation failed')
                 return
             if expected_size and os.path.getsize(download_path) != expected_size:
                 log('mqtt', f'Size mismatch: got {os.path.getsize(download_path)}, expected {expected_size}')
