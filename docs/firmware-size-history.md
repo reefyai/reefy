@@ -5,6 +5,172 @@ changing Buildroot, kernel configuration, package selection or packaging.
 Keep exact byte counts and immutable build references so later comparisons
 remain useful after CI artifacts expire. MiB means 1,048,576 bytes.
 
+## Additional Wi-Fi firmware payload
+
+The optimized implementation adds **30,351,360 compressed bytes** (30.35 MB,
+28.95 MiB), measured through the native Buildroot package hooks for both
+target and image destinations. Intel contributes 10,096,640 compressed bytes.
+All 31 selected Intel firmware prefixes and all three PNVM files remain.
+The broad-bundle measurements below are the original comparison baseline.
+
+The package trims only superseded Intel API files, then compresses the
+retained files with XZ CRC32. Other adapter families retain their complete
+selected firmware. A reviewed manifest pins the kernel, firmware release,
+file hashes and Intel driver source hashes. Pin/source changes or missing
+compressed-loader support stop the build for review. Warm installs remove
+only managed Intel names in the target and image trees. The existing package
+cache includes the manifest and helper source in its input fingerprint.
+
+The self-hosted firmware workflow also builds the kernel's unchanged upstream
+`test_firmware` module as a test artifact. It is not installed in Reefy OS.
+The permanent service E2E scenario uses it to exercise actual kernel loading,
+including refusal and preservation cases, on a run-owned QEMU guest.
+
+The expanded Wi-Fi selections add **217,020,188 bytes unpacked** (217.02 MB,
+206.97 MiB) and **80,678,912 bytes compressed** (80.68 MB, 76.94 MiB).
+There are 263 additional regular files. The table measures each family
+relative to the same original selection; compression across the combined
+tree means the individual compressed deltas need not sum exactly.
+
+| Added firmware family | Unpacked bytes | Compressed bytes | Compressed MB |
+| --- | ---: | ---: | ---: |
+| Intel iwlwifi, including legacy adapters | 170,155,740 | 60,420,096 | 60.42 |
+| Atheros/Qualcomm, including AR9271 and WCN6855 | 26,213,944 | 8,744,960 | 8.74 |
+| Broadcom/Cypress FullMAC | 17,757,774 | 9,797,632 | 9.80 |
+| MediaTek/Ralink, including USB-specific files | 2,892,730 | 1,748,992 | 1.75 |
+| **Combined** | **217,020,188** | **80,678,912** | **80.68** |
+
+The original firmware-only filesystem is 14,688,256 bytes compressed; the
+expanded one is 95,367,168 bytes. Both contain the same existing Realtek,
+MediaTek MT7922 and Ethernet firmware. XE GPU firmware is excluded from both
+measurements because `post_build.sh` removes it from the OS into the separate
+Intel provider. Bluetooth firmware and kernel driver selections are unchanged.
+
+### Method and limits
+
+This is a **firmware-payload measurement, not a completed release build**.
+It uses Buildroot's native Kconfig, firmware archive construction, install
+macro and WHENCE symlink handling, followed by SquashFS XZ with 128 KiB
+blocks, matching our rootfs compression settings. It measures the size
+contribution to one rootfs; the exact complete EFI delta can vary with
+filesystem metadata and fragment packing. A raw image containing two EFI
+copies carries the addition twice, while its fixed partitioned file length
+does not grow. ZIP size has not been remeasured for this change.
+
+Provenance:
+
+- Original source: `b8a43402ca98997a21d7f6d078fd1886ec100b4f`.
+- Buildroot: `d6061d653d7fb215c2409c59e4bfad1b9d677215`.
+- Firmware archive: `linux-firmware-20260810.tar.xz`.
+- Archive SHA-256, verified against Buildroot's hash file:
+  `ac17c34fe73756926a961fbafadf8d8f07a3bd2dd2f4ea31a0fb5d50c714a49a`.
+- SquashFS tools: 4.6.1, four compression workers, deterministic timestamps.
+- [Machine-readable sizes, configuration hashes and per-file hashes](measurements/wifi-firmware-size.json).
+- [Native configuration, package-install and compression log](measurements/wifi-firmware-size.log).
+
+All 45 requested additional firmware selections survived Kconfig resolution.
+Every original installed file and symlink was preserved byte-for-byte; the
+installer produced no broken or escaping symlinks. Selected package license
+files exist in the verified source. A separate `printvars` check using the
+complete Buildroot makefiles confirmed that the production package sees all
+six extra MediaTek files from our package override.
+
+The additions cover the previously missing common Intel, Atheros, Broadcom
+FullMAC, MediaTek and Ralink selections. They do not make every wireless chip
+supported. For example, MT7921 USB remains disabled in the kernel, and legacy
+Broadcom b43 firmware is not provided by these linux-firmware selections.
+AP/client capability and physical-adapter qualification remain separate checks.
+
+Repeat on Linux using an existing, matching Buildroot checkout and a verified
+upstream archive. The tool does not download files or build a kernel and
+requires a fresh scratch directory:
+
+```sh
+git show b8a43402ca98997a21d7f6d078fd1886ec100b4f:configs/reefy_defconfig \
+  > /tmp/wifi-baseline-defconfig
+python3 tools/ci/measure-wifi-firmware.py \
+  --buildroot "$BUILDROOT_SOURCE" \
+  --archive "$FIRMWARE_ARCHIVE" \
+  --baseline-defconfig /tmp/wifi-baseline-defconfig \
+  --mksquashfs "$BUILDROOT_OUTPUT/host/bin/mksquashfs" \
+  --scratch /tmp/wifi-firmware-measurement
+```
+
+## Intel firmware size-reduction research
+
+The broad Intel Buildroot selections include historical firmware API versions
+for many kernel generations: 120 regular files (117 ucode images and three
+PNVM calibration files), covering 31 firmware prefixes. For example, the
+AX210 `ty-a0-gf-a0` prefix includes 13 API versions, but our pinned Linux
+v6.18.60 requires API 89. AX200 and AX201 use API 77. Retaining older chip
+families does not require retaining all obsolete APIs for newer chips.
+
+An Intel-only comparison, preserving root-level firmware aliases, measured:
+
+| Experimental packaging | Files | Unpacked/stored bytes before SquashFS | SquashFS bytes | MB |
+| --- | ---: | ---: | ---: | ---: |
+| All selected API versions | 120 | 170,155,740 | 60,416,000 | 60.42 |
+| One kernel-compatible API per prefix, plus PNVM | 34 | 35,627,836 | 13,418,496 | 13.42 |
+| Also retain a second compatible API where available | 39 | 47,770,320 | 17,797,120 | 17.80 |
+| All versions, individually XZ-compressed | 120 | 51,677,584 | 51,683,328 | 51.68 |
+| Kernel-compatible selection, individually XZ-compressed | 34 | 10,085,036 | 10,088,448 | 10.09 |
+| All versions, 1 MiB SquashFS blocks | 120 | 170,155,740 | 55,738,368 | 55.74 |
+
+All options retain the 31 prefixes and all three existing PNVM files. The
+kernel-compatible selection removes 86 superseded ucode files, saving about
+47 MB compressed (78%). Combining pruning with per-file XZ saves about
+50.3 MB (83%). This would bring the total additional Wi-Fi firmware payload
+from approximately 80.7 MB to approximately 30.4 MB. Complete EFI and ZIP
+deltas still require a full build. The Intel-only baseline differs by one
+4 KiB metadata block from the earlier full-payload subtraction.
+
+The lowest-risk first optimization is pruning API versions against the
+exact compiled kernel, without dropping chip families. This must be tied to
+kernel upgrades and fail if an expected firmware prefix has no compatible
+file. Never select the largest filename blindly: this kernel's Wi-Fi 7 loader
+can fall back from core `c99` to API 101, while newer `c101`/`c106` files in
+the archive are outside its supported range. MAC and RF API constraints must
+both be considered.
+
+Per-file compression is a second, independent option. The existing kernel
+enables `CONFIG_FW_LOADER_COMPRESS_XZ` and `CONFIG_FW_LOADER_COMPRESS_ZSTD`.
+The experiment uses standard XZ with CRC32 and preset 6, verifies every file's
+decompressed content, and retains `.xz` aliases for the kernel's compressed
+lookup. The further reduction comes from compressing whole firmware files
+instead of only independent 128 KiB filesystem blocks. Production adoption
+would also need boot/loading checks and integration with both package install
+destinations and the existing package cache.
+
+Downloading firmware on demand would defeat offline Wi-Fi setup. Dropping
+old Intel adapters is unnecessary for the main savings demonstrated here.
+Changing the entire rootfs to 1 MiB blocks affects all boot/read behavior and
+saves less than pruning, so it is not the recommended first change.
+
+These are the initial research results, followed by the implementation above.
+Physical adapter qualification remains separate from kernel-loader testing.
+The compatible-name selection is based on source inspection, not physical
+adapter qualification. Every input file matches the SHA-256 from the original
+verified `linux-firmware-20260810` inventory. The Intel subtree was retrieved
+from the same release tag through the kernel.org Google mirror.
+
+- [Machine-readable comparison and retained API names](measurements/intel-firmware-options.json).
+- [Repeatable experiment](measurements/intel-firmware-research.py).
+- [Exact kernel source URLs and hashes](measurements/intel-kernel-source-provenance.json).
+- [Pinned AX210 API limits](https://github.com/gregkh/linux/blob/v6.18.60/drivers/net/wireless/intel/iwlwifi/cfg/ax210.c).
+- [Pinned AX200 MAC API limits](https://github.com/gregkh/linux/blob/v6.18.60/drivers/net/wireless/intel/iwlwifi/cfg/22000.c).
+- [Firmware request and fallback rules](https://github.com/gregkh/linux/blob/v6.18.60/drivers/net/wireless/intel/iwlwifi/iwl-drv.c).
+
+Repeat on Linux with the saved original inventory and an Intel-only subtree
+archive from `https://kernel.googlesource.com/pub/scm/linux/kernel/git/firmware/linux-firmware/+archive/refs/tags/20260810/intel/iwlwifi.tar.gz`:
+
+```sh
+python3 docs/measurements/intel-firmware-research.py \
+  --inventory docs/measurements/wifi-firmware-size.json \
+  --archive "$INTEL_FIRMWARE_ARCHIVE" \
+  --mksquashfs "$BUILDROOT_OUTPUT/host/bin/mksquashfs" \
+  --scratch /tmp/intel-firmware-measurement
+```
+
 ## Recorded builds
 
 | Firmware version | Buildroot | Source commit | Build |

@@ -1,0 +1,302 @@
+{
+  "kernel": "v6.18.60",
+  "firmware": "20260810",
+  "method": "Intel-only SquashFS XZ trees with root aliases; all input files match the verified earlier inventory; firmware loading not hardware-tested",
+  "input_inventory_sha256": "799db22ed7ccfdd5f4390d2c665ae95fdc1d8808ab3ea2c4ba75ea7bd1ccb937",
+  "subtree_archive_sha256": "a364066afa69910654dcc90d6aad9ce7e66f05f06980e1e4a078a35dabde44a3",
+  "research_script_sha256": "0a5688ad1ac3ef1e2dcbb16d533b4f7603812c13e2cbf74ff4f99e2f23698e5d",
+  "variants": {
+    "all_versions": {
+      "files": 120,
+      "regular_file_bytes": 170155740,
+      "squashfs_bytes": 60416000,
+      "retained_families": 31,
+      "saved_squashfs_bytes": 0
+    },
+    "kernel_selected": {
+      "files": 34,
+      "regular_file_bytes": 35627836,
+      "squashfs_bytes": 13418496,
+      "retained_families": 31,
+      "saved_squashfs_bytes": 46997504
+    },
+    "kernel_selected_with_compatible_fallback": {
+      "files": 39,
+      "regular_file_bytes": 47770320,
+      "squashfs_bytes": 17797120,
+      "retained_families": 31,
+      "saved_squashfs_bytes": 42618880
+    },
+    "all_versions_per_file_xz": {
+      "files": 120,
+      "regular_file_bytes": 51677584,
+      "squashfs_bytes": 51683328,
+      "retained_families": 31,
+      "saved_squashfs_bytes": 8732672
+    },
+    "kernel_selected_per_file_xz": {
+      "files": 34,
+      "regular_file_bytes": 10085036,
+      "squashfs_bytes": 10088448,
+      "retained_families": 31,
+      "saved_squashfs_bytes": 50327552
+    },
+    "all_versions_1m_squashfs_blocks": {
+      "files": 120,
+      "regular_file_bytes": 170155740,
+      "squashfs_bytes": 55738368,
+      "retained_families": 31,
+      "saved_squashfs_bytes": 4677632
+    }
+  },
+  "families": {
+    "iwlwifi-100": {
+      "available_files": 1,
+      "kernel_api_range": [
+        5,
+        5
+      ],
+      "selected_file": "iwlwifi-100-5.ucode"
+    },
+    "iwlwifi-1000": {
+      "available_files": 1,
+      "kernel_api_range": [
+        5,
+        5
+      ],
+      "selected_file": "iwlwifi-1000-5.ucode"
+    },
+    "iwlwifi-105": {
+      "available_files": 1,
+      "kernel_api_range": [
+        6,
+        6
+      ],
+      "selected_file": "iwlwifi-105-6.ucode"
+    },
+    "iwlwifi-135": {
+      "available_files": 1,
+      "kernel_api_range": [
+        6,
+        6
+      ],
+      "selected_file": "iwlwifi-135-6.ucode"
+    },
+    "iwlwifi-2000": {
+      "available_files": 1,
+      "kernel_api_range": [
+        6,
+        6
+      ],
+      "selected_file": "iwlwifi-2000-6.ucode"
+    },
+    "iwlwifi-2030": {
+      "available_files": 1,
+      "kernel_api_range": [
+        6,
+        6
+      ],
+      "selected_file": "iwlwifi-2030-6.ucode"
+    },
+    "iwlwifi-3160": {
+      "available_files": 1,
+      "kernel_api_range": [
+        17,
+        17
+      ],
+      "selected_file": "iwlwifi-3160-17.ucode"
+    },
+    "iwlwifi-3168": {
+      "available_files": 1,
+      "kernel_api_range": [
+        29,
+        29
+      ],
+      "selected_file": "iwlwifi-3168-29.ucode"
+    },
+    "iwlwifi-3945": {
+      "available_files": 1,
+      "kernel_api_range": [
+        2,
+        2
+      ],
+      "selected_file": "iwlwifi-3945-2.ucode"
+    },
+    "iwlwifi-4965": {
+      "available_files": 1,
+      "kernel_api_range": [
+        2,
+        2
+      ],
+      "selected_file": "iwlwifi-4965-2.ucode"
+    },
+    "iwlwifi-5000": {
+      "available_files": 1,
+      "kernel_api_range": [
+        5,
+        5
+      ],
+      "selected_file": "iwlwifi-5000-5.ucode"
+    },
+    "iwlwifi-6000g2a": {
+      "available_files": 1,
+      "kernel_api_range": [
+        6,
+        6
+      ],
+      "selected_file": "iwlwifi-6000g2a-6.ucode"
+    },
+    "iwlwifi-6000g2b": {
+      "available_files": 1,
+      "kernel_api_range": [
+        6,
+        6
+      ],
+      "selected_file": "iwlwifi-6000g2b-6.ucode"
+    },
+    "iwlwifi-7260": {
+      "available_files": 1,
+      "kernel_api_range": [
+        17,
+        17
+      ],
+      "selected_file": "iwlwifi-7260-17.ucode"
+    },
+    "iwlwifi-7265": {
+      "available_files": 1,
+      "kernel_api_range": [
+        17,
+        17
+      ],
+      "selected_file": "iwlwifi-7265-17.ucode"
+    },
+    "iwlwifi-7265D": {
+      "available_files": 1,
+      "kernel_api_range": [
+        29,
+        29
+      ],
+      "selected_file": "iwlwifi-7265D-29.ucode"
+    },
+    "iwlwifi-8000C": {
+      "available_files": 2,
+      "kernel_api_range": [
+        22,
+        36
+      ],
+      "selected_file": "iwlwifi-8000C-36.ucode"
+    },
+    "iwlwifi-8265": {
+      "available_files": 2,
+      "kernel_api_range": [
+        22,
+        36
+      ],
+      "selected_file": "iwlwifi-8265-36.ucode"
+    },
+    "iwlwifi-9000-pu-b0-jf-b0": {
+      "available_files": 3,
+      "kernel_api_range": [
+        30,
+        46
+      ],
+      "selected_file": "iwlwifi-9000-pu-b0-jf-b0-46.ucode"
+    },
+    "iwlwifi-9260-th-b0-jf-b0": {
+      "available_files": 3,
+      "kernel_api_range": [
+        30,
+        46
+      ],
+      "selected_file": "iwlwifi-9260-th-b0-jf-b0-46.ucode"
+    },
+    "iwlwifi-Qu-b0-hr-b0": {
+      "available_files": 7,
+      "kernel_api_range": [
+        77,
+        77
+      ],
+      "selected_file": "iwlwifi-Qu-b0-hr-b0-77.ucode"
+    },
+    "iwlwifi-Qu-b0-jf-b0": {
+      "available_files": 7,
+      "kernel_api_range": [
+        77,
+        77
+      ],
+      "selected_file": "iwlwifi-Qu-b0-jf-b0-77.ucode"
+    },
+    "iwlwifi-Qu-c0-hr-b0": {
+      "available_files": 7,
+      "kernel_api_range": [
+        77,
+        77
+      ],
+      "selected_file": "iwlwifi-Qu-c0-hr-b0-77.ucode"
+    },
+    "iwlwifi-Qu-c0-jf-b0": {
+      "available_files": 7,
+      "kernel_api_range": [
+        77,
+        77
+      ],
+      "selected_file": "iwlwifi-Qu-c0-jf-b0-77.ucode"
+    },
+    "iwlwifi-QuZ-a0-hr-b0": {
+      "available_files": 7,
+      "kernel_api_range": [
+        77,
+        77
+      ],
+      "selected_file": "iwlwifi-QuZ-a0-hr-b0-77.ucode"
+    },
+    "iwlwifi-QuZ-a0-jf-b0": {
+      "available_files": 7,
+      "kernel_api_range": [
+        77,
+        77
+      ],
+      "selected_file": "iwlwifi-QuZ-a0-jf-b0-77.ucode"
+    },
+    "iwlwifi-cc-a0": {
+      "available_files": 7,
+      "kernel_api_range": [
+        77,
+        77
+      ],
+      "selected_file": "iwlwifi-cc-a0-77.ucode"
+    },
+    "iwlwifi-gl-c0-fm-c0": {
+      "available_files": 14,
+      "kernel_api_range": [
+        100,
+        101
+      ],
+      "selected_file": "iwlwifi-gl-c0-fm-c0-101.ucode"
+    },
+    "iwlwifi-so-a0-gf-a0": {
+      "available_files": 11,
+      "kernel_api_range": [
+        89,
+        89
+      ],
+      "selected_file": "iwlwifi-so-a0-gf-a0-89.ucode"
+    },
+    "iwlwifi-so-a0-jf-b0": {
+      "available_files": 4,
+      "kernel_api_range": [
+        77,
+        77
+      ],
+      "selected_file": "iwlwifi-so-a0-jf-b0-77.ucode"
+    },
+    "iwlwifi-ty-a0-gf-a0": {
+      "available_files": 13,
+      "kernel_api_range": [
+        89,
+        89
+      ],
+      "selected_file": "iwlwifi-ty-a0-gf-a0-89.ucode"
+    }
+  }
+}
