@@ -21,6 +21,7 @@
 # code after a successful operation.
 set -e
 (set +o pipefail) 2>/dev/null || true
+. /usr/lib/reefy/boot-slot-state.sh
 
 REEFY_MNT="/mnt/reefy"
 
@@ -312,10 +313,7 @@ cmd_status() {
 cmd_confirm() {
     # Commit current boot slot as default.
     # Called by reefy-boot-confirm after health checks pass.
-    CURRENT=$(efibootmgr 2>/dev/null | grep '^BootCurrent:' | awk '{print $2}')
-    DEFAULT=$(efibootmgr 2>/dev/null | grep '^BootOrder:' | awk '{print $2}' | cut -d, -f1)
-
-    if [ "$CURRENT" = "$DEFAULT" ]; then
+    if mounted_slot_is_default; then
         echo "[reefy-efi] Already default slot, nothing to confirm"
         exit 0
     fi
@@ -363,6 +361,7 @@ cmd_update() {
     flock -n 9 || die "Another update is already running"
 
     resolve_slots
+    PYTHONPATH=/usr/lib/reefy python3 -m reefy.boot_slots --check-fit "$EFI_FILE" "$INACTIVE_DEV"
     # Fix all EFI entries first (idempotent, self-healing)
     fix_entries
 

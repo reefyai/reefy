@@ -1,20 +1,16 @@
 #!/bin/sh
 # reefy-boot-confirm: Confirm A/B boot slot after firmware update.
-# No marker files — all state derived from EFI variables.
-#
-# If BootCurrent == BootOrder[0]: normal boot, nothing to do.
-# If BootCurrent != BootOrder[0]: we booted via BootNext into new slot.
-#   Wait for system health, then commit (make new slot the default).
+# Compare the mounted partition with the default entry's GUID. BootCurrent
+# can be stale after entry repair deletes and reallocates its number.
+. /usr/lib/reefy/boot-slot-state.sh
 
-CURRENT=$(efibootmgr 2>/dev/null | grep '^BootCurrent:' | awk '{print $2}')
-DEFAULT=$(efibootmgr 2>/dev/null | grep '^BootOrder:' | awk '{print $2}' | cut -d, -f1)
-
-# Normal boot — current slot is already the default
-if [ "$CURRENT" = "$DEFAULT" ]; then
+# Storage can still replace/reorder EFI entries after mounting A. Its completed
+# state, rather than an early matching entry, establishes a stable default.
+if [ "$(systemctl show -p ActiveState --value reefy-storage.service)" = active ] && mounted_slot_is_default; then
     exit 0
 fi
 
-echo "[boot-confirm] Booted from non-default slot Boot${CURRENT} (default: Boot${DEFAULT}), confirming..."
+echo "[boot-confirm] Mounted slot is not confirmed as default, checking system health..."
 
 # Wait for critical services to be active (up to 300s outside storage work).
 # For each service: if it has failed, abort immediately (don't confirm the slot).
@@ -58,7 +54,7 @@ if [ "$ALL_OK" != true ]; then
 fi
 
 # All checks passed — commit the new slot as default
-reefy-efi confirm
+reefy-efi confirm || exit 1
 
 # Stop the watchdog — boot is confirmed
 systemctl stop reefy-boot-watchdog.service 2>/dev/null || true
