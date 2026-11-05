@@ -16,7 +16,8 @@ import urllib.request
 FAILURE_THRESHOLD = 3
 COOLDOWN_SECONDS = 300
 PROBE_TIMEOUT_SECONDS = 3
-RESTART_TIMEOUT_SECONDS = 15
+# The Docker stop grace excludes daemon cleanup and container startup.
+RESTART_TIMEOUT_SECONDS = 30
 STATE_DIR = '/run/reefy-watchdog'
 COMPOSE_PROJECTS = ('reefy-system', 'state')
 
