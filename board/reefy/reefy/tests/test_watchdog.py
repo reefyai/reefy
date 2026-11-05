@@ -1,7 +1,12 @@
 """Unit tests for infrastructure liveness checks and recovery."""
 
+import configparser
+import contextlib
 import io
 import os
+from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import types
 import unittest
@@ -147,6 +152,84 @@ class ContainerDiscoveryTests(unittest.TestCase):
 
         self.assertIsNone(watchdog.find_container('reefy-proxy'))
         self.assertEqual(run.call_count, len(watchdog.COMPOSE_PROJECTS))
+
+
+class RestartCompletionTests(unittest.TestCase):
+    def test_restart_ack_after_stop_grace_completes_and_preserves_data(self):
+        # Exercise the actual subprocess deadline. Docker's stop grace does
+        # not include all daemon cleanup, reaping and container startup work.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = root / 'state'
+            state.mkdir()
+            (state / 'reefy-proxy-failures').write_text('2')
+            preserved = root / 'synthetic-persistent-data'
+            preserved.write_bytes(b'preserve unrelated application data')
+            docker = root / 'docker'
+            docker.write_text(
+                '#!' + sys.executable + '\n'
+                'import sys,time\n'
+                'assert sys.argv[1:3] == ["restart", "--time"]\n'
+                'time.sleep(16)\n'
+                'print("synthetic-container")\n')
+            docker.chmod(0o700)
+            output = io.StringIO()
+            with mock.patch.dict(os.environ, {
+                    'PATH': directory + os.pathsep + os.environ.get('PATH', '')}), \
+                    mock.patch.object(watchdog, 'find_container',
+                                      return_value='synthetic-container'), \
+                    mock.patch.object(watchdog, 'probe', return_value=False), \
+                    contextlib.redirect_stdout(output):
+                self.assertFalse(watchdog.check_service(
+                    PROXY_CHECK, str(state), now=100))
+            self.assertIn('reefy-proxy: restart completed', output.getvalue())
+            self.assertNotIn('restart failed', output.getvalue())
+            self.assertFalse((state / 'reefy-proxy-failures').exists())
+            self.assertEqual((state / 'reefy-proxy-cooldown').read_text(), '400')
+            self.assertEqual(preserved.read_bytes(),
+                             b'preserve unrelated application data')
+
+    def test_failed_restart_does_not_claim_recovery_or_change_data(self):
+        outcomes = (
+            types.SimpleNamespace(returncode=1),
+            OSError('synthetic execution failure'),
+            subprocess.TimeoutExpired('synthetic-docker', 30),
+        )
+        for outcome in outcomes:
+            with self.subTest(outcome=type(outcome).__name__), \
+                    tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / 'reefy-proxy-failures').write_text('2')
+                preserved = root / 'synthetic-persistent-data'
+                preserved.write_bytes(b'preserve unrelated application data')
+                output = io.StringIO()
+                options = ({'side_effect': outcome}
+                           if isinstance(outcome, BaseException)
+                           else {'return_value': outcome})
+                with mock.patch.object(watchdog, 'find_container',
+                                       return_value='synthetic-container'), \
+                        mock.patch.object(watchdog, 'probe', return_value=False), \
+                        mock.patch.object(watchdog.subprocess, 'run', **options), \
+                        contextlib.redirect_stdout(output):
+                    self.assertFalse(watchdog.check_service(
+                        PROXY_CHECK, directory, now=100))
+                self.assertIn('restart failed or timed out', output.getvalue())
+                self.assertNotIn('restart completed', output.getvalue())
+                self.assertEqual((root / 'reefy-proxy-failures').read_text(), '3')
+                self.assertEqual((root / 'reefy-proxy-cooldown').read_text(), '400')
+                self.assertEqual(preserved.read_bytes(),
+                                 b'preserve unrelated application data')
+
+    def test_oneshot_budget_contains_both_bounded_service_checks(self):
+        service = Path(watchdog.__file__).parents[2] / 'systemd/system/reefy-watchdog.service'
+        config = configparser.ConfigParser()
+        config.read(service)
+        budget = int(config['Service']['TimeoutStartSec'].removesuffix('s'))
+        # Each existing project lookup has a five-second subprocess bound.
+        per_service = (len(watchdog.COMPOSE_PROJECTS) * 5
+                       + watchdog.PROBE_TIMEOUT_SECONDS
+                       + watchdog.RESTART_TIMEOUT_SECONDS)
+        self.assertGreater(budget, len(watchdog.CHECKS) * per_service)
 
 
 if __name__ == '__main__':
