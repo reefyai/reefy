@@ -17,18 +17,16 @@ mounted from the host. Updating host firmware does not update their bundles.
 
 ## Fix
 
-Pin Buildroot to stable maintenance commit
-`d6061d653d7fb215c2409c59e4bfad1b9d677215` from `2026.08.x`.
-This advances the original 2026.08 release by 274 maintenance commits,
-including Go 1.27.2, OpenSSL fixes and the switch from c_rehash to openssl
-rehash. This is a broader maintenance update, requiring a fresh firmware
-build and lifecycle validation. It does not track a moving branch or master.
+Pin Buildroot to the upstream `2026.08.1` release,
+`7fdeadb3b9f12f78e5fccca914d7fef47090ab9a`. This advances the previous
+maintenance pin `d6061d653d7fb215c2409c59e4bfad1b9d677215` to a tagged
+release within the same stable series. It requires a fresh firmware build
+and lifecycle validation; it does not track a moving branch or master.
 
-Keep ca-certificates 20260223 with its original source checksum. Backport
-the verbatim Buildroot-submitted `0002-remove-eMudhra-parents.patch`,
-which blacklists "emSign ECC Root CA - G3" and "Comodo AAA Services root".
-Buildroot applies this data-only patch through BR2_GLOBAL_PATCH_DIR.
-All unrelated root certificates must remain byte-for-byte identical.
+Upstream ca-certificates `20260816+nmu1` already blacklists
+"emSign ECC Root CA - G3" and "Comodo AAA Services root". The old local
+blacklist patch is retired because it no longer applies. Warm-install cleanup
+and the actual TLS refusal/preservation regressions remain in place.
 
 Before configuring Buildroot, run `python3 tools/ci/prepare-buildroot.py`.
 It verifies the maintenance revision and patch checksum, then applies the
@@ -44,8 +42,8 @@ the custom installation-link hook. Go now uses upstream's standard
 `host/lib/go` installation and `host/bin/go` entrypoint. There are no local
 patches to Go compiler, standard-library or TLS source.
 
-CI uses a new output directory for this maintenance update so the 274-commit
-advance is validated without stale installed packages. Downloads and ccache
+CI uses a new output directory for the tagged maintenance update so it is
+validated without stale installed packages. Downloads and ccache
 remain reusable. No device update or production deployment is part of this PR.
 
 CI always refreshes the small CA package so an existing .stamp_patched cannot
@@ -67,15 +65,13 @@ preserves ordinary warm-cache reuse after a verified successful build.
 
 ## Bundled Python CA data
 
-The stable pin includes certifi 2026.4.22, whose independent bundle still
-trusts emSign ECC Root CA - G3. Backport only `certifi/cacert.pem` from the
-official certifi commits `5cb238caeeb6c30ec1a7309ad3e16a5aa7b10ce8` and
-`662df63d7906df66f1f07c0751a3dfe9da14d914`. The first removes emSign roots;
-the second restores the three unaffected roots. These upstream data hunks
-apply without fuzz to the pinned package. Their net effect removes one root
-and preserves all 119 other certificate bodies byte-for-byte. The Python
-code and package version remain unchanged. Refresh target and host certifi
-packages so cached patch/install stamps cannot bypass the backport.
+The stable release includes certifi `2026.10.18`, which already removes the
+compromised root. Retire the duplicate removal patch and retain upstream
+restoration commit `662df63d7906df66f1f07c0751a3dfe9da14d914` for the unaffected
+emSign roots. The restoration patch applies directly to the new package.
+Refresh target and host certifi packages so cached patch/install stamps cannot
+bypass the selected upstream data. Python pip and ensurepip retain their
+independent CA-data remediation below.
 
 The companion source-package regression verifies the original certifi tarball
 SHA-256 `8d455352a37b71bf76a79caa83a3d6c25afee4a385d632127b6afb3963f1c580`.
