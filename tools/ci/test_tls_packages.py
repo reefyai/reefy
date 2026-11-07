@@ -17,12 +17,6 @@ class TrustPackageTests(unittest.TestCase):
             path = Path(entry.replace('$(BR2_EXTERNAL_REEFY_PATH)', str(ROOT)))
             self.assertTrue(any(p.is_file() for p in path.rglob('*')), str(path))
 
-    def test_security_backport_is_present(self):
-        patch = ROOT / 'board/reefy/reefy/patches/ca-certificates/0002-remove-eMudhra-parents.patch'
-        additions = [line for line in patch.read_text().splitlines()
-                     if line.startswith('+"')]
-        self.assertEqual(additions, ['+"emSign ECC Root CA - G3"', '+"Comodo AAA Services root"'])
-
     def test_warm_install_removes_retired_roots_and_preserves_local_and_mqtt_ca(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

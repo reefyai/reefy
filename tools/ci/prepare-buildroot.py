@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 import subprocess
 
-REVISION = 'd6061d653d7fb215c2409c59e4bfad1b9d677215'
+REVISION = '7fdeadb3b9f12f78e5fccca914d7fef47090ab9a'
 PATCH_SHA256 = 'bf8c43c4dd774807071272ff1301c20bcf00f0e4653c5ac6efa9264a2c00547a'
 
 

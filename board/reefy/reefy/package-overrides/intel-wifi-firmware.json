@@ -1,5 +1,5 @@
 {
-  "kernel_ref": "v6.18.60",
+  "kernel_ref": "v6.18.62",
   "firmware_version": "20260810",
   "kernel_sources": {
     "drivers/net/wireless/intel/iwlegacy/3945.c": "f80c0e844ae4e1fe73b878a94e96b78fd613186ee27d80a14714f632b9df692f",
@@ -21,11 +21,11 @@
     "drivers/net/wireless/intel/iwlwifi/cfg/rf-hr.c": "18dbfac5a1efc0937fad1f21b5333261c0660d09034c44f899d34a0e47917107",
     "drivers/net/wireless/intel/iwlwifi/cfg/rf-jf.c": "3d15a92ae3d56421ff60a4dae2fdb478681de5b799be94af08e318e4a6c77552",
     "drivers/net/wireless/intel/iwlwifi/fw/file.h": "728642ebef07b59fd63f42ff1e1432bb5be63c6c1a66791639b09e3f894946e5",
-    "drivers/net/wireless/intel/iwlwifi/fw/pnvm.c": "8e8900791aa1dc997112e537f34eb7e67cc22704ec91da57299d3ebc4465a12d",
+    "drivers/net/wireless/intel/iwlwifi/fw/pnvm.c": "cd413672417979d3e152b89de4f2c08822ab7f5d9c925765094972c1673ff9b5",
     "drivers/net/wireless/intel/iwlwifi/iwl-config.h": "cd347e454fffb89787c4feacbf20ea66e0603d206fc13fdf88d4065075bc687b",
     "drivers/net/wireless/intel/iwlwifi/iwl-drv.c": "d27fedc6531c783bc3d738f30842bb74f449a10b37d6ac8574f6cc43a2d210d1",
     "drivers/net/wireless/intel/iwlwifi/iwl-nvm-parse.c": "ec0a6506b53d0a61cc8c60ca7cb023a42cfc89474a17a5e57935f5c88c93b3ee",
-    "drivers/net/wireless/intel/iwlwifi/pcie/drv.c": "8d19956212851ee02382c8c3d8a40a99dc1a0aa3ff5d43b965a60686ca120bea"
+    "drivers/net/wireless/intel/iwlwifi/pcie/drv.c": "403c92eb4d42e7d5a57a18f23423822fbf5e3d636e217b6da0c5fd470d16ac3f"
   },
   "files": {
     "intel/iwlwifi/iwlwifi-100-5.ucode": "cba50730d97bf3bebfc8b66c47f2eb20d1a26472beccbc47171d1ff01586f240",
