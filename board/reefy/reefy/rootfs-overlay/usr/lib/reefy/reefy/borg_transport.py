@@ -4,6 +4,7 @@ import subprocess
 import time
 
 ATTEMPTS = 3
+LOCK_WAIT_S = 120
 FATAL = ('permission denied', 'invalid passphrase', 'wrong passphrase',
          'data integrity error', 'not a valid repository',
          'repository does not exist', 'quota exceeded', 'no space left')
@@ -14,6 +15,13 @@ def retryable(stderr):
     return (not any(word in text for word in FATAL)
             and any(word in text for word in (
                 'connection closed by remote host', 'connection reset by peer')))
+
+
+def _with_lock_wait(command, remaining):
+    # Borg 1.x otherwise fails a contended repository/cache lock after one
+    # second. Use its supported option within the existing operation budget.
+    wait_s = min(LOCK_WAIT_S, max(1, int(remaining)))
+    return [command[0], '--lock-wait', str(wait_s), *command[1:]]
 
 
 def list_archive(archive, env, emit, timeout_s=120):
@@ -27,7 +35,8 @@ def list_archive(archive, env, emit, timeout_s=120):
             if result is None:
                 raise subprocess.TimeoutExpired(['borg', 'list'], timeout_s)
             return result
-        result = subprocess.run(['borg', 'list', '--short', archive], env=env,
+        command = _with_lock_wait(['borg', 'list', '--short', archive], remaining)
+        result = subprocess.run(command, env=env,
                                 capture_output=True, text=True, timeout=remaining)
         delay = 2 * attempt
         if (result.returncode == 0 or not retryable(result.stderr or '')
@@ -47,7 +56,10 @@ def extract_archive(command, env, directory, emit, timeout_s=6 * 3600):
         raise ValueError('Borg timeout must be positive')
     deadline = time.monotonic() + timeout_s
     for attempt in range(1, ATTEMPTS + 1):
-        process = subprocess.Popen(command, env=env, cwd=directory,
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(command, timeout_s)
+        process = subprocess.Popen(_with_lock_wait(command, remaining), env=env, cwd=directory,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         last_progress = float('-inf')
         error_tail = ''

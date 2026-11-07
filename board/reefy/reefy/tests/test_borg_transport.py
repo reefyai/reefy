@@ -10,6 +10,34 @@ CLOSED = 'Connection closed by remote host. Is borg working on the server?'
 
 
 class TransportTests(unittest.TestCase):
+    def test_archive_lock_wait_fits_the_existing_remaining_budget(self):
+        success = SimpleNamespace(returncode=0, stdout='synthetic/file\n', stderr='')
+        with patch.object(transport.subprocess, 'run', return_value=success) as run, \
+                patch.object(transport.time, 'monotonic', side_effect=[10, 10.2]):
+            transport.list_archive('repo.invalid::synthetic', {}, lambda _: None, timeout_s=4)
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index('--lock-wait') + 1], '3')
+        self.assertAlmostEqual(run.call_args.kwargs['timeout'], 3.8)
+
+    def test_extract_waits_for_locks_without_mutating_the_callers_command(self):
+        command = ['borg', '--log-json', 'extract', '--progress', 'repo.invalid::synthetic']
+        original = command.copy()
+        success = SimpleNamespace(stderr=io.BytesIO(b''), returncode=0, wait=lambda: None)
+        with patch.object(transport.subprocess, 'Popen', return_value=success) as start, \
+                patch.object(transport.time, 'monotonic', side_effect=[0, .2]):
+            self.assertEqual(transport.extract_archive(command, {}, '/synthetic', lambda _: None), 0)
+        actual = start.call_args.args[0]
+        self.assertEqual(actual[actual.index('--lock-wait') + 1], '120')
+        self.assertEqual(command, original)
+
+    def test_extract_never_starts_a_new_process_after_its_budget(self):
+        with patch.object(transport.subprocess, 'Popen') as start, \
+                patch.object(transport.time, 'monotonic', side_effect=[0, 2]):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                transport.extract_archive(['borg', 'extract', 'synthetic'], {},
+                                          '/synthetic', lambda _: None, timeout_s=1)
+        start.assert_not_called()
+
     def test_auth_and_integrity_errors_remain_fatal(self):
         for error in ('Permission denied', 'Invalid passphrase', 'Data integrity error',
                       'Repository does not exist', 'Quota exceeded'):
@@ -62,7 +90,7 @@ class TransportTests(unittest.TestCase):
     def test_extract_retry_does_not_reset_total_time_budget(self):
         proc = SimpleNamespace(stderr=io.BytesIO(CLOSED.encode()), returncode=2, wait=lambda: None)
         with patch.object(transport.subprocess, 'Popen', return_value=proc) as start, \
-                patch.object(transport.time, 'monotonic', side_effect=[0, .5, 1]), \
+                patch.object(transport.time, 'monotonic', side_effect=[0, .1, .5, 1]), \
                 patch.object(transport.time, 'sleep') as sleep:
             self.assertEqual(transport.extract_archive(['borg', 'extract'], {}, '/synthetic', lambda _: None, timeout_s=1), 2)
         self.assertEqual(start.call_count, 1)
