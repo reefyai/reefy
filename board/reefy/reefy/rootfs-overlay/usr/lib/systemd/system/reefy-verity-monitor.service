@@ -1,0 +1,17 @@
+[Unit]
+Description=Reefy verified root integrity recovery
+DefaultDependencies=no
+After=systemd-remount-fs.service
+Before=sysinit.target reefy-storage.service shutdown.target
+Conflicts=shutdown.target
+ConditionPathExists=/run/reefy-verity/runtime/verity-monitor.sh
+
+[Service]
+Type=simple
+ExecStart=/run/reefy-verity/runtime/bin/busybox chroot /run/reefy-verity/runtime /bin/busybox sh /verity-monitor.sh
+Restart=always
+RestartSec=1
+OOMScoreAdjust=-1000
+
+[Install]
+WantedBy=sysinit.target

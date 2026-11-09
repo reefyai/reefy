@@ -1,4 +1,7 @@
 #!/bin/busybox sh
+set -eu
+# Every unexpected early failure takes the same fail-closed recovery path.
+trap 'exec /bin/busybox sh /verity-recover.sh' EXIT
 
 # Do initial environment preparation
 /bin/busybox --install
@@ -17,10 +20,42 @@ mount -t proc none /proc
 mount -t sysfs none /sys
 exec </dev/console >/dev/console 2>&1
 
+mkdir -p /run
+mount -t tmpfs -o mode=0755,nosuid,nodev tmpfs /run
+. /verity-init.sh
+verity_activate || exec /bin/busybox sh /verity-recover.sh
+mount -t squashfs -o ro /dev/mapper/reefy-root /lower || \
+    exec /bin/busybox sh /verity-recover.sh
+
+# Retain a visible read-only view of the verified lower mount after switch_root.
+# This also makes the effective root mapping inspectable without hidden mounts.
+mkdir -p /run/reefy-verity/lower
+mount --bind /lower /run/reefy-verity/lower || \
+    exec /bin/busybox sh /verity-recover.sh
+
+# Keep the recovery executable and its libraries independent of verified root
+# reads after switch_root. The payload itself stays pinned by the loop device.
+runtime=/run/reefy-verity/runtime
+mkdir -p "$runtime" "$runtime/dev" "$runtime/proc" "$runtime/sys"
+for directory in bin sbin lib lib64 usr; do
+    [ ! -d "/$directory" ] || cp -a "/$directory" "$runtime/"
+done
+cp /verity-recover.sh /verity-monitor.sh /verity-boot-guid.sh "$runtime/"
+# systemd-stub records the UKI's ESP even when BootCurrent is a firmware
+# whole-disk fallback entry. Read this before later entry repair can renumber it.
+mkdir -p /sys/firmware/efi/efivars
+mountpoint -q /sys/firmware/efi/efivars || \
+    mount -t efivarfs -o ro efivarfs /sys/firmware/efi/efivars || true
+. /verity-boot-guid.sh
+guid=$(verity_boot_guid) || guid=''
+printf '%s\n' "$guid" > "$runtime/boot-guid"
+for fs in dev proc sys; do
+    mount --bind "/$fs" "$runtime/$fs" || exec /bin/busybox sh /verity-recover.sh
+done
+
 case " $(cat /proc/cmdline) " in
 *" reefy.initramfs_shell=1 "*)
     echo "[reefy] reefy.initramfs_shell=1: starting pre-root shell" > /dev/kmsg
-    mount -t squashfs /rootfs.squashfs /lower 2>/dev/null || true
     echo
     echo "Reefy initramfs debug shell"
     echo "Squashfs root is mounted at /lower."
@@ -32,10 +67,10 @@ case " $(cat /proc/cmdline) " in
     ;;
 esac
 
-echo "[reefy] Mounting squashfs root filesystem ..." > /dev/kmsg
-mountpoint -q /lower 2>/dev/null || mount -t squashfs /rootfs.squashfs /lower
-
-mount -t overlay -o rw,lowerdir=/lower,upperdir=/upper,workdir=/work overlay /rootfs/
+mount -t overlay -o rw,lowerdir=/lower,upperdir=/upper,workdir=/work overlay /rootfs/ || \
+    exec /bin/busybox sh /verity-recover.sh
+mkdir -p /rootfs/run
+mount --move /run /rootfs/run || exec /bin/busybox sh /verity-recover.sh
 
 echo "[reefy] Switching to squashfs root filesystem ..." > /dev/kmsg
 exec switch_root /rootfs /sbin/init

@@ -191,8 +191,9 @@ If the new system cannot reach that health check, UEFI returns to the previous
 slot. On systems with a supported hardware watchdog, Reefy has a second
 recovery path if the kernel hangs before userspace can report failure.
 
-Read [A/B firmware updates](docs/a-b-firmware-updates.md) and the
-[watchdog architecture](docs/watchdog-architecture.md).
+Read [A/B firmware updates](docs/a-b-firmware-updates.md), the
+[watchdog architecture](docs/watchdog-architecture.md), and
+[verified OS root](docs/dm-verity.md).
 
 ### Offline by default after configuration
 

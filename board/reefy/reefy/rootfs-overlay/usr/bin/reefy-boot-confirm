@@ -4,13 +4,37 @@
 # can be stale after entry repair deletes and reallocates its number.
 . /usr/lib/reefy/boot-slot-state.sh
 
+verified_root_healthy() {
+    if [ -d /run/reefy-verity/runtime ]; then
+        case "$(dmsetup status --noflush reefy-root 2>/dev/null)" in
+            *' verity V'*) ;;
+            *) echo '[boot-confirm] Refusing to confirm an unhealthy verified root'; return 1 ;;
+        esac
+        if ! systemctl is-active --quiet reefy-verity-monitor.service || \
+                [ "$(systemctl show -p NRestarts --value reefy-verity-monitor.service)" != 0 ]; then
+            echo '[boot-confirm] Refusing to confirm without a healthy integrity monitor'
+            return 1
+        fi
+    fi
+    return 0
+}
+verified_root_healthy || exit 1
+
 # Storage can still replace/reorder EFI entries after mounting A. Its completed
 # state, rather than an early matching entry, establishes a stable default.
 if [ "$(systemctl show -p ActiveState --value reefy-storage.service)" = active ] && mounted_slot_is_default; then
-    exit 0
+    if [ ! -d /run/reefy-verity/runtime ]; then
+        exit 0
+    fi
+    if [ "$(systemctl show -p ActiveState --value reefy-control.service)" = active ]; then
+        /run/reefy-verity/runtime/bin/busybox chroot /run/reefy-verity/runtime /bin/busybox sh /verity-recover.sh clear || exit 1
+        exit 0
+    fi
+    # A verified default slot must still wait for control readiness before
+    # retiring old failures; returning here would retain them indefinitely.
 fi
 
-echo "[boot-confirm] Mounted slot is not confirmed as default, checking system health..."
+echo "[boot-confirm] Waiting for critical services before confirming boot health..."
 
 # Wait for critical services to be active (up to 300s outside storage work).
 # For each service: if it has failed, abort immediately (don't confirm the slot).
@@ -53,8 +77,15 @@ if [ "$ALL_OK" != true ]; then
     exit 1
 fi
 
+# Recheck integrity after the potentially long service wait.
+verified_root_healthy || exit 1
+
 # All checks passed — commit the new slot as default
 reefy-efi confirm || exit 1
+
+if [ -d /run/reefy-verity/runtime ]; then
+    /run/reefy-verity/runtime/bin/busybox chroot /run/reefy-verity/runtime /bin/busybox sh /verity-recover.sh clear || exit 1
+fi
 
 # Stop the watchdog — boot is confirmed
 systemctl stop reefy-boot-watchdog.service 2>/dev/null || true

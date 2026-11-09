@@ -59,10 +59,14 @@ jobs:
         with:
           submodules: recursive
       - run: python3 tools/ci/prepare-buildroot.py
-      - run: apt-get update && apt-get install -y pigz gdb build-essential python3-wheel
+      - run: apt-get update && apt-get install -y pigz gdb build-essential python3-wheel cryptsetup-bin squashfs-tools busybox-static
       - run: python3 -m unittest discover -s tools/kernel-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/userspace-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/ci -p 'test_*.py'
+      - name: Verify native initramfs dependency closure before firmware build
+        run: |
+          python3 -m unittest discover -s board/reefy/reefy/tests -p 'test_verity_build.py' -v
+          python3 -m unittest discover -s board/reefy/reefy/tests -p 'test_verity_boot_guid.py' -v
       - name: Verify provider publisher identity pins
         run: python3 -m unittest discover -s board/reefy/reefy/tests -p 'test_provider_workflow.py'
 
@@ -287,6 +291,25 @@ jobs:
 
       - name: Verify compiled systemd feature configuration
         run: python3 tools/ci/systemd-config.py "$BR_OUTPUT" --verify
+
+      - name: Verify effective early verity and recovery dependencies
+        run: |
+          python3 - <<'PYCODE'
+          import os
+          from pathlib import Path
+          configurations = list(Path(os.environ['BR_OUTPUT']).glob('build/linux-*/.config'))
+          assert len(configurations) == 1, 'Expected one effective kernel configuration'
+          resolved = dict(line.split('=', 1) for line in configurations[0].read_text().splitlines()
+                          if line.startswith('CONFIG_') and '=' in line)
+          required = ('DM_VERITY', 'DM_VERITY_FEC', 'REED_SOLOMON', 'BLK_DEV_LOOP',
+                      'BLK_DEV_DM', 'CRYPTO_SHA256', 'SQUASHFS', 'EFIVAR_FS',
+                      'VIRTIO', 'VIRTIO_PCI', 'VIRTIO_BLK', 'NVME_CORE', 'BLK_DEV_NVME',
+                      'SCSI', 'BLK_DEV_SD', 'SATA_AHCI', 'SATA_AHCI_PLATFORM',
+                      'USB_XHCI_HCD', 'USB_XHCI_PCI', 'USB_STORAGE', 'USB_UAS',
+                      'MMC', 'MMC_BLOCK', 'MMC_SDHCI', 'MMC_SDHCI_PCI', 'MMC_SDHCI_ACPI')
+          missing = [name for name in required if resolved.get('CONFIG_' + name) != 'y']
+          assert not missing, 'Early recovery cannot load these from an unverified root: ' + ', '.join(missing)
+          PYCODE
 
       - name: Build exact AMD provider modules
         run: bash tools/ci/logged-build.sh tools/ci/build-amd.sh
@@ -551,6 +574,14 @@ jobs:
             ${{ env.BR_OUTPUT }}/images/reefy-prod.raw
             ${{ env.BR_OUTPUT }}/images/reefy-dev.efi
             ${{ env.BR_OUTPUT }}/images/reefy-dev.raw
+
+      - name: Preserve verity build measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reefy-verity-build-measurements
+          path: ${{ env.BR_OUTPUT }}/images/verity-build-metrics.json
+          if-no-files-found: warn
 
       - name: Preserve build logs even on failure
         if: ${{ always() }}
