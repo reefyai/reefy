@@ -1,7 +1,11 @@
 # Verified OS root
 
-Firmware built with embedded dm-verity checks the read-only operating system
-against a SHA-256 root hash. Forward error correction (FEC) can recover limited
+Reefy uses **dm-verity to detect and reject changes to its immutable
+operating-system image**, including the host's shipped executables, libraries,
+and system files. This helps prevent damaged or unauthorized modifications from
+silently becoming trusted OS code.
+
+Forward error correction (FEC) can recover limited
 corruption while verification ensures that recovered bytes match that hash.
 The firmware remains a single Unified Kernel Image (UKI), with the existing
 A/B EFI system partitions used for updates and recovery.
@@ -68,9 +72,14 @@ Verification covers the immutable SquashFS OS. The temporary writable OverlayFS
 upper layer and persistent application data are outside this root verification
 mapping. FEC parity for the OS does not provide application-data recovery.
 
-On a verity-enabled boot, the effective mapping can be inspected with:
+The generated `/etc/veritytab` belongs to the embedded initramfs. After switching
+to the OS root, its retained copy is `/run/reefy-verity/veritytab`. The retained
+configuration's root hash should match the active mapping table.
+
+On a verity-enabled boot, inspect the configuration and effective mapping with:
 
 ```sh
+cat /run/reefy-verity/veritytab
 sudo dmsetup table reefy-root
 sudo dmsetup status --noflush reefy-root
 findmnt /run/reefy-verity/lower

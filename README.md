@@ -232,6 +232,10 @@ security feature.
 - **Minimal immutable host:** Buildroot includes an explicit package set, with
   no general-purpose system package manager such as apt or dnf and a read-only
   SquashFS base.
+- **Verified OS integrity:** Reefy uses dm-verity to detect and reject changes
+  to its immutable operating-system image, including the host's shipped
+  executables, libraries, and system files. This helps prevent damaged or
+  unauthorized modifications from silently becoming trusted OS code.
 - **Recoverable updates:** Health-gated A/B firmware and watchdog rollback
   reduce the risk of failed remote updates.
 - **Separated workloads and data:** Applications run in containers, while
