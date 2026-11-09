@@ -9,3 +9,15 @@ CONFIG_FEATURE_STAT_FORMAT=y
 # membership is never updated. Needed by reefy.dataplane to add
 # per-app SSH users to the docker group.
 CONFIG_FEATURE_ADDUSER_TO_GROUP=y
+
+# Early verified-root activation and recovery cannot load modules or binaries
+# from the filesystem they are about to verify.
+CONFIG_LOSETUP=y
+CONFIG_FEATURE_MOUNT_LOOP=y
+CONFIG_CHATTR=y
+CONFIG_CHROOT=y
+CONFIG_AWK=y
+CONFIG_SED=y
+CONFIG_READLINK=y
+CONFIG_FEATURE_READLINK_FOLLOW=y
+CONFIG_MOUNTPOINT=y

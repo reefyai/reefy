@@ -191,8 +191,9 @@ If the new system cannot reach that health check, UEFI returns to the previous
 slot. On systems with a supported hardware watchdog, Reefy has a second
 recovery path if the kernel hangs before userspace can report failure.
 
-Read [A/B firmware updates](docs/a-b-firmware-updates.md) and the
-[watchdog architecture](docs/watchdog-architecture.md).
+Read [A/B firmware updates](docs/a-b-firmware-updates.md), the
+[watchdog architecture](docs/watchdog-architecture.md), and
+[verified OS root](docs/dm-verity.md).
 
 ### Offline by default after configuration
 
@@ -231,6 +232,10 @@ security feature.
 - **Minimal immutable host:** Buildroot includes an explicit package set, with
   no general-purpose system package manager such as apt or dnf and a read-only
   SquashFS base.
+- **Verified OS integrity:** Reefy uses dm-verity to detect and reject changes
+  to its immutable operating-system image, including the host's shipped
+  executables, libraries, and system files. This helps prevent damaged or
+  unauthorized modifications from silently becoming trusted OS code.
 - **Recoverable updates:** Health-gated A/B firmware and watchdog rollback
   reduce the risk of failed remote updates.
 - **Separated workloads and data:** Applications run in containers, while

@@ -59,10 +59,14 @@ jobs:
         with:
           submodules: recursive
       - run: python3 tools/ci/prepare-buildroot.py
-      - run: apt-get update && apt-get install -y pigz gdb build-essential python3-wheel
+      - run: apt-get update && apt-get install -y pigz gdb build-essential python3-wheel cryptsetup-bin squashfs-tools busybox-static
       - run: python3 -m unittest discover -s tools/kernel-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/userspace-debug -p 'test_*.py'
       - run: python3 -m unittest discover -s tools/ci -p 'test_*.py'
+      - name: Verify native initramfs dependency closure before firmware build
+        run: |
+          python3 -m unittest discover -s board/reefy/reefy/tests -p 'test_verity_build.py' -v
+          python3 -m unittest discover -s board/reefy/reefy/tests -p 'test_verity_boot_guid.py' -v
       - name: Verify provider publisher identity pins
         run: python3 -m unittest discover -s board/reefy/reefy/tests -p 'test_provider_workflow.py'
 
@@ -99,14 +103,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: reefyai/reefy-artifact-fixtures
-          ref: 5c0654ea1b85acab5d3b35497f0cec02a036cec0
+          ref: cf52f0ff6cbe10311a31b07a17425e115eb8377c
           path: artifact-fixtures
 
       - name: Checkout AMD provider builder
         uses: actions/checkout@v4
         with:
           repository: reefyai/reefy-amd
-          ref: be11248dd3de5c492d06c363a036981d8012a566
+          ref: c0dd3d168fb2b5c399f19901ba6cb9a5a6963d8c
           path: amd-provider
 
       - name: Validate E2E build identity salt
@@ -287,6 +291,25 @@ jobs:
 
       - name: Verify compiled systemd feature configuration
         run: python3 tools/ci/systemd-config.py "$BR_OUTPUT" --verify
+
+      - name: Verify effective early verity and recovery dependencies
+        run: |
+          python3 - <<'PYCODE'
+          import os
+          from pathlib import Path
+          configurations = list(Path(os.environ['BR_OUTPUT']).glob('build/linux-*/.config'))
+          assert len(configurations) == 1, 'Expected one effective kernel configuration'
+          resolved = dict(line.split('=', 1) for line in configurations[0].read_text().splitlines()
+                          if line.startswith('CONFIG_') and '=' in line)
+          required = ('DM_VERITY', 'DM_VERITY_FEC', 'REED_SOLOMON', 'BLK_DEV_LOOP',
+                      'BLK_DEV_DM', 'CRYPTO_SHA256', 'SQUASHFS', 'EFIVAR_FS',
+                      'VIRTIO', 'VIRTIO_PCI', 'VIRTIO_BLK', 'NVME_CORE', 'BLK_DEV_NVME',
+                      'SCSI', 'BLK_DEV_SD', 'SATA_AHCI', 'SATA_AHCI_PLATFORM',
+                      'USB_XHCI_HCD', 'USB_XHCI_PCI', 'USB_STORAGE', 'USB_UAS',
+                      'MMC', 'MMC_BLOCK', 'MMC_SDHCI', 'MMC_SDHCI_PCI', 'MMC_SDHCI_ACPI')
+          missing = [name for name in required if resolved.get('CONFIG_' + name) != 'y']
+          assert not missing, 'Early recovery cannot load these from an unverified root: ' + ', '.join(missing)
+          PYCODE
 
       - name: Build exact AMD provider modules
         run: bash tools/ci/logged-build.sh tools/ci/build-amd.sh
@@ -552,6 +575,14 @@ jobs:
             ${{ env.BR_OUTPUT }}/images/reefy-dev.efi
             ${{ env.BR_OUTPUT }}/images/reefy-dev.raw
 
+      - name: Preserve verity build measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reefy-verity-build-measurements
+          path: ${{ env.BR_OUTPUT }}/images/verity-build-metrics.json
+          if-no-files-found: warn
+
       - name: Preserve build logs even on failure
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -567,28 +598,28 @@ jobs:
 
   publish-nvidia-provider:
     needs: build
-    uses: reefyai/reefy-nvidia/.github/workflows/publish.yml@32dce2db6c66e58d24f9423c4b8cb5e12be7e178
+    uses: reefyai/reefy-nvidia/.github/workflows/publish.yml@354c700a5be1328471969978e0e72d4865e001dd
     with:
       input_artifact: reefy-nvidia-inputs
     secrets: inherit
 
   publish-intel-provider:
     needs: build
-    uses: reefyai/reefy-intel/.github/workflows/publish.yml@a0fffe946c4d5026de87dc71f94e9433a9716538
+    uses: reefyai/reefy-intel/.github/workflows/publish.yml@c1dcfeef9942c56262e0db564058980a958443fe
     with:
       input_artifact: reefy-intel-inputs
     secrets: inherit
 
   publish-amd-provider:
     needs: build
-    uses: reefyai/reefy-amd/.github/workflows/publish.yml@be11248dd3de5c492d06c363a036981d8012a566
+    uses: reefyai/reefy-amd/.github/workflows/publish.yml@c0dd3d168fb2b5c399f19901ba6cb9a5a6963d8c
     with:
       input_artifact: reefy-amd-inputs
     secrets: inherit
 
   publish-artifact-fixture:
     needs: build
-    uses: reefyai/reefy-artifact-fixtures/.github/workflows/publish.yml@5c0654ea1b85acab5d3b35497f0cec02a036cec0
+    uses: reefyai/reefy-artifact-fixtures/.github/workflows/publish.yml@cf52f0ff6cbe10311a31b07a17425e115eb8377c
     with:
       input_artifact: reefy-artifact-fixture-inputs
     secrets: inherit

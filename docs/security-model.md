@@ -2,7 +2,7 @@
 
 *How Reefy reduces attack surface, protects system integrity, and makes firmware origin independently verifiable*
 
-*July 11, 2026*
+*November 9, 2026*
 
 Reefy OS is a purpose-built Linux distribution designed around security, recoverability, and verifiability from the beginning. Its security does not depend on one feature or the assumption that software never has bugs. The model combines a traceable software supply chain, a minimal host, an immutable base filesystem, recoverable A/B updates, an actively maintained LTS kernel, containerized applications, and encrypted persistent storage.
 
@@ -14,7 +14,7 @@ The objective is straightforward: run less code on the host, make the code that 
 |---|---|
 | Firmware origin | Public builds and signed provenance tie artifacts to source. |
 | Minimal host | Buildroot selects required components; no on-device package manager. |
-| Integrity and recovery | Read-only root, A/B firmware, health checks, and watchdog rollback. |
+| Integrity and recovery | dm-verity verification, read-only OS base, A/B firmware, health checks, and watchdog rollback. |
 | Kernel | Linux LTS, exact version pinning, hardening, and ongoing updates. |
 | Applications and data | Containers separate workloads; LUKS2 encrypts persistent storage. |
 | Connectivity | Outbound tunnels reduce direct public-network exposure. |
@@ -63,13 +63,21 @@ Buildroot produces a complete root filesystem from an explicit configuration. Th
 
 This is a smaller attack surface, not a zero attack surface. Reefy still requires Docker, OpenSSH, secure device communication, storage and encryption tools, system services, and drivers for diverse PC and GPU hardware. Each component must be maintained. The benefit is that the set is intentional and visible.
 
-## 3. An immutable base with explicit persistence
+## 3. A verified OS base with dm-verity
 
-The build creates the root filesystem as SquashFS, packages it in an initramfs, and embeds it with the kernel in a Unified Kernel Image. The process is visible in [`create_initramfs.sh`](https://github.com/reefyai/reefy/blob/dca4747e5692cdf3d67d7f472e4c7aadc5e86f3f/board/reefy/reefy/scripts/create_initramfs.sh) and the early-boot [`init`](https://github.com/reefyai/reefy/blob/dca4747e5692cdf3d67d7f472e4c7aadc5e86f3f/board/reefy/reefy/scripts/init).
+Reefy uses **dm-verity to detect and reject changes to its immutable operating-system image**, including the host's shipped executables, libraries, and system files. This helps prevent damaged or unauthorized modifications from silently becoming trusted OS code.
 
-At boot, the read-only SquashFS becomes the lower layer of an overlay filesystem. Normal host writes land in a temporary upper layer and disappear after reboot. The shipped base remains a fixed unit instead of changing gradually over the device’s lifetime.
+### What is dm-verity?
 
-Persistent application data and explicitly configured overlays live separately, preserving required state without modifying the read-only firmware base.
+dm-verity is a Linux kernel feature that checks read-only filesystem blocks against a cryptographic root hash. That hash represents the expected contents of the OS image. Changing a protected block causes verification to fail unless its contents still match the trusted hash.
+
+Reefy reads and verifies the complete protected image before mounting the OS, then continues checking subsequent reads. Unverifiable blocks produce an error instead of supplying altered system data.
+
+### Protection and recovery
+
+Forward error correction can repair limited corruption while preserving hash verification. If integrity cannot be established, Reefy refuses the affected data and uses independent recovery tools to attempt a healthy alternate firmware slot. If neither slot is usable, recovery stops rather than booting an unverified OS.
+
+The expected root hash is embedded inside Reefy's Unified Kernel Image. Signing the complete image and verifying it with owner-controlled Secure Boot keys authenticates that trust anchor, protecting against replacement of both the OS and its expected hash.
 
 ## 4. Recoverable A/B firmware updates
 

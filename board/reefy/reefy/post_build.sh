@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euxo pipefail
 
+mkdir -p "${TARGET_DIR}/etc/systemd/system/sysinit.target.wants"
+ln -sf /usr/lib/systemd/system/reefy-verity-monitor.service \
+    "${TARGET_DIR}/etc/systemd/system/sysinit.target.wants/reefy-verity-monitor.service"
+
 # Add Reefy Linux build version to /etc/os-release using the current date if IMAGE_VERSION is not defined.
 # Auto-bumps the sequence number (-00, -01, ...) on repeated same-day builds.
 DATE=$(date +%Y.%m.%d)

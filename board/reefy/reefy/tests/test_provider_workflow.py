@@ -84,13 +84,13 @@ class ProviderWorkflowTests(unittest.TestCase):
         workflow = WORKFLOW.read_text()
         expected = {
             'reefyai/reefy-nvidia':
-                '32dce2db6c66e58d24f9423c4b8cb5e12be7e178',
+                '354c700a5be1328471969978e0e72d4865e001dd',
             'reefyai/reefy-intel':
-                'a0fffe946c4d5026de87dc71f94e9433a9716538',
+                'c1dcfeef9942c56262e0db564058980a958443fe',
             'reefyai/reefy-amd':
-                'be11248dd3de5c492d06c363a036981d8012a566',
+                'c0dd3d168fb2b5c399f19901ba6cb9a5a6963d8c',
             'reefyai/reefy-artifact-fixtures':
-                '5c0654ea1b85acab5d3b35497f0cec02a036cec0',
+                'cf52f0ff6cbe10311a31b07a17425e115eb8377c',
         }
         for repository, commit in expected.items():
             self.assertEqual(_workflow_ref(workflow, repository), commit)
