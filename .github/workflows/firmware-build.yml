@@ -213,7 +213,7 @@ jobs:
       - name: Heal stale kernel module cache
         working-directory: buildroot
         run: |
-          expected_kernel=$(sed -n 's/^BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION="v\([0-9.]*\)"$/\1/p' ../configs/reefy_defconfig)
+          expected_kernel=$(sed -n 's/^BR2_LINUX_KERNEL_VERSION="\([0-9.]*\)"$/\1/p' "$BR_OUTPUT/.config")
           test -n "$expected_kernel" || { echo "could not read pinned kernel version"; exit 1; }
 
           fingerprint=$(cd .. && python3 tools/kernel-debug/fingerprint.py --output "$BR_OUTPUT")
@@ -297,9 +297,12 @@ jobs:
           python3 - <<'PYCODE'
           import os
           from pathlib import Path
-          configurations = list(Path(os.environ['BR_OUTPUT']).glob('build/linux-*/.config'))
-          assert len(configurations) == 1, 'Expected one effective kernel configuration'
-          resolved = dict(line.split('=', 1) for line in configurations[0].read_text().splitlines()
+          output = Path(os.environ['BR_OUTPUT'])
+          config = dict(line.split('=', 1) for line in (output / '.config').read_text().splitlines()
+                        if line.startswith('BR2_') and '=' in line)
+          kernel_version = config['BR2_LINUX_KERNEL_VERSION'].strip('"')
+          kernel_config = output / 'build' / f'linux-{kernel_version}' / '.config'
+          resolved = dict(line.split('=', 1) for line in kernel_config.read_text().splitlines()
                           if line.startswith('CONFIG_') and '=' in line)
           required = ('DM_VERITY', 'DM_VERITY_FEC', 'REED_SOLOMON', 'BLK_DEV_LOOP',
                       'BLK_DEV_DM', 'CRYPTO_SHA256', 'SQUASHFS', 'EFIVAR_FS',
@@ -316,7 +319,7 @@ jobs:
 
       - name: Verify pinned kernel version
         run: |
-          expected_kernel=$(sed -n 's/^BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION="v\([0-9.]*\)"$/\1/p' configs/reefy_defconfig)
+          expected_kernel=$(sed -n 's/^BR2_LINUX_KERNEL_VERSION="\([0-9.]*\)"$/\1/p' "$BR_OUTPUT/.config")
           test -n "$expected_kernel" || { echo "could not read pinned kernel version"; exit 1; }
           kernel_release=$(find "$BR_OUTPUT/target/lib/modules" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
           test "$kernel_release" = "$expected_kernel" \

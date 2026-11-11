@@ -32,7 +32,7 @@ echo "REEFY_DESIRED_STATE_SCHEMA=2" >> "${OS_RELEASE}"
 # configuration, exported symbol CRCs, and immutable provider publisher pins
 # so an incremental rebuild or provider change cannot reuse an incompatible
 # cached provider with the same uname -r.
-PINNED_KERNEL=$(sed -n 's/^BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION="v\([0-9.]*\)"$/\1/p' "${BR2_CONFIG}")
+PINNED_KERNEL=$(sed -n 's/^BR2_LINUX_KERNEL_VERSION="\([0-9.]*\)"$/\1/p' "${BR2_CONFIG}")
 LINUX_BUILD_DIR=''
 for candidate in "${BUILD_DIR}"/linux-*; do
   if [ "$(cat "${candidate}/include/config/kernel.release" 2>/dev/null || true)" = "${PINNED_KERNEL}" ] \

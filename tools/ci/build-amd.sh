@@ -5,7 +5,7 @@ export PATH="$BR_OUTPUT/host/bin:$BR_OUTPUT/host/sbin:$PATH"
 test -x "$BR_OUTPUT/host/bin/pahole"
 test "$(command -v pahole)" = "$BR_OUTPUT/host/bin/pahole"
 pahole --version
-expected_kernel=$(sed -n 's/^BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION="v\([0-9.]*\)"$/\1/p' configs/reefy_defconfig)
+expected_kernel=$(sed -n 's/^BR2_LINUX_KERNEL_VERSION="\([0-9.]*\)"$/\1/p' "$BR_OUTPUT/.config")
 test -n "$expected_kernel"
 kernel_build=''
 for candidate in "$BR_OUTPUT"/build/linux-*; do
