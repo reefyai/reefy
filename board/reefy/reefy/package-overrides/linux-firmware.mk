@@ -16,7 +16,7 @@ REEFY_INTEL_WIFI_CMD = $(HOST_DIR)/bin/python3 $(REEFY_INTEL_WIFI_TOOL) --manife
 
 define REEFY_SELECT_INTEL_WIFI_FIRMWARE
 	$(REEFY_INTEL_WIFI_CMD) prepare --archive $(@D)/br-firmware.tar \
-		--kernel-ref $(call qstrip,$(BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION)) \
+		--kernel-ref v$(call qstrip,$(BR2_LINUX_KERNEL_VERSION)) \
 		--firmware-version $(LINUX_FIRMWARE_VERSION)
 endef
 LINUX_FIRMWARE_POST_BUILD_HOOKS += REEFY_SELECT_INTEL_WIFI_FIRMWARE

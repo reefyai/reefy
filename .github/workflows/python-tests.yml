@@ -8,6 +8,8 @@ on:
   push:
     branches: [main]
     paths:
+      - 'configs/reefy_defconfig'
+      - 'board/reefy/reefy/package-overrides/intel-wifi-firmware.json'
       - 'board/reefy/reefy/rootfs-overlay/usr/lib/reefy/**'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-control'
       - 'board/reefy/reefy/rootfs-overlay/usr/bin/reefy-reconciler'
@@ -24,6 +26,8 @@ on:
       - 'board/reefy/reefy/scripts/calculate_build_id.sh'
   pull_request:
     paths:
+      - 'configs/reefy_defconfig'
+      - 'board/reefy/reefy/package-overrides/intel-wifi-firmware.json'
       - '.github/workflows/python-tests.yml'
       - '.github/workflows/firmware-build.yml'
       - 'board/reefy/reefy/provider-publisher-pins'

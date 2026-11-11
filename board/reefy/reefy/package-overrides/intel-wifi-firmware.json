@@ -1,5 +1,5 @@
 {
-  "kernel_ref": "v6.18.62",
+  "kernel_ref": "v6.18.63",
   "firmware_version": "20260810",
   "kernel_sources": {
     "drivers/net/wireless/intel/iwlegacy/3945.c": "f80c0e844ae4e1fe73b878a94e96b78fd613186ee27d80a14714f632b9df692f",
