@@ -2061,6 +2061,13 @@ class InternalStorageFailFastTests(unittest.TestCase):
 class ExtendStorageSectorTests(unittest.TestCase):
     def setUp(self):
         self.s = storage.Storage()
+        self.layout = mock.patch.object(self.s, '_storage_growth_layout',
+                                        return_value=('data', 'pool', 'xfs'))
+        self.grow = mock.patch.object(self.s, '_grow_storage')
+        self.layout.start()
+        self.grow.start()
+        self.addCleanup(self.layout.stop)
+        self.addCleanup(self.grow.stop)
 
     @staticmethod
     def _result(returncode=0, stdout='', stderr=''):
@@ -2579,3 +2586,112 @@ class LvmDiscoveryDeadlineTests(unittest.TestCase):
         setup.assert_not_called()
         self.assertFalse(any(call.args[0][0] in ('pvcreate', 'vgcreate', 'lvcreate', 'mkfs.xfs')
                              for call in run.call_args_list))
+
+
+class StorageGrowthTests(unittest.TestCase):
+    def setUp(self):
+        self.s = storage.Storage()
+        self.commands = []
+        self.fail = None
+        self.free = '100'
+        self.fs = 'xfs'
+        self.volumes = [
+            {'lv_name': 'reefy_default', 'segtype': 'thin', 'pool_lv': 'reefy_pool'},
+            {'lv_name': 'reefy_pool', 'segtype': 'thin-pool', 'pool_lv': ''},
+        ]
+        self.layout = ('/dev/reefy/reefy_default', 'reefy_pool', 'xfs')
+        self.run = mock.patch.object(storage.subprocess, 'run', side_effect=self.command)
+        self.run.start()
+        self.addCleanup(self.run.stop)
+
+    def command(self, cmd, **kwargs):
+        self.commands.append(cmd)
+        out = ''
+        if cmd[0] == 'findmnt':
+            out = f'/dev/mapper/reefy-reefy_default {self.fs}'
+        elif cmd[0] == 'lvs' and '--reportformat' in cmd:
+            out = json.dumps({'report': [{'lv': self.volumes}]})
+        elif cmd[0] == 'vgs':
+            out = self.free
+        elif cmd[0] == 'lvs':
+            out = '2147483648' if cmd[-1].endswith('reefy_pool') else '1073741824'
+        return types.SimpleNamespace(returncode=5 if cmd[0] == self.fail else 0,
+                                     stdout=out, stderr='injected failure')
+
+    def test_grows_pool_before_virtual_data_lv_then_xfs(self):
+        self.s._grow_storage(self.layout)
+        mutations = [c for c in self.commands if c[0] in ('lvextend', 'xfs_growfs')]
+        self.assertEqual(mutations, [
+            ['lvextend', '-l', '+100%FREE', '/dev/reefy/reefy_pool'],
+            ['lvextend', '-L', '2147483648B', '/dev/reefy/reefy_default'],
+            ['xfs_growfs', '/mnt/reefy-data'],
+        ])
+        self.assertNotIn('resize2fs', [c[0] for c in self.commands])
+
+    def test_retries_filesystem_growth_without_new_disks_or_vg_space(self):
+        self.free = '0'
+        with mock.patch.object(self.s, '_storage_growth_layout', return_value=self.layout), \
+                mock.patch.object(self.s, '_lv_virtual_size', return_value=2147483648), \
+                mock.patch.object(self.s, '_provision_luks_stack') as provision:
+            self.s._extend_storage([])
+        provision.assert_not_called()
+        self.assertEqual([c for c in self.commands if c[0] == 'lvextend'], [])
+        self.assertIn(['xfs_growfs', '/mnt/reefy-data'], self.commands)
+
+    def test_thin_ext4_uses_actual_data_lv(self):
+        self.s._grow_storage((*self.layout[:2], 'ext4'))
+        self.assertIn(['resize2fs', '/dev/reefy/reefy_default'], self.commands)
+        self.assertNotIn('xfs_growfs', [c[0] for c in self.commands])
+
+    def test_legacy_ext4_grows_legacy_lv_without_thin_pool(self):
+        self.s._grow_storage(('/dev/reefy/data', None, 'ext4'))
+        self.assertEqual([c for c in self.commands if c[0] == 'lvextend'],
+                         [['lvextend', '-l', '+100%FREE', '/dev/reefy/data']])
+        self.assertIn(['resize2fs', '/dev/reefy/data'], self.commands)
+
+    def test_failures_propagate_and_stop_later_stages(self):
+        for command, message in [('vgs', 'free storage'),
+                                 ('lvextend', 'Physical storage'),
+                                 ('xfs_growfs', 'filesystem')]:
+            with self.subTest(command=command):
+                self.commands.clear()
+                self.fail = command
+                with self.assertRaisesRegex(RuntimeError, message):
+                    self.s._grow_storage(self.layout)
+                self.assertEqual(self.commands[-1][0], command)
+
+    def test_virtual_growth_failure_propagates(self):
+        self.free = '0'
+        self.fail = 'lvextend'
+        with self.assertRaisesRegex(RuntimeError, 'Data LV growth failed'):
+            self.s._grow_storage(self.layout)
+        self.assertNotIn('xfs_growfs', [c[0] for c in self.commands])
+
+    def test_missing_size_is_fatal_and_larger_virtual_lv_is_never_shrunk(self):
+        self.free = '0'
+        with mock.patch.object(self.s, '_lv_virtual_size', return_value=None):
+            with self.assertRaisesRegex(RuntimeError, 'sizes'):
+                self.s._grow_storage(self.layout)
+        self.commands.clear()
+        with mock.patch.object(self.s, '_lv_virtual_size', side_effect=[1024, 2048]):
+            self.s._grow_storage(self.layout)
+        self.assertEqual([c for c in self.commands if c[0] == 'lvextend'], [])
+
+    def test_unknown_filesystem_or_layout_refused_before_provisioning(self):
+        for case in ('filesystem', 'layout', 'mount', 'inspection'):
+            with self.subTest(case=case), \
+                    mock.patch.object(self.s, '_provision_luks_stack') as provision, \
+                    mock.patch.object(self.s, '_same_block_device',
+                                      return_value=case != 'mount'):
+                self.fs = 'btrfs' if case == 'filesystem' else 'xfs'
+                self.volumes[0]['pool_lv'] = 'foreign' if case == 'layout' else 'reefy_pool'
+                self.fail = 'lvs' if case == 'inspection' else None
+                with self.assertRaises(RuntimeError):
+                    self.s._extend_storage(['sdb'])
+                provision.assert_not_called()
+
+    def test_mount_alias_validated_by_block_identity(self):
+        with mock.patch.object(self.s, '_same_block_device', return_value=True) as same:
+            self.assertEqual(self.s._storage_growth_layout(), self.layout)
+        same.assert_called_once_with('/dev/mapper/reefy-reefy_default',
+                                     '/dev/reefy/reefy_default')

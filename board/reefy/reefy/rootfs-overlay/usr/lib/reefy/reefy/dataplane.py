@@ -3624,9 +3624,9 @@ class DataPlane:
             reefy_data_src = ''
         if reefy_data_src in acceptable_sources:
             new_disks = self._storage._find_new_storage_disks(devices)
-            if not new_disks:
-                log('mqtt', f'Internal storage already at {self.REEFY_DATA_MNT}')
-                return
+            # A previous apply may have added its PVs but failed to grow the
+            # pool, data LV or filesystem. Finish those stages on retry even
+            # when all selected disks are already members of the VG.
             self._storage._extend_storage(new_disks)
             return
 
