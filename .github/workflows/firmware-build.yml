@@ -154,6 +154,15 @@ jobs:
           make O="$BR_OUTPUT" olddefconfig
 
 
+      - name: Download and verify kernel sources
+        working-directory: buildroot
+        run: |
+          # Buildroot verifies both packages against the pinned release checksum.
+          # Wget retries transient HTTP failures within its normal three tries.
+          make O="$BR_OUTPUT" \
+            BR2_WGET='wget -nd -t 3 --connect-timeout=10 --retry-on-http-error=429,500,502,503,504 --waitretry=15' \
+            linux-headers-source linux-source
+
       - name: Verify toolchain default build identities
         working-directory: buildroot
         run: |
