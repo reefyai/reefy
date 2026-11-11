@@ -617,7 +617,7 @@ jobs:
 
   publish-intel-provider:
     needs: build
-    uses: reefyai/reefy-intel/.github/workflows/publish.yml@5b8bcf2b9d359c7698013a75310142e3f0bc9033
+    uses: reefyai/reefy-intel/.github/workflows/publish.yml@de25d5bdf35658de2b759f8c394f6be1d5ac7220
     with:
       input_artifact: reefy-intel-inputs
     secrets: inherit
