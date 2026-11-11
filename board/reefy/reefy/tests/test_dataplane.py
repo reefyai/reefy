@@ -3053,6 +3053,17 @@ class ApplyStorageTests(unittest.TestCase):
 
         extend.assert_called_once_with(['sdb'])
 
+    def test_mounted_existing_members_still_finish_interrupted_growth(self):
+        mounted_source = f'/dev/{self.dp.STORAGE_VG}/{self.dp.STORAGE_LV}'
+        with mock.patch.object(
+                dataplane.subprocess, 'run',
+                return_value=self._result(stdout=mounted_source)), \
+                mock.patch.object(self.dp._storage, '_find_new_storage_disks',
+                                  return_value=[]), \
+                mock.patch.object(self.dp._storage, '_extend_storage') as extend:
+            self.dp._apply_storage({'devices': ['sda', 'sdb']})
+        extend.assert_called_once_with([])
+
     def test_mounted_disk_discovery_failure_propagates(self):
         mounted_source = f'/dev/{self.dp.STORAGE_VG}/{self.dp.STORAGE_LV}'
         with mock.patch.object(

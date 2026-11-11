@@ -241,3 +241,33 @@ thin-pool layout.
 | `board/reefy/reefy/rootfs-overlay/usr/lib/systemd/system/reefy-app-volumes.service` | Per-app volume boot barrier. |
 | `board/reefy/reefy/rootfs-overlay/etc/docker/daemon.json` | Docker data-root configuration. |
 | `docs/storage-chunk-size-study.md` | Measurements behind the 512 KiB thin-pool chunk and XFS choices. |
+
+## Adding a disk to mounted data storage
+
+The mounted-storage apply path provisions only disks that are not already
+members of VG `reefy`, preserving the shared LUKS key and existing members.
+Before provisioning it validates the mounted source, filesystem and LVM layout.
+A compatible disk joins the VG; the thin pool grows first, then the existing
+`reefy_default` virtual LV and its mounted filesystem. XFS uses `xfs_growfs`;
+existing ext4 filesystems use `resize2fs`. Legacy installations extend their
+actual `data` LV instead of creating a thin pool.
+
+The thick state LV, dedicated app LVs and snapshots keep their identities and
+sizes. Existing app-volume caps are not resized by this operation. Bulk quotas
+on the default XFS filesystem follow the ordinary storage guard's physical
+capacity sampling.
+
+Each growth failure propagates to the apply result. A later mounted-storage
+apply finishes pool, LV and filesystem growth even when the added disks are
+already VG members. Neither selected member is reformatted on that retry;
+completed growth is idempotent. No shrink or automatic rollback is attempted.
+
+Durable component E2E coverage lives in Reefy Service's
+`tests/system/test_storage_expansion.py`, run by its Storage expansion E2E
+GitHub Actions workflow. It uses the established QEMU harness and synthetic
+LUKS disks, with exact baseline/candidate Python source overlays on immutable
+Reefy firmware. It covers the baseline failure, XFS and ext4 layouts,
+incompatible-disk refusal, interrupted growth, unchanged keys and data,
+preserved app volumes and snapshots, and guest-initiated reboot and poweroff.
+This focused coverage does not replace the complete browser/backend firmware
+promotion journeys described in `docs/testing-policy.md`.

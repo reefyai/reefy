@@ -210,6 +210,7 @@ class Storage:
     # Re-bound from reefy.shared (single source) so method bodies keep
     # using self.<CONST> unchanged.
     STORAGE_VG = shared.STORAGE_VG
+    REEFY_DATA_MNT = shared.REEFY_DATA_MNT
     STORAGE_LV = shared.STORAGE_LV
     STORAGE_POOL = shared.STORAGE_POOL
     STATE_LV = shared.STATE_LV
@@ -2102,65 +2103,129 @@ class Storage:
                 f'Invalid VG {self.STORAGE_VG} extent size')
         return extent_size
 
-    def _extend_storage(self, new_disks):
-        """Add new disks to existing VG and extend the LV + filesystem online."""
-        key_part = self._find_reefy_key_partition()
-        if not key_part:
-            raise RuntimeError('Cannot find reefy LUKS key partition')
+    def _storage_growth_layout(self):
+        """Validate the mounted layout before touching any selected new disk."""
+        result = subprocess.run(
+            ['findmnt', '-n', '-o', 'SOURCE,FSTYPE',
+             '--mountpoint', self.REEFY_DATA_MNT],
+            capture_output=True, text=True, timeout=10)
+        fields = result.stdout.split()
+        if result.returncode != 0 or len(fields) != 2:
+            raise RuntimeError('Cannot inspect mounted data filesystem')
+        source, filesystem = fields
+        if filesystem not in ('xfs', 'ext4'):
+            raise RuntimeError(f'Unsupported data filesystem: {filesystem}')
+        result = subprocess.run(
+            ['lvs', '--reportformat', 'json', '-o',
+             'lv_name,segtype,pool_lv', self.STORAGE_VG],
+            capture_output=True, text=True, timeout=10)
+        try:
+            if result.returncode != 0:
+                raise ValueError(self._process_error(result))
+            records = json.loads(result.stdout)['report'][0]['lv']
+            volumes = {row['lv_name'].strip(): row for row in records}
+        except (ValueError, KeyError, TypeError, IndexError) as error:
+            raise RuntimeError('Cannot inspect storage growth layout') from error
+        default = volumes.get(self.STORAGE_LV)
+        if default:
+            if (default['segtype'].strip() != 'thin'
+                    or default['pool_lv'].strip() != self.STORAGE_POOL
+                    or volumes.get(self.STORAGE_POOL, {}).get(
+                        'segtype', '').strip() != 'thin-pool'):
+                raise RuntimeError('Unsupported default data LV layout')
+            lv_name, pool = self.STORAGE_LV, self.STORAGE_POOL
+        else:
+            legacy = volumes.get(self.LEGACY_STORAGE_LV, {})
+            if legacy.get('segtype', '').strip() not in ('linear', 'striped'):
+                raise RuntimeError('Cannot find a supported data LV')
+            lv_name, pool = self.LEGACY_STORAGE_LV, None
+        lv_path = f'/dev/{self.STORAGE_VG}/{lv_name}'
+        if not self._same_block_device(source, lv_path):
+            raise RuntimeError('Data mount does not match the storage LV')
+        return lv_path, pool, filesystem
 
-        targets = [(f'/dev/{dev_name}', f'reefy-{dev_name}')
-                   for dev_name in new_disks]
-        required_sector_size = self._vg_mapper_sector_size()
-        new_pvs = self._provision_luks_stack(
-            targets,
-            key_part,
-            _log=lambda message: log('reconciler', message),
-            sector_size=required_sector_size,
-            write_keyfile=False,
-        )
-        if len(new_pvs) != len(targets):
-            raise RuntimeError(
-                f'Prepared {len(new_pvs)} of {len(targets)} selected '
-                f'extension devices')
-
-        for pv_path in new_pvs:
-            result = _run_lvm_timed(
-                ['pvcreate', '--pvmetadatacopies', '2', '-ff', '-y', pv_path],
-                capture_output=True, text=True, timeout=PV_CREATE_TIMEOUT_S)
+    def _grow_storage(self, layout):
+        """Finish physical, virtual and filesystem growth; safe after interruption."""
+        lv_path, pool, filesystem = layout
+        result = subprocess.run(
+            ['vgs', '--noheadings', '-o', 'vg_free_count', self.STORAGE_VG],
+            capture_output=True, text=True, timeout=10)
+        try:
+            if result.returncode != 0:
+                raise ValueError(self._process_error(result))
+            free_extents = int(result.stdout.strip())
+            if free_extents < 0:
+                raise ValueError('negative free extent count')
+        except ValueError as error:
+            raise RuntimeError('Cannot inspect free storage extents') from error
+        if free_extents:
+            physical = (f'/dev/{self.STORAGE_VG}/{pool}' if pool else lv_path)
+            result = subprocess.run(
+                ['lvextend', '-l', '+100%FREE', physical],
+                capture_output=True, text=True, timeout=120)
             if result.returncode != 0:
                 raise RuntimeError(
-                    f'PV create failed on {pv_path}: '
-                    f'{self._process_error(result)}')
-
-        # Extend VG with new PVs
-        result = subprocess.run(
-            ['vgextend', self.STORAGE_VG] + new_pvs,
-            capture_output=True, text=True, timeout=15
-        )
+                    f'Physical storage growth failed: {self._process_error(result)}')
+        if pool:
+            pool_size = self._lv_virtual_size(f'{self.STORAGE_VG}/{pool}')
+            data_size = self._lv_virtual_size(lv_path)
+            if not pool_size or not data_size:
+                raise RuntimeError('Cannot inspect expanded pool and data LV sizes')
+            # Extending a thin LV alone adds no physical pool capacity. Grow
+            # the pool first, then expose it through the existing data LV.
+            # Dedicated app LVs, snapshots and the thick state LV stay intact.
+            if data_size < pool_size:
+                result = subprocess.run(
+                    ['lvextend', '-L', f'{pool_size}B', lv_path],
+                    capture_output=True, text=True, timeout=120)
+                if result.returncode != 0:
+                    raise RuntimeError(
+                        f'Data LV growth failed: {self._process_error(result)}')
+        # Both commands are idempotent. Repeat even when LVM already grew:
+        # an earlier apply may have stopped before filesystem growth finished.
+        command = (['xfs_growfs', self.REEFY_DATA_MNT] if filesystem == 'xfs'
+                   else ['resize2fs', lv_path])
+        result = subprocess.run(command, capture_output=True,
+                                text=True, timeout=120)
         if result.returncode != 0:
             raise RuntimeError(
-                f'VG extend failed: {self._process_error(result)}')
+                f'Data filesystem growth failed: {self._process_error(result)}')
 
-        # Extend LV to use all free space
-        lv_path = f'/dev/{self.STORAGE_VG}/{self.STORAGE_LV}'
-        result = subprocess.run(
-            ['lvextend', '-l', '+100%FREE', lv_path],
-            capture_output=True, text=True, timeout=15
-        )
-        if result.returncode != 0:
-            log('mqtt', f'LV extend failed: {result.stderr}')
-            return
-
-        # Grow filesystem online
-        result = subprocess.run(
-            ['resize2fs', lv_path],
-            capture_output=True, text=True, timeout=120
-        )
-        if result.returncode == 0:
-            dev_list = ', '.join(new_disks)
-            log('mqtt', f'Extended storage with {dev_list}')
-        else:
-            log('mqtt', f'resize2fs failed: {result.stderr}')
+    def _extend_storage(self, new_disks):
+        """Add selected disks, then finish growth without reformatting members."""
+        layout = self._storage_growth_layout()
+        if new_disks:
+            key_part = self._find_reefy_key_partition()
+            if not key_part:
+                raise RuntimeError('Cannot find reefy LUKS key partition')
+            targets = [(f'/dev/{dev_name}', f'reefy-{dev_name}')
+                       for dev_name in new_disks]
+            required_sector_size = self._vg_mapper_sector_size()
+            new_pvs = self._provision_luks_stack(
+                targets, key_part,
+                _log=lambda message: log('reconciler', message),
+                sector_size=required_sector_size, write_keyfile=False)
+            if len(new_pvs) != len(targets):
+                raise RuntimeError(
+                    f'Prepared {len(new_pvs)} of {len(targets)} selected '
+                    f'extension devices')
+            for pv_path in new_pvs:
+                result = _run_lvm_timed(
+                    ['pvcreate', '--pvmetadatacopies', '2', '-ff', '-y', pv_path],
+                    capture_output=True, text=True, timeout=PV_CREATE_TIMEOUT_S)
+                if result.returncode != 0:
+                    raise RuntimeError(
+                        f'PV create failed on {pv_path}: '
+                        f'{self._process_error(result)}')
+            result = subprocess.run(
+                ['vgextend', self.STORAGE_VG] + new_pvs,
+                capture_output=True, text=True, timeout=30)
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f'VG extend failed: {self._process_error(result)}')
+        self._grow_storage(layout)
+        if new_disks:
+            log('mqtt', f'Extended storage with {", ".join(new_disks)}')
 
     def _get_dm_tree(self, target):
         """Build list of all dm device names that depend on target (any depth).
