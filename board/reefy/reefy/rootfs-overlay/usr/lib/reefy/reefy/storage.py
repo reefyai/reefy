@@ -39,6 +39,32 @@ class ExistingVolumeUnavailableError(RuntimeError):
 
 LVM_PROBE_TIMEOUT_S = 30
 PV_CREATE_TIMEOUT_S = 60
+LUKS_HEADER_PROBE_TIMEOUT_S = 30
+LUKS_HEADER_PROBE_SLOW_S = 5
+
+
+def _probe_luks_header(device, _log=None):
+    """Allow bounded storage queuing; a timeout must still stop provisioning."""
+    started = time.monotonic()
+    outcome = 'error'
+    try:
+        result = subprocess.run(['cryptsetup', 'isLuks', device],
+                                capture_output=True,
+                                timeout=LUKS_HEADER_PROBE_TIMEOUT_S)
+        outcome = f'exit_{result.returncode}'
+        return result
+    except subprocess.TimeoutExpired:
+        outcome = 'timeout'
+        raise
+    finally:
+        elapsed = time.monotonic() - started
+        if elapsed >= LUKS_HEADER_PROBE_SLOW_S:
+            try:
+                (_log or log)(f'LUKS header probe elapsed={elapsed:.3f}s '
+                              f'budget={LUKS_HEADER_PROBE_TIMEOUT_S}s outcome={outcome}')
+            except Exception:
+                # Diagnostics must preserve the probe result or original error.
+                pass
 
 
 def _run_lvm_timed(command, *, timeout, **kwargs):
@@ -568,7 +594,7 @@ class Storage:
             dev = dev.strip()
             if not dev or (parent and dev == f'/dev/{parent}'):
                 continue
-            result = subprocess.run(['cryptsetup', 'isLuks', dev], capture_output=True, timeout=5)
+            result = _probe_luks_header(dev, _log)
             if result.returncode != 0:
                 continue
             luks_name = f'reefy-{os.path.basename(dev)}'
@@ -721,10 +747,10 @@ class Storage:
         return None
 
     def _pv_vg_name(self, pv):
-        result = subprocess.run(
+        result = _run_lvm_timed(
             ['pvs', '--noheadings', '-o', 'vg_name',
              '-S', f'pv_name={pv}'],
-            capture_output=True, text=True, timeout=10)
+            capture_output=True, text=True, timeout=LVM_PROBE_TIMEOUT_S)
         if result.returncode != 0:
             raise RuntimeError(
                 f'Cannot inspect PV {pv}: {self._process_error(result)}')

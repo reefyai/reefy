@@ -3,6 +3,7 @@
 Most tests inspect source via find_spec. Behavior tests load the module
 with a minimal paho stub so they also run in the paho-less test image."""
 
+import ast
 import importlib.util
 import json
 from pathlib import Path
@@ -248,8 +249,15 @@ class StateOwnershipRegressionTests(unittest.TestCase):
         # On connect, control asks the data plane to re-apply its own saved
         # state via the Reconcile Varlink call, rather than reading
         # desired-state.json and forwarding it.
-        src = _control_src()
-        self.assertIn("_submit_and_wait_apply('SubmitReconcile')", src)
+        tree = ast.parse(_control_src())
+        handler = next(node for node in ast.walk(tree)
+                       if isinstance(node, ast.FunctionDef)
+                       and node.name == '_handle_device_connect')
+        calls = [node for node in ast.walk(handler)
+                 if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Attribute)
+                 and node.func.attr == '_submit_and_wait_apply']
+        self.assertEqual([node.args[0].value for node in calls], ['SubmitReconcile'])
 
 
 class HardwareInventoryRegressionTests(unittest.TestCase):

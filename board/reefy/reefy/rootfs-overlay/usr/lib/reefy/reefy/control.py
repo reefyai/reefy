@@ -63,6 +63,10 @@ class ControlPlane:
     # Topic suffixes a sidecar may publish through control. Allowlisted so
     # a compromised sidecar can't forge status/health/command-response/etc.
     CONTROL_PUBLISH_ALLOWED = ('notify',)
+    # Docker can finish starting after the usual short IPC grace. Reconnect
+    # reconciliation runs outside the MQTT loop and must still report the
+    # saved-state result once that startup socket becomes available.
+    BOOT_RECONCILE_STARTUP_GRACE_S = 120
 
     def __init__(self):
         self.config = {}
@@ -568,7 +572,9 @@ class ControlPlane:
         when state was applied; if there's none yet (first adoption, before
         the backend's first apply_state) just go online."""
         try:
-            res = self._submit_and_wait_apply('SubmitReconcile')
+            res = self._submit_and_wait_apply(
+                'SubmitReconcile',
+                startup_grace_s=self.BOOT_RECONCILE_STARTUP_GRACE_S)
         except Exception as exception:
             error = shared.redact_log_message(exception)
             log('reconciler', f'reconcile on connect failed: {error}')
