@@ -747,10 +747,10 @@ class Storage:
         return None
 
     def _pv_vg_name(self, pv):
-        result = subprocess.run(
+        result = _run_lvm_timed(
             ['pvs', '--noheadings', '-o', 'vg_name',
              '-S', f'pv_name={pv}'],
-            capture_output=True, text=True, timeout=10)
+            capture_output=True, text=True, timeout=LVM_PROBE_TIMEOUT_S)
         if result.returncode != 0:
             raise RuntimeError(
                 f'Cannot inspect PV {pv}: {self._process_error(result)}')
