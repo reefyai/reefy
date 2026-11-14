@@ -125,3 +125,51 @@ class TerminalBridgeSubscriberTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TerminalCredentialTransitionTests(unittest.TestCase):
+    def test_adoption_rebuilds_mqtt_only_and_keeps_live_pty_until_shutdown(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ('device.key', 'bootstrap.crt', 'bootstrap.key', 'ca.crt'):
+                (root / name).write_text('synthetic-' + name)
+            (root / 'device-uuid').write_text('11111111-1111-4111-8111-111111111111')
+            sentinel = root / 'app-data'
+            sentinel.write_bytes(b'synthetic-data-preserved')
+            config = {'MQTT_BROKER': 'synthetic.invalid', 'MQTT_USER_ID': 'synthetic',
+                      'MQTT_CA_CERT': str(root / 'ca.crt'),
+                      'MQTT_CLIENT_CERT': str(root / 'bootstrap.crt'),
+                      'MQTT_CLIENT_KEY': str(root / 'bootstrap.key')}
+            old, new = mock.MagicMock(), mock.MagicMock()
+            observed = []
+            def first_connected():
+                (root / 'device.crt').write_text('synthetic-adopted-certificate')
+            def replacement_connected():
+                observed.append('host' in bridge._sessions)
+                observed.append(sentinel.read_bytes() == b'synthetic-data-preserved')
+                raise KeyboardInterrupt()
+            old.loop_start.side_effect = first_connected
+            new.loop_start.side_effect = replacement_connected
+            bridge._sessions['host'] = {'synthetic': 'live-pty'}
+            with mock.patch.object(bridge, 'STATE_DIR', str(root)), \
+                    mock.patch.object(bridge, 'load_config', return_value=config), \
+                    mock.patch.object(bridge.mqtt, 'Client', side_effect=[old, new]), \
+                    mock.patch.object(bridge.threading, 'Thread'), \
+                    mock.patch.object(bridge, 'kill_session') as kill:
+                bridge.main()
+            self.assertEqual(observed, [True, True])
+            old.tls_set.assert_called_once()
+            new.tls_set.assert_called_once()
+            self.assertEqual(old.tls_set.call_args.kwargs['certfile'], str(root / 'bootstrap.crt'))
+            self.assertEqual(new.tls_set.call_args.kwargs['certfile'], str(root / 'device.crt'))
+            old.disconnect.assert_called_once()
+            new.connect_async.assert_called_once()
+            self.assertEqual(kill.call_count, 1)  # final shutdown only
+            self.assertEqual((root / 'device.key').read_text(), 'synthetic-device.key')
+            bridge._sessions.clear()
+
+    def test_denied_suback_is_not_connection_readiness(self):
+        self.assertTrue(bridge.subscription_accepted([0, 1]))
+        self.assertFalse(bridge.subscription_accepted([128]))
+        self.assertFalse(bridge.subscription_accepted([mock.Mock(value=135)]))
+        self.assertFalse(bridge.subscription_accepted([]))
