@@ -48,6 +48,7 @@ except ImportError:
 
 MQTT_CONF_PATH = '/mnt/reefy/mqtt/mqtt.conf'
 STATE_DIR = '/mnt/reefy-data/state'
+BOOTSTRAP_UUID_PATH = '/tmp/bootstrap-uuid'
 # Cleanup horizon for orphaned PTYs (browser tabs that die without firing
 # beforeunload). Long enough that a watching user never trips it, short
 # enough that genuinely abandoned sessions don't accumulate for weeks.
@@ -80,8 +81,9 @@ def load_config():
     return config
 
 
-def get_device_uuid():
-    for path in [os.path.join(STATE_DIR, 'device-uuid'), '/tmp/bootstrap-uuid']:
+def get_device_uuid(*, bootstrap=False):
+    paths = [BOOTSTRAP_UUID_PATH] if bootstrap else [os.path.join(STATE_DIR, 'device-uuid')]
+    for path in paths:
         if os.path.exists(path):
             with open(path) as f:
                 uuid = f.read().strip()
@@ -344,6 +346,65 @@ def resize_session(session_id, cols, rows):
             fcntl.ioctl(s['master_fd'], termios.TIOCSWINSZ, winsize)
 
 
+def connection_identity():
+    """Read the selected identity without changing keys, storage or services."""
+    config = load_config()
+    if not config:
+        raise ValueError('Terminal identity is not ready')
+    certificate = config.get('MQTT_DEVICE_CERT', os.path.join(STATE_DIR, 'device.crt'))
+    key = config.get('MQTT_DEVICE_KEY', os.path.join(STATE_DIR, 'device.key'))
+    bootstrap = not os.path.isfile(certificate)
+    if bootstrap:
+        certificate = config.get('MQTT_CLIENT_CERT', '/mnt/reefy/mqtt/bootstrap.crt')
+        key = config.get('MQTT_CLIENT_KEY', '/mnt/reefy/mqtt/bootstrap.key')
+    # A preserved data disk may contain an old UUID without a usable cert.
+    # Bootstrap proofs must use this boot's UUID, just like control registration.
+    device_uuid = get_device_uuid(bootstrap=bootstrap)
+    if not device_uuid:
+        raise ValueError('Terminal identity is not ready')
+    ca = config.get('MQTT_CA_CERT', '/mnt/reefy/mqtt/ca.crt')
+    stamps = []
+    for path in (certificate, key, ca):
+        info = os.stat(path)
+        stamps.append((path, info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns))
+    return {'config': config, 'uuid': device_uuid, 'certificate': certificate,
+            'bootstrap': bootstrap,
+            'key': key, 'ca': ca,
+            'stamp': (device_uuid, tuple(sorted(config.items())), tuple(stamps))}
+
+
+def configured_client(identity):
+    """Paho TLS contexts cannot be reset after setup; build a fresh client."""
+    config = identity['config']
+    client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+                         client_id=mqtt_client_id(identity['uuid']),
+                         transport=config.get('MQTT_TRANSPORT', 'websockets'))
+    client.tls_set(ca_certs=identity['ca'], certfile=identity['certificate'],
+                   keyfile=identity['key'], cert_reqs=ssl.CERT_REQUIRED,
+                   tls_version=ssl.PROTOCOL_TLSv1_2)
+    if config.get('MQTT_TRANSPORT', 'websockets') == 'websockets':
+        client.ws_set_options(path=config.get('MQTT_WS_PATH', '/mqtt'))
+    if identity['bootstrap']:
+        from reefy.bootstrap_terminal import connection_proof
+        def before_connect(cl, userdata):
+            cl.username_pw_set(config.get('MQTT_USER_ID',''),
+                connection_proof(identity['uuid'],config.get('MQTT_USER_ID','')))
+        client.on_pre_connect = before_connect
+    client.reconnect_delay_set(min_delay=1, max_delay=60)
+    return client
+
+
+def terminal_subscriptions(identity, base):
+    # Bootstrap proof grants only a host shell, never app/container topics.
+    session = 'host' if identity['bootstrap'] else '+'
+    return [(base+'/'+session+'/input',0),(base+'/'+session+'/control',1)]
+
+
+def subscription_accepted(reason_codes):
+    return bool(reason_codes) and all(getattr(reason, 'value', reason) < 128
+                                      for reason in reason_codes)
+
+
 def main():
     config = load_config()
     if not config:
@@ -353,10 +414,12 @@ def main():
             print("[terminal-bridge] No MQTT config found")
             sys.exit(1)
 
-    uuid = get_device_uuid()
-    if not uuid:
-        print("[terminal-bridge] No device UUID found")
+    try:
+        identity = connection_identity()
+    except (OSError, ValueError):
+        print('[terminal-bridge] Terminal identity is not ready')
         sys.exit(1)
+    uuid = identity['uuid']
 
     public_id = config.get('MQTT_USER_ID', '')
     topic_base = f"reefy/{public_id}/devices/{uuid}/terminal"
@@ -369,36 +432,10 @@ def main():
     ws_path = config.get('MQTT_WS_PATH', '/mqtt')
     ca_cert = config.get('MQTT_CA_CERT', '/mnt/reefy/mqtt/ca.crt')
 
-    client_cert = os.path.join(STATE_DIR, 'device.crt')
-    client_key = os.path.join(STATE_DIR, 'device.key')
-    if not os.path.exists(client_cert):
-        client_cert = '/mnt/reefy/mqtt/bootstrap.crt'
-        client_key = '/mnt/reefy/mqtt/bootstrap.key'
-
-    client = mqtt.Client(
-        callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-        client_id=mqtt_client_id(uuid),
-        transport=transport,
-    )
-
-    client.tls_set(
-        ca_certs=ca_cert,
-        certfile=client_cert,
-        keyfile=client_key,
-        cert_reqs=ssl.CERT_REQUIRED,
-        tls_version=ssl.PROTOCOL_TLSv1_2,
-    )
-
-    if transport == 'websockets':
-        client.ws_set_options(path=ws_path)
-
-    client.reconnect_delay_set(min_delay=1, max_delay=60)
+    client = configured_client(identity)
 
     # Subscriptions: (topic, qos)
-    subscriptions = [
-        (f"{topic_base}/+/input", 0),
-        (f"{topic_base}/+/control", 1),
-    ]
+    subscriptions = terminal_subscriptions(identity,topic_base)
     # Track SUBACK confirmation: paho can report on_connect after a network
     # blip, but the broker can drop the resulting SUBSCRIBE silently. Without
     # this, the bridge thinks it is subscribed while the broker has no subs
@@ -418,10 +455,18 @@ def main():
         print(f"[terminal-bridge] Subscribe sent (mids={sub_state['pending_mids']})")
 
     def on_connect(cl, userdata, flags, rc, properties):
+        if getattr(rc, 'value', rc) != 0:
+            sub_state['confirmed'] = False
+            print('[terminal-bridge] MQTT authentication refused')
+            return
         print(f"[terminal-bridge] Connected to {broker}:{port}")
         do_subscribe(cl)
 
     def on_subscribe(cl, userdata, mid, reason_codes, properties):
+        if not subscription_accepted(reason_codes):
+            sub_state['confirmed'] = False
+            print('[terminal-bridge] MQTT subscription refused')
+            return
         sub_state['pending_mids'].discard(mid)
         if not sub_state['pending_mids']:
             sub_state['confirmed'] = True
@@ -440,6 +485,8 @@ def main():
             try:
                 data = json.loads(msg.payload)
             except (json.JSONDecodeError, TypeError):
+                return
+            if identity['bootstrap'] and (session_id != 'host' or data.get('container')):
                 return
             action = data.get('action')
             if action == 'subscribe':
@@ -503,9 +550,48 @@ def main():
     threading.Thread(target=subscription_watchdog, daemon=True,
                      name='term-sub-watchdog').start()
 
+    # Credential changes rebuild only the MQTT transport. Keep PTYs, tmux,
+    # apps and mounted data alive across bootstrap-to-adopted handoff.
+    next_identity_check = 0.0
     # Main loop: read PTY output from all sessions and publish to MQTT
     try:
         while True:
+            if time.monotonic() >= next_identity_check:
+                next_identity_check = time.monotonic() + 1
+                try:
+                    candidate = connection_identity()
+                    if candidate['stamp'] != identity['stamp']:
+                        # Validate new TLS files before retiring the old client.
+                        replacement = configured_client(candidate)
+                        client.disconnect()
+                        client.loop_stop()
+                        if (candidate['uuid'], candidate['config'].get('MQTT_USER_ID')) != (uuid, public_id):
+                            for sid in list(_sessions):
+                                kill_session(sid)
+                            _sessions.clear()
+                        identity = candidate
+                        uuid = identity['uuid']
+                        config = identity['config']
+                        public_id = config.get('MQTT_USER_ID', '')
+                        topic_base = f"reefy/{public_id}/devices/{uuid}/terminal"
+                        subscriptions = terminal_subscriptions(identity,topic_base)
+                        sub_state['confirmed'] = False
+                        sub_state['pending_mids'].clear()
+                        client = replacement
+                        client.on_connect = on_connect
+                        client.on_message = on_message
+                        client.on_disconnect = on_disconnect
+                        client.on_subscribe = on_subscribe
+                        # loop_start owns reconnects, including transient outage
+                        # during adoption. Never restart the terminal process.
+                        client.connect_async(config.get('MQTT_BROKER', 'mqtt.reefy.ai'),
+                                             int(config.get('MQTT_PORT', '443')), 30)
+                        client.loop_start()
+                        print('[terminal-bridge] MQTT credentials reloaded')
+                except (OSError, ValueError, ssl.SSLError):
+                    # A non-atomic certificate write may be observed mid-write.
+                    # Keep the existing transport and retry when it is complete.
+                    pass
             fd_to_session = {}
             with _lock:
                 for sid, s in _sessions.items():
