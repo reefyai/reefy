@@ -62,7 +62,7 @@ jobs:
           bin=board/reefy/reefy/rootfs-overlay/usr/bin
           python -m py_compile \
             "$ov/reefy/__init__.py" "$ov/reefy/shared.py" "$ov/reefy/storage.py" \
-            "$ov/reefy/dataplane.py" "$ov/reefy/control.py" \
+            "$ov/reefy/dataplane.py" "$ov/reefy/control.py" "$ov/reefy/bootstrap_terminal.py" \
             "$bin/reefy-control" "$bin/reefy-reconciler" "$bin/reefy-mount-volumes" \
             "$bin/reefy-backup" "$bin/reefy-terminal-bridge"
 

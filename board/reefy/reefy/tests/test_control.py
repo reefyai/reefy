@@ -718,8 +718,7 @@ class SensitivePasswordRotationTests(unittest.TestCase):
         self.assertNotIn('traceback.print_exc()', _control_src())
 
 
-if __name__ == '__main__':
-    unittest.main()
+
 
 
 class ControlPublishEventTests(unittest.TestCase):
@@ -885,3 +884,31 @@ class TailscaleHostnameConfigTests(unittest.TestCase):
             self.assertEqual(result['hostname'], 'synthetic-device')
             self.assertNotIn('hostname', host['tailscale'])
             self.assertEqual(result['connection_id'], 'synthetic-connection')
+
+
+class BootstrapTerminalRegistrationTests(unittest.TestCase):
+    def test_registration_advertises_same_per_boot_key_as_terminal(self):
+        import tempfile
+        from reefy import bootstrap_terminal
+        control=_load_control_module()
+        plane=object.__new__(control.ControlPlane)
+        plane.bootstrap_uuid='11111111-1111-4111-8111-111111111111'
+        plane.current_uuid=plane.bootstrap_uuid
+        plane.topic_prefix='reefy/synthetic-owner'
+        plane.hostname='synthetic-host'
+        plane._generate_keypair_and_csr=mock.Mock(return_value='synthetic-adoption-csr')
+        plane._get_mac=mock.Mock(return_value='00:00:00:00:00:01')
+        plane._get_hw_info=mock.Mock(return_value={})
+        plane._read_device_password=mock.Mock(return_value=None)
+        plane._with_compatibility=mock.Mock()
+        client=mock.Mock()
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(bootstrap_terminal,'KEY_DIR',root):
+            plane._register_device(client)
+            body=json.loads(client.publish.call_args.args[1])
+            self.assertEqual(body['terminal_csr'],bootstrap_terminal.registration_csr(plane.bootstrap_uuid))
+            self.assertEqual(body['csr'],'synthetic-adoption-csr')
+            self.assertEqual(body['uuid'],plane.bootstrap_uuid)
+
+
+if __name__ == '__main__':
+    unittest.main()

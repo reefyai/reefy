@@ -544,6 +544,8 @@ class ControlPlane:
             "csr": csr,
             "hw": self._get_hw_info(),
         }
+        from reefy.bootstrap_terminal import registration_csr
+        reg_data['terminal_csr'] = registration_csr(self.bootstrap_uuid)
         self._with_compatibility(reg_data)
         device_pw = self._read_device_password()
         if device_pw:
