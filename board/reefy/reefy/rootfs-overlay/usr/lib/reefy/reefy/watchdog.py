@@ -5,8 +5,10 @@ not actionable because devices can briefly lose network or CPU time. Recovery
 starts only after consecutive failures and is rate-limited per service.
 """
 
+from datetime import datetime
 import json
 import os
+import re
 import subprocess
 import time
 import urllib.error
@@ -18,6 +20,7 @@ COOLDOWN_SECONDS = 300
 PROBE_TIMEOUT_SECONDS = 3
 # The Docker stop grace excludes daemon cleanup and container startup.
 RESTART_TIMEOUT_SECONDS = 30
+STATE_INSPECT_TIMEOUT_SECONDS = 3
 STATE_DIR = '/run/reefy-watchdog'
 COMPOSE_PROJECTS = ('reefy-system', 'state')
 
@@ -103,6 +106,43 @@ def _clear(path):
         pass
 
 
+def _container_state(container):
+    """Read only the exact target's identity, start time and running state."""
+    try:
+        result = subprocess.run([
+            'docker', 'inspect', '--format',
+            '{"id":"{{.Id}}","started":"{{.State.StartedAt}}",'
+            '"running":{{.State.Running}},"restarting":{{.State.Restarting}}}',
+            container], capture_output=True, text=True,
+            timeout=STATE_INSPECT_TIMEOUT_SECONDS)
+        if result.returncode:
+            return None
+        state = json.loads(result.stdout)
+        if (not isinstance(state, dict)
+                or not re.fullmatch(r'[0-9a-f]{64}', state.get('id', ''))
+                or not state['id'].startswith(container)
+                or type(state.get('running')) is not bool
+                or type(state.get('restarting')) is not bool):
+            return None
+        started = datetime.fromisoformat(state['started'].replace('Z', '+00:00'))
+        if started.tzinfo is None or started.year <= 1:
+            return None
+        return dict(state, started=started)
+    except (OSError, subprocess.TimeoutExpired, ValueError, TypeError,
+            KeyError, AttributeError):
+        return None
+
+
+def _completed_restart(check, container, before):
+    if before is None:
+        return False
+    after = _container_state(container)
+    return bool(after and after['id'] == before['id']
+                and after['started'] > before['started']
+                and after['running'] and not after['restarting']
+                and probe(check['url'], check['kind']))
+
+
 def check_service(check, state_dir=STATE_DIR, now=None):
     """Probe one service and perform bounded recovery when it stays wedged."""
     service = check['service']
@@ -133,6 +173,7 @@ def check_service(check, state_dir=STATE_DIR, now=None):
         return False
 
     log(f'{service}: restarting unresponsive container {container[:12]}')
+    before = _container_state(container)
     try:
         result = subprocess.run(
             ['docker', 'restart', '--time', '5', container],
@@ -141,7 +182,12 @@ def check_service(check, state_dir=STATE_DIR, now=None):
             timeout=RESTART_TIMEOUT_SECONDS,
         )
         restarted = result.returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired:
+        # Docker may finish the restart before its CLI acknowledgment. Never
+        # replay it: require the same container to have a newer start, be
+        # running and answer its real liveness probe. Unknown state fails closed.
+        restarted = _completed_restart(check, container, before)
+    except OSError:
         restarted = False
 
     _write_int(cooldown_file, now + COOLDOWN_SECONDS)

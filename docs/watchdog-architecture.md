@@ -102,7 +102,7 @@ repair application failures.
 ## Layer 3: infrastructure watchdog
 
 `reefy-watchdog.timer` starts two minutes after boot and runs every minute. It
-launches a bounded oneshot service with a 90-second systemd timeout.
+launches a bounded oneshot service with a 120-second systemd timeout.
 
 The shell entry point performs the Tailscale-specific log check and then runs
 the Python liveness checks. State and cooldown files live in
@@ -140,6 +140,14 @@ docker restart --time 5 <container>
 
 The restart call is bounded to 30 seconds. Docker's five-second stop grace
 covers waiting for the stop signal, not daemon cleanup and container startup.
+Before restarting, the watchdog records the exact container identity and start
+time using a three-second read-only inspect. If the restart call times out, it
+does not repeat the command. A second inspect must prove that the same container
+has a newer start, is running and is not restarting, and its actual liveness
+probe must succeed. Missing, unchanged, replaced or unhealthy state remains a
+failed recovery. The additional bounded observations fit within the oneshot
+deadline; the failure threshold, cooldown, restart timeout and E2E recovery
+deadline remain unchanged.
 See [Docker restart timeout semantics](https://docs.docker.com/reference/cli/docker/container/restart/).
 The outer oneshot deadline contains both bounded container checks. Whether a
 restart succeeds or fails, a

@@ -109,6 +109,20 @@ def _signatures_absent(target):
         return False
 
 
+def _header_zeroed(target):
+    """Bound a read-only check of the exact header the timed-out dd owns."""
+    program = ("import sys\n"
+               "with open(sys.argv[1], 'rb', buffering=0) as stream:\n"
+               " data = stream.read(4 * 1024 * 1024)\n"
+               "raise SystemExit(0 if data == bytes(4 * 1024 * 1024) else 1)\n")
+    try:
+        probe = subprocess.run([sys.executable, '-c', program, target],
+                               capture_output=True, timeout=5)
+        return probe.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def _scan_existing_volumes(_log=None):
     """Bound discovery and preserve wait diagnostics before killing a timeout."""
     emit = _log or log
@@ -2413,12 +2427,22 @@ class Storage:
 
         # Step 3: Zero first 4MB (GPT headers, superblocks, partition tables)
         log('mqtt', f'Zeroing first 4MB of {target}')
-        subprocess.run(
-            ['dd', 'if=/dev/zero', f'of={target}', 'bs=1M', 'count=4', 'conv=fsync'],
-            capture_output=True, timeout=15
-        )
+        command = ['dd', 'if=/dev/zero', f'of={target}', 'bs=1M', 'count=4', 'conv=fsync']
+        try:
+            zeroed = subprocess.run(command, capture_output=True, timeout=15)
+        except subprocess.TimeoutExpired:
+            if not _header_zeroed(target):
+                raise
+        else:
+            if zeroed.returncode:
+                raise subprocess.CalledProcessError(zeroed.returncode, command)
 
-        subprocess.run(['blockdev', '--flushbufs', target], capture_output=True, timeout=5)
+        # A zeroed page-cache read alone is not proof of durability. Require
+        # the existing bounded flush to succeed before reporting completion.
+        command = ['blockdev', '--flushbufs', target]
+        flushed = subprocess.run(command, capture_output=True, timeout=5)
+        if flushed.returncode:
+            raise subprocess.CalledProcessError(flushed.returncode, command)
         log('mqtt', f'Device {target} wiped successfully')
 
     def _find_reefy_disk(self):
