@@ -4,4 +4,4 @@ Description=reefy watchdog
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/reefy-watchdog.sh
-TimeoutStartSec=90s
+TimeoutStartSec=120s

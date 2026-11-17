@@ -68,7 +68,11 @@ class RecoveryTests(unittest.TestCase):
 
         self.assertFalse(watchdog.check_service(
             PROXY_CHECK, self.tempdir.name, now=102))
-        run.assert_called_once_with(
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(run.call_args_list[0].args[0][:2], ['docker', 'inspect'])
+        self.assertEqual(run.call_args_list[0].kwargs['timeout'],
+                         watchdog.STATE_INSPECT_TIMEOUT_SECONDS)
+        run.assert_called_with(
             ['docker', 'restart', '--time', '5', 'container123456'],
             capture_output=True,
             text=True,
@@ -228,7 +232,9 @@ class RestartCompletionTests(unittest.TestCase):
         # Each existing project lookup has a five-second subprocess bound.
         per_service = (len(watchdog.COMPOSE_PROJECTS) * 5
                        + watchdog.PROBE_TIMEOUT_SECONDS
-                       + watchdog.RESTART_TIMEOUT_SECONDS)
+                       + watchdog.RESTART_TIMEOUT_SECONDS
+                       + 2 * watchdog.STATE_INSPECT_TIMEOUT_SECONDS
+                       + watchdog.PROBE_TIMEOUT_SECONDS)
         self.assertGreater(budget, len(watchdog.CHECKS) * per_service)
 
 
