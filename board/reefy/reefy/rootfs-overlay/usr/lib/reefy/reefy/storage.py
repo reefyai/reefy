@@ -81,6 +81,34 @@ def _run_lvm_timed(command, *, timeout, **kwargs):
             except OSError:
                 pass
 
+def _mount_tree_absent(path):
+    """Prove a timed-out unmount completed; unavailable evidence fails closed."""
+    try:
+        with open('/proc/self/mountinfo') as stream:
+            rows = [line.split() for line in stream]
+        if not rows or any(len(row) < 10 or '-' not in row for row in rows):
+            return False
+        target = os.path.realpath(path)
+        for row in rows:
+            mount = re.sub(r'\\([0-7]{3})', lambda m: chr(int(m[1], 8)), row[4])
+            if mount == target or mount.startswith(target + '/'):
+                return False
+        return True
+    except OSError:
+        return False
+
+
+def _signatures_absent(target):
+    """A probe failure must never authorize the following destructive steps."""
+    try:
+        probe = subprocess.run(['wipefs', '--no-act', '--json', target],
+                               capture_output=True, text=True, timeout=10)
+        report = json.loads(probe.stdout)
+        return probe.returncode == 0 and report.get('signatures') == []
+    except (OSError, subprocess.SubprocessError, ValueError, AttributeError):
+        return False
+
+
 def _scan_existing_volumes(_log=None):
     """Bound discovery and preserve wait diagnostics before killing a timeout."""
     emit = _log or log
@@ -1016,7 +1044,18 @@ class Storage:
                         subprocess.run(['cp', '-a', f'{sdir}/.', f'{tmp}/'],
                                        capture_output=True, timeout=60)
                 finally:
-                    subprocess.run(['umount', tmp], capture_output=True, timeout=10)
+                    try:
+                        unmounted = subprocess.run(['umount', tmp], capture_output=True, timeout=10)
+                    except subprocess.TimeoutExpired:
+                        # run() killed/reaped the child, but a kernel-side flush
+                        # can finish before it is reaped. Do not replay umount
+                        # or abandon successfully seeded state in that case.
+                        if not _mount_tree_absent(tmp):
+                            raise
+                    else:
+                        if unmounted.returncode and not _mount_tree_absent(tmp):
+                            raise subprocess.CalledProcessError(
+                                unmounted.returncode, ['umount', tmp])
         finally:
             try:
                 os.rmdir(tmp)
@@ -2360,7 +2399,17 @@ class Storage:
 
         # Step 2: Wipe all filesystem/volume-manager signatures
         log('mqtt', f'Wiping signatures on {target}')
-        subprocess.run(['wipefs', '-af', target], capture_output=True, timeout=15)
+        try:
+            wiped = subprocess.run(['wipefs', '-af', target], capture_output=True, timeout=15)
+        except subprocess.TimeoutExpired:
+            # A late ioctl completion can leave a successful erase behind a
+            # timeout. Continue only with positive read-only proof; never retry
+            # the destructive command or infer success from missing output.
+            if not _signatures_absent(target):
+                raise
+        else:
+            if wiped.returncode:
+                raise subprocess.CalledProcessError(wiped.returncode, ['wipefs', '-af', target])
 
         # Step 3: Zero first 4MB (GPT headers, superblocks, partition tables)
         log('mqtt', f'Zeroing first 4MB of {target}')
