@@ -114,6 +114,12 @@ LUKS is opened with discard pass-through and crypto-CPU submission enabled.
 These flags are persisted in the LUKS header on provisioning. Filesystems also
 mount with discard so deleted thin-pool chunks can reach the physical device.
 
+Fresh state, data and app LVs use `mkfs.xfs -K` to skip the format-time
+whole-volume discard. Formatting still creates normal XFS metadata within the
+existing deadline. This avoids discarding several GiB before a new state volume
+can become ready, while preserving normal discard mounts and reclaim. Existing
+LVs are not reformatted. See the [XFS formatter manual](https://man7.org/linux/man-pages/man8/mkfs.xfs.8.html).
+
 This design protects an internal data disk removed without the Reefy boot
 disk. It does not protect against an attacker who obtains both the boot disk
 and the encrypted data disks, because the unlock key is on the boot disk. A

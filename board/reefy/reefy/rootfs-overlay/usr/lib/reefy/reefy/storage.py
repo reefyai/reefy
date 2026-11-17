@@ -952,7 +952,7 @@ class Storage:
         # (we only mkfs on create); the mount path is fs-type-aware so
         # both XFS (new) and ext4 (legacy) mount correctly.
         result = subprocess.run(
-            ['mkfs.xfs', '-q', '-L', 'reefy-data', default_lv_path],
+            ['mkfs.xfs', '-q', '-K', '-L', 'reefy-data', default_lv_path],
             capture_output=True, text=True, timeout=120)
         if result.returncode != 0:
             raise RuntimeError(f'mkfs.xfs failed: {result.stderr}')
@@ -1019,8 +1019,11 @@ class Storage:
             if _log:
                 _log(f'state LV create failed: {r.stderr}')
             return
+        # New LV creation does not need a whole-volume discard before writing
+        # XFS metadata. Large discard requests can consume the format deadline
+        # through LUKS and virtual disks. Normal discard mounts stay enabled.
         r = subprocess.run(
-            ['mkfs.xfs', '-q', lv_path],
+            ['mkfs.xfs', '-q', '-K', lv_path],
             capture_output=True, text=True, timeout=60)
         if r.returncode != 0:
             if _log:
@@ -1807,7 +1810,7 @@ class Storage:
                 # Existing ext4 LVs are untouched - we only mkfs on create.
                 try:
                     r = subprocess.run(
-                        ['mkfs.xfs', '-q', lv_path],
+                        ['mkfs.xfs', '-q', '-K', lv_path],
                         capture_output=True, text=True, timeout=60)
                 except (subprocess.SubprocessError, OSError):
                     self._require_new_volume_cleanup(lv_ref)
