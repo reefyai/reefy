@@ -81,3 +81,56 @@ class ProvisionTimeoutPostconditions(unittest.TestCase):
         for completed,report in ((False,None),(True,'{}'),(True,'not json'),(True,'{"signatures":null}')):
             with self.subTest(report=report), self.assertRaises(subprocess.TimeoutExpired):
                 self.wipe(completed,report=report)
+
+
+class HeaderTimeoutPostconditions(unittest.TestCase):
+    def exercise(self, completed, flush_code=0):
+        with tempfile.TemporaryDirectory() as directory:
+            disk=Path(directory)/'owned-disk'
+            disk.write_bytes(b'A'*(4*1024**2))
+            sibling=Path(directory)/'unrelated';sibling.write_bytes(b'preserved')
+            calls=[];real_run=subprocess.run
+            def run(args,**kwargs):
+                calls.append(args)
+                if args[0]=='dd':
+                    if completed:disk.write_bytes(bytes(4*1024**2))
+                    raise subprocess.TimeoutExpired(args,15)
+                if args[0]=='blockdev':return result(flush_code)
+                if args[0]==storage.sys.executable:return real_run(args,**kwargs)
+                return result()
+            with mock.patch.object(storage.subprocess,'run',side_effect=run), mock.patch.object(storage.Storage,'_get_dm_tree',return_value=[]):
+                try:storage.Storage()._force_wipe_device(str(disk))
+                finally:
+                    self.assertEqual(sibling.read_bytes(),b'preserved')
+                    self.assertEqual(sum(a[0]=='dd' for a in calls),1)
+                    if not completed:self.assertFalse(any(a[0]=='blockdev' for a in calls))
+
+    def test_completed_header_zeroing_requires_flush_and_never_replays_write(self):
+        self.exercise(True)
+
+    def test_incomplete_header_is_not_accepted(self):
+        with self.assertRaises(subprocess.TimeoutExpired):self.exercise(False)
+
+    def test_completed_header_with_failed_flush_is_not_accepted(self):
+        with self.assertRaises(subprocess.CalledProcessError):self.exercise(True,1)
+
+    def test_short_nonzero_or_unavailable_header_proof_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            disk=Path(directory)/'owned-disk'
+            for payload in (bytes(1024),bytes(4*1024**2-1)+b'X'):
+                disk.write_bytes(payload)
+                self.assertFalse(storage._header_zeroed(str(disk)))
+        for error in (OSError('synthetic unavailable device'),
+                      subprocess.TimeoutExpired('synthetic probe',5)):
+            with mock.patch.object(storage.subprocess,'run',side_effect=error):
+                self.assertFalse(storage._header_zeroed('/synthetic-owned-disk'))
+
+    def test_failed_zeroing_stops_before_flush(self):
+        calls=[]
+        def run(args,**kwargs):
+            calls.append(args)
+            return result(1 if args[0]=='dd' else 0)
+        with mock.patch.object(storage.subprocess,'run',side_effect=run), mock.patch.object(storage.Storage,'_get_dm_tree',return_value=[]):
+            with self.assertRaises(subprocess.CalledProcessError):
+                storage.Storage()._force_wipe_device('/synthetic-owned-disk')
+        self.assertFalse(any(a[0]=='blockdev' for a in calls))
