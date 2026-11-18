@@ -39,6 +39,7 @@ class ExistingVolumeUnavailableError(RuntimeError):
 
 LVM_PROBE_TIMEOUT_S = 30
 PV_CREATE_TIMEOUT_S = 60
+LV_CREATE_TIMEOUT_S = 60
 LUKS_HEADER_PROBE_TIMEOUT_S = 30
 LUKS_HEADER_PROBE_SLOW_S = 5
 
@@ -982,7 +983,7 @@ class Storage:
             result = subprocess.run(
                 ['lvcreate', '--thin', '--virtualsize', f'{pool_size}B',
                  '-n', self.STORAGE_LV, pool_path],
-                capture_output=True, text=True, timeout=60)
+                capture_output=True, text=True, timeout=LV_CREATE_TIMEOUT_S)
         except subprocess.TimeoutExpired as error:
             raise RuntimeError(
                 'Default LV creation timed out after 60 seconds; '
@@ -1011,7 +1012,7 @@ class Storage:
 
     def _ensure_state_lv(self, _log=None):
         """Create the thick state LV (reefy_state), sized
-        min(4 GiB, 10% of VG), floored at 256 MiB. Real blocks outside
+        min(4 GiB, 10% of VG), floored at 512 MiB. Real blocks outside
         the thin pool so /mnt/reefy-data/state is never starved by a full
         app pool. Idempotent; must run BEFORE the pool's 100%FREE.
         State's footprint is tiny+bounded, so a fixed-but-generous size
@@ -1030,13 +1031,20 @@ class Storage:
             vg_bytes = 0
         gib = 1024 ** 3
         size = min(4 * gib, vg_bytes // 10) if vg_bytes else gib
-        size = max(size, 256 * 1024 * 1024)  # floor for tiny media
+        # XFS requires more than 300 MiB. Keep even tiny fresh volumes
+        # comfortably above that limit; existing state LVs returned above
+        # must never be resized or reformatted by provisioning.
+        size = max(size, 512 * 1024 * 1024)
         size_mib = size // (1024 * 1024)
         create_command = ['lvcreate', '-L', f'{size_mib}M', '-n', self.STATE_LV,
                           self.STORAGE_VG]
+        # Metadata can be committed while lvcreate still waits for device I/O
+        # or udev completion. Use the same bounded allowance as default-LV
+        # creation and require its real successful exit before formatting.
+        # The caller's adoption/readiness deadline remains unchanged.
         try:
-            r = subprocess.run(create_command, capture_output=True,
-                               text=True, timeout=15)
+            r = _run_lvm_timed(create_command, capture_output=True,
+                               text=True, timeout=LV_CREATE_TIMEOUT_S)
         except subprocess.TimeoutExpired:
             # subprocess.run has killed and reaped the timed-out process.
             # A path check alone cannot distinguish missing metadata from a
@@ -1062,8 +1070,8 @@ class Storage:
                 raise
             if _log:
                 _log('State LV create timed out without committed metadata; retrying once')
-            r = subprocess.run(create_command, capture_output=True,
-                               text=True, timeout=15)
+            r = _run_lvm_timed(create_command, capture_output=True,
+                               text=True, timeout=LV_CREATE_TIMEOUT_S)
         if r.returncode != 0:
             if _log:
                 _log(f'state LV create failed: {r.stderr}')
@@ -1071,13 +1079,16 @@ class Storage:
         # New LV creation does not need a whole-volume discard before writing
         # XFS metadata. Large discard requests can consume the format deadline
         # through LUKS and virtual disks. Normal discard mounts stay enabled.
-        r = subprocess.run(
+        # State uses the same XFS metadata/log initialization as the default
+        # data LV. A separate 60s cutoff killed a valid cold format under
+        # parallel I/O, leaving mkfs-in-progress=1 and no root inode. Give
+        # it the existing data-format allowance; adoption readiness is unchanged.
+        # Require the real formatter exit, never accept an XFS signature alone.
+        r = _run_lvm_timed(
             ['mkfs.xfs', '-q', '-K', lv_path],
-            capture_output=True, text=True, timeout=60)
+            capture_output=True, text=True, timeout=120)
         if r.returncode != 0:
-            if _log:
-                _log(f'state LV mkfs.xfs failed: {r.stderr}')
-            return
+            raise RuntimeError(f'state LV mkfs.xfs failed: {r.stderr}')
         if _log:
             _log(f'Created thick state LV {self.STATE_LV} ({size_mib} MiB)')
 

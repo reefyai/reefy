@@ -1253,7 +1253,7 @@ class StateLvCreateTimeoutTests(unittest.TestCase):
         instance = storage.Storage()
         calls = []
         creates = 0
-        original = subprocess.TimeoutExpired(['lvcreate'], 15)
+        original = subprocess.TimeoutExpired(['lvcreate'], storage.LV_CREATE_TIMEOUT_S)
 
         def run(command, **kwargs):
             nonlocal creates
@@ -1285,7 +1285,7 @@ class StateLvCreateTimeoutTests(unittest.TestCase):
         creates = [(command, kwargs) for command, kwargs in calls if command[0] == 'lvcreate']
         self.assertEqual(len(creates), 2)
         self.assertEqual(creates[0], creates[1])
-        self.assertEqual(creates[0][1]['timeout'], 15)
+        self.assertEqual(creates[0][1]['timeout'], storage.LV_CREATE_TIMEOUT_S)
         self.assertEqual([command[0] for command, _ in calls],
                          ['vgs', 'lvcreate', 'lvs', 'lvcreate', 'mkfs.xfs'])
 
