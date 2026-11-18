@@ -67,6 +67,57 @@ def _probe_luks_header(device, _log=None):
                 pass
 
 
+def _created_partition_ready(disk, number):
+    """Require the exact block node, parent and GPT geometry before writing."""
+    try:
+        from reefy.boot_slots import layout
+        sector, _, partitions = layout(disk)
+        entry = partitions[number]
+        expected_type = uuid_mod.UUID(
+            'e3c9e316-0b5c-4db8-817d-f92df00215ae' if number == 3 else
+            '0fc63daf-8483-4772-8e79-3d69d8477de4').bytes_le
+        if number not in (3, 4) or entry['type'] != expected_type:
+            return False
+        parent = os.stat(disk)
+        child = os.stat(_part_dev(disk, number))
+        if not stat.S_ISBLK(parent.st_mode) or not stat.S_ISBLK(child.st_mode):
+            return False
+        node = os.path.realpath(
+            f'/sys/dev/block/{os.major(child.st_rdev)}:{os.minor(child.st_rdev)}')
+        def read(path):
+            with open(path) as stream:
+                return stream.read().strip()
+        return (read(os.path.dirname(node) + '/dev') ==
+                f'{os.major(parent.st_rdev)}:{os.minor(parent.st_rdev)}'
+                and int(read(node + '/partition')) == number
+                and int(read(node + '/start')) * 512 == entry['start'] * sector
+                and int(read(node + '/size')) * 512 ==
+                (entry['end'] - entry['start'] + 1) * sector)
+    except (OSError, ValueError, KeyError, RuntimeError, struct.error):
+        return False
+
+
+def _refresh_created_partition(disk, number):
+    # Only add the partition just created. Whole-disk partprobe also touches
+    # mounted boot slots and can block unrelated udev work during adoption.
+    # A timed-out acknowledgement is not proof of failure or success: require
+    # the kernel's exact parent/geometry to match the CRC-validated GPT.
+    if number not in (3, 4):
+        raise ValueError('Only newly created key/data partitions may be refreshed')
+    try:
+        subprocess.run(['partx', '--add', '--nr', str(number), disk],
+                       capture_output=True, timeout=10)
+    except subprocess.TimeoutExpired:
+        pass
+    deadline = time.monotonic() + 1
+    while not _created_partition_ready(disk, number):
+        if time.monotonic() >= deadline:
+            raise RuntimeError(
+                f'Created partition is not verified in the kernel: '
+                f'{_part_dev(disk, number)}; provisioning stopped')
+        time.sleep(0.1)
+
+
 def _run_lvm_timed(command, *, timeout, **kwargs):
     """Bound a provisioning command and report slow elapsed time only."""
     started = time.monotonic()
@@ -613,8 +664,7 @@ class Storage:
             subprocess.run(
                 ['sgdisk', f'--new=3:{key_start}:+1M', '--typecode=3:0c01', disk],
                 capture_output=True, timeout=BOOT_GPT_TIMEOUT_SECONDS, check=True)
-            subprocess.run(['partprobe', disk], capture_output=True, timeout=10)
-            time.sleep(1)
+            _refresh_created_partition(disk, 3)
 
             if not os.path.exists(key_part):
                 raise RuntimeError(
@@ -703,8 +753,7 @@ class Storage:
                 ['sgdisk', f'--new=4:{data_start}:0', '--typecode=4:8300',
                  '--change-name=4:reefy-data', disk],
                 capture_output=True, timeout=BOOT_GPT_TIMEOUT_SECONDS, check=True)
-            subprocess.run(['partprobe', disk], capture_output=True, timeout=10)
-            time.sleep(1)
+            _refresh_created_partition(disk, 4)
 
         if not os.path.exists(data_part):
             raise RuntimeError(
