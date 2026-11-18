@@ -1,6 +1,12 @@
 #!/bin/bash
 set -euxo pipefail
 
+# Adoption uses a scoped kernel partition refresh. Fail the image build if a
+# warm package cache omitted that required runtime command.
+test -x "${TARGET_DIR}/usr/sbin/partx" ||
+  test -x "${TARGET_DIR}/usr/bin/partx" ||
+  test -x "${TARGET_DIR}/sbin/partx"
+
 mkdir -p "${TARGET_DIR}/etc/systemd/system/sysinit.target.wants"
 ln -sf /usr/lib/systemd/system/reefy-verity-monitor.service \
     "${TARGET_DIR}/etc/systemd/system/sysinit.target.wants/reefy-verity-monitor.service"

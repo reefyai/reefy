@@ -86,9 +86,9 @@ class ProviderWorkflowTests(unittest.TestCase):
             'reefyai/reefy-nvidia':
                 '354c700a5be1328471969978e0e72d4865e001dd',
             'reefyai/reefy-intel':
-                'de25d5bdf35658de2b759f8c394f6be1d5ac7220',
+                'a57f61f9d8e5270745f46ab99fa90a192f25351f',
             'reefyai/reefy-amd':
-                'c0dd3d168fb2b5c399f19901ba6cb9a5a6963d8c',
+                'd3fb4c2e3873c8b569f99663377a07f68bd5be37',
             'reefyai/reefy-artifact-fixtures':
                 'cf52f0ff6cbe10311a31b07a17425e115eb8377c',
         }
