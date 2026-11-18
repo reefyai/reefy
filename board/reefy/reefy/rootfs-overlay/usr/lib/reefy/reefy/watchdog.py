@@ -236,6 +236,9 @@ def check_service(check, state_dir=STATE_DIR, now=None):
     before = _container_state(container)
     if before is not None:
         _write_restart_intent(pending_file, before, now + COOLDOWN_SECONDS)
+    # Persist the cooldown before submission, including daemon interruption
+    # after Docker accepts the command but before its acknowledgment returns.
+    _write_int(cooldown_file, now + COOLDOWN_SECONDS)
     pending = False
     try:
         result = subprocess.run(
@@ -254,7 +257,6 @@ def check_service(check, state_dir=STATE_DIR, now=None):
     except OSError:
         restarted = False
 
-    _write_int(cooldown_file, now + COOLDOWN_SECONDS)
     if restarted:
         _clear(pending_file)
         _clear(failure_file)

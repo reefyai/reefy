@@ -147,3 +147,22 @@ class PendingRestartTests(unittest.TestCase):
                 self.assertFalse(self.pending.exists())
         self.assertEqual(len(receipts), 2)
         self.assert_preserved()
+
+    def test_interruption_after_submission_preserves_cooldown_without_replay(self):
+        def interrupted(args, **kwargs):
+            self.commands.append(args)
+            self.assertTrue(self.pending.exists())
+            self.assertEqual((self.root / 'reefy-proxy-cooldown').read_text(), '400')
+            raise KeyboardInterrupt()
+        with patch.object(watchdog.subprocess, 'run', side_effect=interrupted):
+            with self.assertRaises(KeyboardInterrupt):
+                self.tick(100)
+        self.late = self.healthy = True
+        self.tick(180)
+        self.assertFalse(self.pending.exists())
+        self.healthy = False
+        self.failures.write_text('2')
+        self.tick(200)
+        self.assertEqual(len(self.commands), 1)
+        self.assertIn('recovery suppressed by cooldown', self.output.getvalue())
+        self.assert_preserved()
