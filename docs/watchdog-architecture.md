@@ -198,3 +198,13 @@ boot
 | `board/reefy/reefy/rootfs-overlay/usr/lib/reefy/reefy/watchdog.py` | cloudflared and proxy probes, failure counts, and bounded restart. |
 | `board/reefy/reefy/rootfs-overlay/usr/lib/systemd/system/reefy-watchdog.timer` | Two-minute delay and one-minute interval. |
 | `board/reefy/reefy/rootfs-overlay/usr/lib/systemd/system/reefy-watchdog.service` | Bounded oneshot wrapper. |
+
+### Restart observation under Docker contention
+
+A timed-out Docker restart is submitted only once. The watchdog then spends at
+most ten seconds observing that exact container: its start must advance, it must
+be running without restarting, and its real liveness probe must succeed. A
+brief inspect lock or startup delay can be observed again within that window;
+missing, changed or unhealthy identity never proves recovery. Each inspect keeps
+its three-second bound. The service timeout remains 120 seconds, with the same
+three-failure threshold and cooldown.
