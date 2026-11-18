@@ -30,8 +30,10 @@ class PartitionIdentityTests(unittest.TestCase):
                 st_rdev=os.makedev(8, 16 if path == '/dev/synthetic' else 16 + number))
         with patch.object(boot_slots, 'layout', return_value=(sector, 99999,
                 {number: {'start': 2048, 'end': 4095, 'type': kind}})), \
-                patch.object(storage.os, 'stat', side_effect=device), \
-                patch.object(storage.os.path, 'realpath', return_value='/sys/fake/disk/part'), \
+                patch.object(storage, 'os', SimpleNamespace(
+                    stat=device, major=os.major, minor=os.minor,
+                    path=SimpleNamespace(realpath=lambda _: '/sys/fake/disk/part',
+                                         dirname=os.path.dirname))), \
                 patch('builtins.open', side_effect=read):
             return storage._created_partition_ready('/dev/synthetic', number)
 
