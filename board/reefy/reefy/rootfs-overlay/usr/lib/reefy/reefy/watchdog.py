@@ -21,6 +21,7 @@ PROBE_TIMEOUT_SECONDS = 3
 # The Docker stop grace excludes daemon cleanup and container startup.
 RESTART_TIMEOUT_SECONDS = 30
 STATE_INSPECT_TIMEOUT_SECONDS = 3
+RESTART_OBSERVATION_SECONDS = 10
 STATE_DIR = '/run/reefy-watchdog'
 COMPOSE_PROJECTS = ('reefy-system', 'state')
 
@@ -106,7 +107,7 @@ def _clear(path):
         pass
 
 
-def _container_state(container):
+def _container_state(container, timeout=STATE_INSPECT_TIMEOUT_SECONDS):
     """Read only the exact target's identity, start time and running state."""
     try:
         result = subprocess.run([
@@ -114,7 +115,7 @@ def _container_state(container):
             '{"id":"{{.Id}}","started":"{{.State.StartedAt}}",'
             '"running":{{.State.Running}},"restarting":{{.State.Restarting}}}',
             container], capture_output=True, text=True,
-            timeout=STATE_INSPECT_TIMEOUT_SECONDS)
+            timeout=timeout)
         if result.returncode:
             return None
         state = json.loads(result.stdout)
@@ -136,11 +137,24 @@ def _container_state(container):
 def _completed_restart(check, container, before):
     if before is None:
         return False
-    after = _container_state(container)
-    return bool(after and after['id'] == before['id']
-                and after['started'] > before['started']
-                and after['running'] and not after['restarting']
-                and probe(check['url'], check['kind']))
+    # Docker inspection can briefly block behind the restart's daemon lock.
+    # Observe the one submitted restart, without replaying it or extending the
+    # watchdog service or end-to-end recovery deadlines. Unknown stays failure.
+    deadline = time.monotonic() + RESTART_OBSERVATION_SECONDS
+    while (remaining := deadline - time.monotonic()) > 0:
+        after = _container_state(container, min(STATE_INSPECT_TIMEOUT_SECONDS, remaining))
+        if after and after['id'] != before['id']:
+            return False
+        if (after and after['started'] > before['started']
+                and after['running'] and not after['restarting']):
+            remaining = deadline - time.monotonic()
+            if remaining > 0 and probe(check['url'], check['kind'],
+                                       timeout=min(PROBE_TIMEOUT_SECONDS, remaining)):
+                return True
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(0.5, remaining))
+    return False
 
 
 def check_service(check, state_dir=STATE_DIR, now=None):

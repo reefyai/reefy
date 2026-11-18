@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import _bootstrap  # noqa: F401
@@ -25,28 +26,40 @@ class RestartPostconditions(unittest.TestCase):
             sentinel = root / 'unrelated-data'
             sentinel.write_bytes(b'preserved')
             operations = []
-            states = iter((before, after))
+            pending = [before, *(after if isinstance(after, list) else [after])]
+            ticks = [0.0]
+            probes = [0]
+
+            def probe(*args, **kwargs):
+                probes[0] += 1
+                return probes[0] > 1 and healthy
 
             def run(args, **kwargs):
                 operations.append(args)
                 if args[1] == 'restart':
                     raise subprocess.TimeoutExpired(args, 30)
                 self.assertEqual(args[1], 'inspect')
-                value = next(states)
+                value = pending.pop(0) if len(pending) > 1 else pending[0]
                 if isinstance(value, BaseException):
+                    ticks[0] += kwargs['timeout']
                     raise value
                 return type('Result', (), {'returncode': 0,
                     'stdout': json.dumps(value) if value is not None else 'invalid'})()
 
             output = io.StringIO()
             with patch.object(watchdog, 'find_container', return_value=IDENTITY), \
-                    patch.object(watchdog, 'probe', side_effect=[False, healthy]), \
-                    patch.object(watchdog.subprocess, 'run', side_effect=run), \
+                    patch.object(watchdog, 'probe', side_effect=probe), \
+                    patch.object(watchdog, 'time', SimpleNamespace(
+                        monotonic=lambda: ticks[0],
+                        sleep=lambda s: ticks.__setitem__(0, ticks[0] + s))), \
+                    patch.object(watchdog, 'subprocess', SimpleNamespace(
+                        run=run, TimeoutExpired=subprocess.TimeoutExpired)), \
                     contextlib.redirect_stdout(output):
                 watchdog.check_service(CHECK, directory, now=100)
             self.assertEqual(sentinel.read_bytes(), b'preserved')
             self.assertEqual(sum(a[1] == 'restart' for a in operations), 1)
             self.assertEqual((root / 'reefy-proxy-cooldown').read_text(), '400')
+            self.assertLessEqual(ticks[0], 10)
             return output.getvalue(), (root / 'reefy-proxy-failures').exists()
 
     def test_completed_restart_with_late_ack_is_accepted_without_replay(self):
@@ -56,6 +69,16 @@ class RestartPostconditions(unittest.TestCase):
         output, failed = self.exercise(before, after, True)
         self.assertIn('restart completed', output)
         self.assertNotIn('restart failed', output)
+        self.assertFalse(failed)
+
+    def test_docker_inspection_contention_recovers_without_restarting_again(self):
+        before = dict(id=IDENTITY, started='2020-01-01T00:00:00Z',
+                      running=True, restarting=False)
+        after = dict(before, started='2020-01-01T00:00:10Z')
+        output, failed = self.exercise(before, [
+            subprocess.TimeoutExpired(['docker', 'inspect'], 3),
+            before, after], True)
+        self.assertIn('restart completed', output)
         self.assertFalse(failed)
 
     def test_unknown_unchanged_wrong_or_unhealthy_state_fails_closed(self):
