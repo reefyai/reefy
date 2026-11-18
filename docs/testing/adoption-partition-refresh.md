@@ -21,7 +21,7 @@ python3 -m unittest discover -s board/reefy/reefy/tests -p 'test_storage*.py' -v
 python3 -m unittest discover -s tools/ci -p test_partition_tools.py -v
 ```
 
-The seven new adoption tests pass. The same adoption/restore journey errors
+The eight new adoption tests pass. The same adoption/restore journey errors
 against the original storage module when its refresh acknowledgement times
 out, then passes with the fix without writing a fresh key or formatting an
 existing volume. Negative cases reject sibling devices, incorrect partition

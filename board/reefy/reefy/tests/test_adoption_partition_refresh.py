@@ -13,7 +13,7 @@ from reefy import storage, boot_slots
 
 
 class PartitionIdentityTests(unittest.TestCase):
-    def ready(self, number=3, **changes):
+    def ready(self, number=3, mode=stat.S_IFBLK, wrong_type=False, **changes):
         sector = changes.pop('sector', 512)
         values = {'parent': '8:16', 'partition': str(number),
                   'start': str(2048 * sector // 512),
@@ -21,11 +21,12 @@ class PartitionIdentityTests(unittest.TestCase):
         values.update(changes)
         kind = uuid.UUID('e3c9e316-0b5c-4db8-817d-f92df00215ae' if number == 3
                          else '0fc63daf-8483-4772-8e79-3d69d8477de4').bytes_le
+        if wrong_type: kind = bytes(16)
         def read(path, *args, **kwargs):
             name = 'parent' if str(path).endswith('/dev') else str(path).rsplit('/', 1)[-1]
             return io.StringIO(values[name])
         def device(path):
-            return SimpleNamespace(st_mode=stat.S_IFBLK,
+            return SimpleNamespace(st_mode=mode,
                 st_rdev=os.makedev(8, 16 if path == '/dev/synthetic' else 16 + number))
         with patch.object(boot_slots, 'layout', return_value=(sector, 99999,
                 {number: {'start': 2048, 'end': 4095, 'type': kind}})), \
@@ -44,6 +45,10 @@ class PartitionIdentityTests(unittest.TestCase):
         for changes in ({'parent':'8:32'}, {'partition':'4'}, {'start':'4096'},
                         {'size':'1024'}, {'start':'unknown'}):
             with self.subTest(changes=changes): self.assertFalse(self.ready(**changes))
+
+    def test_regular_file_and_wrong_partition_type_are_not_writable(self):
+        self.assertFalse(self.ready(mode=stat.S_IFREG))
+        self.assertFalse(self.ready(wrong_type=True))
 
     def test_bad_gpt_and_missing_node_fail_closed(self):
         for error in (RuntimeError('bad CRC'), OSError('missing node')):
