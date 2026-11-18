@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import _bootstrap  # noqa: F401
@@ -48,9 +49,11 @@ class RestartPostconditions(unittest.TestCase):
             output = io.StringIO()
             with patch.object(watchdog, 'find_container', return_value=IDENTITY), \
                     patch.object(watchdog, 'probe', side_effect=probe), \
-                    patch.object(watchdog.time, 'monotonic', side_effect=lambda: ticks[0]), \
-                    patch.object(watchdog.time, 'sleep', side_effect=lambda s: ticks.__setitem__(0, ticks[0] + s)), \
-                    patch.object(watchdog.subprocess, 'run', side_effect=run), \
+                    patch.object(watchdog, 'time', SimpleNamespace(
+                        monotonic=lambda: ticks[0],
+                        sleep=lambda s: ticks.__setitem__(0, ticks[0] + s))), \
+                    patch.object(watchdog, 'subprocess', SimpleNamespace(
+                        run=run, TimeoutExpired=subprocess.TimeoutExpired)), \
                     contextlib.redirect_stdout(output):
                 watchdog.check_service(CHECK, directory, now=100)
             self.assertEqual(sentinel.read_bytes(), b'preserved')
