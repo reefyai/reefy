@@ -1071,13 +1071,16 @@ class Storage:
         # New LV creation does not need a whole-volume discard before writing
         # XFS metadata. Large discard requests can consume the format deadline
         # through LUKS and virtual disks. Normal discard mounts stay enabled.
-        r = subprocess.run(
+        # State uses the same XFS metadata/log initialization as the default
+        # data LV. A separate 60s cutoff killed a valid cold format under
+        # parallel I/O, leaving mkfs-in-progress=1 and no root inode. Give
+        # it the existing data-format allowance; adoption readiness is unchanged.
+        # Require the real formatter exit, never accept an XFS signature alone.
+        r = _run_lvm_timed(
             ['mkfs.xfs', '-q', '-K', lv_path],
-            capture_output=True, text=True, timeout=60)
+            capture_output=True, text=True, timeout=120)
         if r.returncode != 0:
-            if _log:
-                _log(f'state LV mkfs.xfs failed: {r.stderr}')
-            return
+            raise RuntimeError(f'state LV mkfs.xfs failed: {r.stderr}')
         if _log:
             _log(f'Created thick state LV {self.STATE_LV} ({size_mib} MiB)')
 
