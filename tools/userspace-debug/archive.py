@@ -2,6 +2,7 @@
 """Capture pre-strip system ELF files and verify a matching shipped sysroot."""
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -9,6 +10,12 @@ import shutil
 import struct
 import subprocess
 import tempfile
+
+
+_compression_spec = importlib.util.spec_from_file_location(
+    'kernel_debug_compression', Path(__file__).resolve().parents[1] / 'kernel-debug/archive.py')
+_compression = importlib.util.module_from_spec(_compression_spec)
+_compression_spec.loader.exec_module(_compression)
 
 
 def sha(path):
@@ -237,7 +244,7 @@ def archive(output, destination):
         paths = sorted(p for p in root.rglob('*') if p.is_file() and not p.is_symlink())
         (root / 'SHA256SUMS').write_text(''.join(f'{sha(p)}  {p.relative_to(root)}\n' for p in paths))
         destination.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(['tar', '-I', 'pigz -p 8', '-cf', str(destination), '-C', str(root), '.'], check=True)
+        _compression.compress_bundle(root, destination, workers=8)
     release = dict(line.split('=', 1) for line in (target / 'usr/lib/os-release').read_text().splitlines() if '=' in line)
     index = {'image_version': release['IMAGE_VERSION'].strip(chr(34)), 'reefy_build_id': release['REEFY_BUILD_ID'].strip(chr(34)), 'archive_sha256': sha(destination), 'archive_bytes': destination.stat().st_size, 'system_elf_count': len(records)}
     destination.with_name('reefy-userspace-debug.json').write_text(json.dumps(index) + '\n')

@@ -77,3 +77,26 @@ Measure a cold build and a second build with a runtime-only change on the same
 runner, then compare package compilation and total critical-path timings.
 Do not claim a measured speedup from unit tests alone. Fresh A/B and rollback
 build identities remain required even when package binaries are reused.
+
+
+## Bounded debug scratch
+
+The archive pair shares one private 32 GiB tmpfs for regenerable staging.
+The namespace is private, the mount forbids swap and execution, and both
+archive children inherit its TMPDIR. Before admission, available host memory
+must cover the cap plus 32 GiB, and every visible cgroup limit must cover the
+cap plus 2 GiB. Insufficient headroom fails with an explicit infrastructure
+error; retry when healthy. There is no disk fallback. The kernel rejects
+writes beyond the cap. Child failure or cancellation drains archive processes
+before releasing the mount; namespace destruction also releases the mount.
+Final archives, symbol originals, build trees and deployment artifacts retain
+their persistent paths and all normal verification/upload checks.
+
+Regression command (Linux, private mount capability required for native cases):
+`python3 -m unittest discover -s tools/ci -p 'test_*.py'`.
+The native cases fill a small tmpfs, cancel a running worker and verify cleanup
+and unrelated persistent output. Non-Linux admission tests still run locally.
+
+Track durable storage work in [the LVM/filesystem follow-up](https://github.com/reefyai/reefy/issues/107).
+RAM staging does not establish a full-suite speedup or replace storage repair
+and migration qualification.
