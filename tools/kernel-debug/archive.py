@@ -17,6 +17,18 @@ def run(*args):
     return subprocess.check_output(args, text=True).strip()
 
 
+def extract_boot_kernel(script, image, destination):
+    """Keep the upstream extraction algorithm, redirect its hard-coded scratch."""
+    source, count = re.subn(r'mktemp /tmp/(vmlinux-X+)',
+                            r'mktemp "$TMPDIR/\1"', script.read_text())
+    if count != 1:
+        raise RuntimeError('kernel extractor temporary-file policy changed')
+    with destination.open('wb') as stream:
+        subprocess.run(['bash', '-s', '--', str(image)], input=source.encode(),
+                       env=dict(os.environ, TMPDIR=str(destination.parent)),
+                       stdout=stream, check=True)
+
+
 def digest(path):
     h = hashlib.sha256()
     with path.open('rb') as stream:
@@ -118,9 +130,8 @@ def main():
             if digest(extracted) != digest(kernel / 'arch/x86/boot/bzImage'):
                 raise RuntimeError(f'{flavor} UKI kernel mismatch')
         extracted = Path(temporary) / 'vmlinux'
-        with extracted.open('wb') as stream:
-            subprocess.run(['bash', str(kernel / 'scripts/extract-vmlinux'),
-                            str(output / 'images/bzImage')], stdout=stream, check=True)
+        extract_boot_kernel(kernel / 'scripts/extract-vmlinux',
+                            output / 'images/bzImage', extracted)
         if elf_info(extracted, readelf)[0] != kernel_id:
             raise RuntimeError('boot kernel build ID mismatch')
 
