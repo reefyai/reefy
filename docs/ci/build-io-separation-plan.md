@@ -29,6 +29,28 @@ successful build/archive verification; interrupted builds cannot bless a cache.
 The package-key format transition intentionally incurs a conservative initial
 refresh. No cache is manually marked valid.
 
+## Remaining state-LV timeout
+
+The retained Wi-Fi adoption guest timed out after 15 seconds in `lvcreate`.
+Host full I/O pressure reached about 75 percent during the provisioning window,
+while physical free space stayed near 98 GiB. Subsequent read-only LVM inventory
+showed the state LV had committed. This is consistent with the previously
+measured host allocation stalls; it does not establish the exact kernel wait
+site for this invocation. The latest fresh firmware builds were verified kernel
+and package cache hits, but still compiled provider modules and regenerated
+filesystem images. Cache reuse therefore did not remove competing disk writes.
+
+Keep the current state-LV safety behavior: retry only when a valid, bounded LVM
+inventory proves the LV absent. If metadata committed or its state is unknown,
+stop without retrying or formatting. Do not increase the 15-second command
+budget or automatically format an existing LV to hide storage contention.
+Focused state-creation and formatting tests retain these checks and preserve
+existing volumes.
+
+A read-only topology check also confirms that both builder caches and VM
+storage resolve through the same ext4 device to both physical NVMe controllers.
+No independent build resource has been selected or provisioned.
+
 ## Target layout and capacity gate
 
 Both physical SSDs currently back the same encrypted thin pool. The VG has no
@@ -61,6 +83,7 @@ Use synthetic proposed paths such as /srv/ci-build/primary and
 | Buildroot output, downloads and ccache | Per-builder build-store directories |
 | Runner checkout, actions temp and build logs | Per-builder workspace directories |
 | Builder-private Docker/containerd data | Per-builder engine directories |
+| Outer runner writable/image layers and engine metadata | Builder-only outer engine on build store |
 | Final firmware, providers and persistent debug archives | Build-store artifact directories |
 | Read-only secondary seed | Primary build-store cache, read-only mount |
 | Shared version counter | One preserved, locked build-store directory |
@@ -69,7 +92,106 @@ Use synthetic proposed paths such as /srv/ci-build/primary and
 
 Do not move the shared host Docker root or customer application volumes. Explicit
 workspace mounts are necessary: moving only /buildroot-cache leaves checkout and
-container-layer writes on the old storage.
+container-layer writes on the old storage. The outer runner containers also
+install packages into their writable layers. Either move the builders to a
+separate physical host, or recreate only the builders under a separate outer
+engine whose entire data root is `/srv/ci-build/runner-engine`. Preserve the
+customer/shared host engine and its data root. Do not try to relocate live
+individual overlay directories or symlink them into a running shared daemon.
+The separate engine requires its own runtime/socket/bridge names and reviewed
+start/reconciliation integration; no host engine socket is exposed to jobs.
+
+## Reviewable mount overrides and read-only checks
+
+`tools/build-storage/build_storage.py` prepares an internal operator bundle. It
+has no apply, mount, copy, format or service-control operation. For example:
+
+```sh
+python3 tools/build-storage/build_storage.py plan \
+  --build-root /srv/ci-build --vm-root /srv/ci-vms > proposed-layout.json
+jq '.layout.compose_overrides.primary' proposed-layout.json > primary.storage.override.json
+jq '.layout.compose_overrides.secondary' proposed-layout.json > secondary.storage.override.json
+```
+
+List **every** actual VM boot, data, snapshot and scratch storage root using
+repeated `--vm-root` arguments. These synthetic paths are examples, not a host
+configuration. Planning creates no directories and always reports storage not
+ready. Review the rendered JSON before separately authorizing resource
+provisioning, copying or applying configuration.
+
+The two overrides replace only volume entries for service `app`, by container
+target. They move `/buildroot-cache`, `/_work`, `/actions-runner/_diag`, `/tmp`,
+`/var/tmp`, `/var/lib/docker` and `/var/lib/containerd`. All persistent build
+outputs and final artifacts must be inside those cache/work paths. The audited
+runner work folder is a child of `/_work`. Private engines retain separate
+stores; the secondary gets only a read-only primary seed. Both roles retain
+one writable, locked version-counter directory. Explicit binds forbid automatic
+host-directory creation. Existing images, environment, device mounts, privileges,
+MQTT settings and network boundaries are not changed by the override.
+
+Before any future start, run the following on the **host** in the same mount
+namespace as the host container engine, after authorized provisioning/copying:
+
+```sh
+python3 tools/build-storage/build_storage.py check proposed-layout.json
+```
+
+The check requires an exact ext4/XFS build mount, at least 1.25 TiB usable and
+20 percent free, and all bind source directories on that mount. It walks
+partition and LUKS/LVM/device-mapper ancestry through sysfs. Shared whole disks,
+shared NVMe controllers (including different namespaces), missing/cyclic ancestry,
+unknown virtual backing, unmounted placeholders, nested mount escapes, read-only
+filesystems and inadequate capacity all fail closed. It does not certify pool
+health, copied-data integrity or performance; those remain separate gates.
+
+These topology checks implement the same-host independent-device option. A
+separate physical builder host needs equivalent reviewed physical/storage
+inventory on both hosts; it cannot pass this local check by inventing remote VM
+paths or mounting VM data onto the builder merely to satisfy the tool.
+
+After the separately authorized runner cutover, capture each builder's
+read-only container inspect `Mounts` and `GraphDriver` fields in a private JSON
+object with `primary` and `secondary` keys (each value holds those two fields), then run:
+
+```sh
+python3 tools/build-storage/build_storage.py check-containers \
+  proposed-layout.json builder-mounts.json
+```
+
+This repeats the host checks and verifies the actual bind sources, destinations
+and read/write modes, including seed/counter mounts. It also requires every
+outer overlay2 upper/work/lower layer to resolve inside the dedicated
+`runner-engine` directory on build storage. Unknown snapshotters fail rather
+than claiming their backing is verified. Added host Docker socket
+mounts are rejected. This uses operator-supplied inventory and never accesses a
+daemon or changes a container. Keep fresh inventory with the qualification
+artifacts; do not reuse it after a restart or configuration change.
+
+Do not apply an override to an ephemeral, reconciler-generated Compose file.
+The cutover must update the builders' authoritative declarations and persistent
+start mechanism, with a host mount dependency and a fresh successful storage
+check before **every** start. A missing/unhealthy build mount must keep only the
+builders stopped, including after host restart; creating directories on the VM
+filesystem is not a fallback. Validate this restart/missing-mount behavior before
+admitting work. Copy the runner diagnostics and workspace state while drained,
+and preserve existing ownership and runner registration. These integration
+changes belong to the separately reviewed cutover for the selected resource.
+
+The tool is outside kernel build inputs so changing storage preparation does
+not invalidate compiled firmware caches. The self-hosted Python workflow runs
+its synthetic regression suite; no new live-storage CI gate is enabled yet.
+
+Focused commands:
+
+```sh
+python3 -m unittest discover -s tools/build-storage -v
+PYTHONPATH=board/reefy/reefy/tests python3 -m unittest \
+  test_storage.StateLvCreateTimeoutTests test_state_format_deadline -v
+```
+
+Passing these checks reports no applied configuration and no passed full
+qualification. Independent hardware and a validated cutover are still required
+before claiming that build/VM contention is fixed.
 
 ## Proposed cutover procedure
 
@@ -89,7 +211,8 @@ container-layer writes on the old storage.
    ownership, permissions and extended attributes. Compare file inventories and
    hashes of cache outputs and retained artifacts. Preserve the version-counter
    maximum and lock ownership; never permit counters to go backwards.
-5. Change only builder-specific mount definitions. Start one builder first. Inspect
+5. Update only builder-specific declarations, engine placement and guarded start
+   dependencies as described above. Start one builder first. Inspect
    findmnt and block dependencies from both container and host views. Check that
    workspace, cache, engine, temp and artifact writes all reach the independent
    store; validate read-only seed and shared counter mounts. Leave the second
@@ -112,7 +235,8 @@ container-layer writes on the old storage.
 
 Accept only with no storage/transport deadline failures under cold concurrent
 load: snapshot identification remains inside its existing five-second budget,
-Docker fault injection inside its existing 30-second transport limit, and all
+Docker fault injection inside its existing 30-second transport limit, state-LV
+creation inside its existing 15-second budget, and all
 normal readiness/recovery/durability checks pass unchanged. Require data and
 credential sentinels preserved, no OOM/reclaim-driven fallback, read-write pools,
 capacity reserves, monotonic version counters and a complete hardware-qualified

@@ -133,3 +133,10 @@ See [the build/VM I/O separation plan](../../docs/ci/build-io-separation-plan.md
 for capacity, mount scope, cold-load acceptance and rollback. It is a proposed
 cutover, not an executed live storage change. A warm cache does not replace
 qualification under a genuinely cold build.
+
+
+The prepared internal tool at `tools/build-storage/build_storage.py` emits
+per-builder mount overrides and verifies host block ancestry and actual container
+mount inventories without applying them. See the separation plan for commands
+and limits. Its regressions run in the self-hosted Python workflow; no physical
+storage migration or automatic live admission gate is enabled by this change.
