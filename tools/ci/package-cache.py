@@ -9,7 +9,7 @@ import subprocess
 PACKAGES = ('linux-firmware', 'thin-provisioning-tools')
 
 
-def configuration(output):
+def configuration(output, repo=None):
     """Hash resolved Kconfig assignments, not generated comments/order."""
     result = {}
     for line in (output / '.config').read_text().splitlines():
@@ -19,13 +19,24 @@ def configuration(output):
         name, separator, value = line.partition('=')
         if not separator or not name.replace('_', '').isalnum():
             raise ValueError('invalid resolved Buildroot configuration')
+        if repo is not None and name in ('BR2_DEFCONFIG', 'BR2_EXTERNAL_REEFY_PATH'):
+            # Buildroot records checkout locations, which do not change compiler
+            # inputs. Normalize only paths proven to belong to this checkout.
+            try:
+                path = Path(json.loads(value))
+                relative = path.resolve().relative_to(repo.resolve())
+            except (ValueError, TypeError):
+                pass
+            else:
+                if name == 'BR2_DEFCONFIG' or relative == Path('.'):
+                    value = json.dumps('<external>/' + relative.as_posix())
         result[name] = value
     return result
 
 
 def fingerprint(repo, output):
-    digest = hashlib.sha256(b'reefy-package-refresh-v1\0')
-    digest.update(json.dumps(configuration(output), sort_keys=True).encode())
+    digest = hashlib.sha256(b'reefy-package-refresh-v2\0')
+    digest.update(json.dumps(configuration(output, repo), sort_keys=True).encode())
     digest.update(subprocess.check_output(['git', 'ls-tree', 'HEAD', 'buildroot'], cwd=repo))
     # Cover external dependencies, patches and hooks conservatively. Runtime
     # overlay edits and tests do not compile either selected package.
@@ -70,7 +81,7 @@ def refresh(repo, output, commit=False):
     key = fingerprint(repo, output)
     pending = marker.with_suffix('.pending.json')
     symbols = {name: hashlib.sha256(value.encode()).hexdigest()
-               for name, value in configuration(output).items()}
+               for name, value in configuration(output, repo).items()}
     if commit:
         if pending.exists():
             before = json.loads(pending.read_text())
@@ -86,7 +97,7 @@ def refresh(repo, output, commit=False):
                 raise RuntimeError(f'{package}: successful installed output is missing')
             records[package] = digest
         temporary = marker.with_suffix('.tmp')
-        temporary.write_text(json.dumps({'inputs': key, 'outputs': records}, sort_keys=True) + '\n')
+        temporary.write_text(json.dumps({'inputs': key, 'outputs': records, 'symbols': symbols}, sort_keys=True) + '\n')
         temporary.replace(marker)
         pending.unlink(missing_ok=True)
         return
@@ -94,8 +105,15 @@ def refresh(repo, output, commit=False):
         previous = json.loads(marker.read_text())
     except (OSError, ValueError):
         previous = {}
-    if not isinstance(previous, dict) or not isinstance(previous.get('outputs', {}), dict):
+    if (not isinstance(previous, dict)
+            or not isinstance(previous.get('outputs', {}), dict)
+            or not isinstance(previous.get('symbols', {}), dict)):
         previous = {}
+    if previous.get('inputs') != key and previous.get('symbols'):
+        changed = sorted(name for name in set(symbols) | set(previous['symbols'])
+                         if symbols.get(name) != previous['symbols'].get(name))
+        print('package-cache: changed configuration keys: ' +
+              (', '.join(changed) or 'none; tracked recipes/buildroot or key format changed'), flush=True)
     # A failed build cannot leave a valid record for its next attempt.
     marker.unlink(missing_ok=True)
     pending.write_text(json.dumps({'inputs': key, 'symbols': symbols}, sort_keys=True) + '\n')
