@@ -2,6 +2,8 @@
 import importlib.util
 from pathlib import Path
 import os
+import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -55,6 +57,40 @@ while not (root/other).exists():
             with self.assertRaises(ProcessLookupError):
                 os.kill(int(pid.read_text()), 0)
             self.assertTrue((root/'logs/userspace.log').exists())
+
+    @unittest.skipUnless(sys.platform == 'linux' and os.geteuid() == 0,
+                         'requires Linux private mount capability')
+    def test_entrypoint_stages_both_archives_only_in_bounded_ram(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            ci = root/'tools/ci'; ci.mkdir(parents=True)
+            for name in ('archive-pair.py', 'bounded_ram.py'):
+                shutil.copyfile(Path(__file__).with_name(name), ci/name)
+            code = """import json,os,tempfile
+from pathlib import Path
+name=Path(__file__).parent.name
+with tempfile.TemporaryDirectory() as temporary:
+ root=Path(temporary);(root/'stage').write_bytes(b'synthetic stage')
+ stats=os.statvfs(root)
+ Path(os.environ['BR_OUTPUT'],name+'.json').write_text(json.dumps(dict(
+  temporary=str(root),limit=stats.f_blocks*stats.f_frsize)))
+Path(os.environ['BR_OUTPUT'],name+'.archive').write_bytes(b'verified synthetic archive')
+"""
+            for name in ('kernel-debug', 'userspace-debug'):
+                directory = root/'tools'/name; directory.mkdir()
+                (directory/'archive.py').write_text(code)
+            out = root/'output'; out.mkdir()
+            sentinel = out/'sentinel'; sentinel.write_bytes(b'preserved')
+            subprocess.run([sys.executable, str(ci/'archive-pair.py')], cwd=root,
+                           env=dict(os.environ, BR_OUTPUT=str(out)), check=True,
+                           capture_output=True, timeout=40)
+            for name in ('kernel-debug', 'userspace-debug'):
+                receipt = json.loads((out/(name+'.json')).read_text())
+                self.assertEqual(receipt['limit'], 32*1024**3)
+                self.assertTrue(receipt['temporary'].startswith('/dev/shm/reefy-debug-'))
+                self.assertFalse(Path(receipt['temporary']).exists())
+                self.assertEqual((out/(name+'.archive')).read_bytes(), b'verified synthetic archive')
+            self.assertEqual(sentinel.read_bytes(), b'preserved')
 
     def test_workflow_requires_pair_before_both_uploads(self):
         workflow = Path(__file__).resolve().parents[2]/'.github/workflows/firmware-build.yml'
