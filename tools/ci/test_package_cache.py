@@ -79,7 +79,7 @@ class PackageRefreshTests(unittest.TestCase):
 
     @patch.object(module.subprocess, 'run')
     def test_invalid_marker_is_a_cache_miss(self, run):
-        for content in ('invalid', '[]', '{"outputs":[]}'):
+        for content in ('invalid', '[]', '{"outputs":[]}', '{"outputs":{},"symbols":["invalid"]}'):
             with self.subTest(content=content):
                 self.marker.write_text(content)
                 run.reset_mock()

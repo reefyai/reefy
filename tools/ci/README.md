@@ -100,3 +100,31 @@ and unrelated persistent output. Non-Linux admission tests still run locally.
 Track durable storage work in [the LVM/filesystem follow-up](https://github.com/reefyai/reefy/issues/107).
 RAM staging does not establish a full-suite speedup or replace storage repair
 and migration qualification.
+
+## Portable cache identities
+
+Package cache identity normalizes BR2_DEFCONFIG and BR2_EXTERNAL_REEFY_PATH only
+when they point into the current checkout. Real configuration, external paths,
+recipes, Buildroot revision and verified installed output hashes remain required.
+The new key format causes one conservative initial refresh per cache. Successful
+records retain hashed configuration components for miss diagnostics. Partial or
+interrupted builds still cannot publish successful cache records.
+
+Kernel keys omit known archive-only tooling and test code, retaining compile
+configuration, patches, unknown build tools, workflow and compiler identity.
+The build-log artifact retains hashed per-input kernel manifests. Package
+configuration components stay private in builder caches; logs identify changed
+input names without publishing configuration values or their hashes. Cache misses must never be worked around by forging markers.
+
+Focused checks:
+
+```
+python3 -m unittest discover -s tools/ci -p 'test_*cache*.py' -v
+python3 -m unittest discover -s tools/kernel-debug -p test_fingerprint.py -v
+```
+
+The portability regressions fail on the prior implementation for relocated
+checkouts and archive-only kernel-key changes. They also exercise actual Git
+inputs, verified output preservation, real configuration changes and private
+hashed diagnostics. Installed-output damage, compiler/recipe changes and failed
+builds retain their existing negative coverage.
