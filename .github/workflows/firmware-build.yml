@@ -495,7 +495,9 @@ jobs:
 
 
       - name: Mark verified kernel cache current
-        run: mv "$BR_OUTPUT/.reefy-kernel-inputs.pending" "$BR_OUTPUT/.reefy-kernel-inputs"
+        run: |
+          mv "$BR_OUTPUT/.reefy-kernel-inputs.pending" "$BR_OUTPUT/.reefy-kernel-inputs"
+          mv "$BR_OUTPUT/.reefy-kernel-input-components.pending.json" "$BR_OUTPUT/.reefy-kernel-input-components.json"
 
       - name: Upload NVIDIA provider inputs
         uses: actions/upload-artifact@v4
@@ -607,6 +609,8 @@ jobs:
             ${{ runner.temp }}/reefy-build-logs/${{ github.run_id }}-${{ github.run_attempt }}/*.log
             archive-pair-logs/*.log
             archive-pair-logs/summary.json
+            ${{ env.BR_OUTPUT }}/.reefy-kernel-input-components*.json
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 30
 
