@@ -1011,7 +1011,7 @@ class Storage:
 
     def _ensure_state_lv(self, _log=None):
         """Create the thick state LV (reefy_state), sized
-        min(4 GiB, 10% of VG), floored at 256 MiB. Real blocks outside
+        min(4 GiB, 10% of VG), floored at 512 MiB. Real blocks outside
         the thin pool so /mnt/reefy-data/state is never starved by a full
         app pool. Idempotent; must run BEFORE the pool's 100%FREE.
         State's footprint is tiny+bounded, so a fixed-but-generous size
@@ -1030,7 +1030,10 @@ class Storage:
             vg_bytes = 0
         gib = 1024 ** 3
         size = min(4 * gib, vg_bytes // 10) if vg_bytes else gib
-        size = max(size, 256 * 1024 * 1024)  # floor for tiny media
+        # XFS requires more than 300 MiB. Keep even tiny fresh volumes
+        # comfortably above that limit; existing state LVs returned above
+        # must never be resized or reformatted by provisioning.
+        size = max(size, 512 * 1024 * 1024)
         size_mib = size // (1024 * 1024)
         create_command = ['lvcreate', '-L', f'{size_mib}M', '-n', self.STATE_LV,
                           self.STORAGE_VG]
