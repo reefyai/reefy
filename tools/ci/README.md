@@ -112,9 +112,9 @@ interrupted builds still cannot publish successful cache records.
 
 Kernel keys omit known archive-only tooling and test code, retaining compile
 configuration, patches, unknown build tools, workflow and compiler identity.
-The build-log artifact retains hashed per-input kernel manifests and hashed
-package configuration components; logs identify changed input names without
-printing values. Cache misses must never be worked around by forging markers.
+The build-log artifact retains hashed per-input kernel manifests. Package
+configuration components stay private in builder caches; logs identify changed
+input names without publishing configuration values or their hashes. Cache misses must never be worked around by forging markers.
 
 Focused checks:
 

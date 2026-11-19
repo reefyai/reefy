@@ -610,7 +610,6 @@ jobs:
             archive-pair-logs/*.log
             archive-pair-logs/summary.json
             ${{ env.BR_OUTPUT }}/.reefy-kernel-input-components*.json
-            ${{ env.BR_OUTPUT }}/.reefy-package-refresh*.json
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 30
