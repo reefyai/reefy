@@ -39,6 +39,7 @@ class ExistingVolumeUnavailableError(RuntimeError):
 
 LVM_PROBE_TIMEOUT_S = 30
 PV_CREATE_TIMEOUT_S = 60
+LV_CREATE_TIMEOUT_S = 60
 LUKS_HEADER_PROBE_TIMEOUT_S = 30
 LUKS_HEADER_PROBE_SLOW_S = 5
 
@@ -982,7 +983,7 @@ class Storage:
             result = subprocess.run(
                 ['lvcreate', '--thin', '--virtualsize', f'{pool_size}B',
                  '-n', self.STORAGE_LV, pool_path],
-                capture_output=True, text=True, timeout=60)
+                capture_output=True, text=True, timeout=LV_CREATE_TIMEOUT_S)
         except subprocess.TimeoutExpired as error:
             raise RuntimeError(
                 'Default LV creation timed out after 60 seconds; '
@@ -1037,9 +1038,13 @@ class Storage:
         size_mib = size // (1024 * 1024)
         create_command = ['lvcreate', '-L', f'{size_mib}M', '-n', self.STATE_LV,
                           self.STORAGE_VG]
+        # Metadata can be committed while lvcreate still waits for device I/O
+        # or udev completion. Use the same bounded allowance as default-LV
+        # creation and require its real successful exit before formatting.
+        # The caller's adoption/readiness deadline remains unchanged.
         try:
-            r = subprocess.run(create_command, capture_output=True,
-                               text=True, timeout=15)
+            r = _run_lvm_timed(create_command, capture_output=True,
+                               text=True, timeout=LV_CREATE_TIMEOUT_S)
         except subprocess.TimeoutExpired:
             # subprocess.run has killed and reaped the timed-out process.
             # A path check alone cannot distinguish missing metadata from a
@@ -1065,8 +1070,8 @@ class Storage:
                 raise
             if _log:
                 _log('State LV create timed out without committed metadata; retrying once')
-            r = subprocess.run(create_command, capture_output=True,
-                               text=True, timeout=15)
+            r = _run_lvm_timed(create_command, capture_output=True,
+                               text=True, timeout=LV_CREATE_TIMEOUT_S)
         if r.returncode != 0:
             if _log:
                 _log(f'state LV create failed: {r.stderr}')
