@@ -28,6 +28,8 @@ def repack(wheel, patches, blocked=BLOCKED):
     roots = certificates(before[BUNDLE])
     if blocked not in roots:
         return {'changed': False, 'sha256': before_sha, 'roots': len(roots)}
+    if not patches:
+        raise RuntimeError('unsafe bootstrap CA bundle: no reviewed backports available')
     if any(name.endswith(('RECORD.jws', 'RECORD.p7s')) for name in before):
         raise RuntimeError('cannot modify a signed bootstrap wheel')
     records = [name for name in before if name.endswith('.dist-info/RECORD')]
@@ -78,8 +80,8 @@ if __name__ == '__main__':
     parser.add_argument('--report', required=True, type=Path)
     args = parser.parse_args()
     patches = sorted(args.patch_dir.glob('*.patch'))
-    if len(patches) != 2:
-        raise RuntimeError('expected the two upstream certifi data backports')
+    if len(patches) not in (0, 2):
+        raise RuntimeError('expected retired backports or the two upstream certifi data backports')
     results = {}
     for wheel in sorted(args.root.glob('usr/lib/python*/ensurepip/_bundled/pip-*.whl')):
         results[str(wheel.relative_to(args.root))] = repack(wheel, patches)
