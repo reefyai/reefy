@@ -1,7 +1,55 @@
 # Buildroot release upgrades
 
-The Buildroot submodule is pinned to the upstream 2026.08 release
-(`d5180309b1b66ef3b8eaccca70ad69be8e0729a1`), replacing 2025.11.3.
+## Current combined release candidate
+
+Linux is pinned to the latest 6.18 LTS patch release, 6.18.64, with matching
+kernel/header archive hashes from kernel.org. The actual source archive was
+checked against that SHA256. All 24 driver files in the Intel Wi-Fi policy are
+byte-identical to the preceding policy; only its kernel reference changes.
+The reproducible-BTF patch applies without fuzz. Provider/kernel ABI checks
+and hardware qualification remain required; matching Wi-Fi inputs do not
+establish GPU compatibility or repair the earlier storage-contention stalls.
+
+The latest stable Buildroot release is 2026.08.2. Pin the exact upstream
+2026.08.x maintenance snapshot `bbbdab36565d4941b6b0449a0eedb5aac8a10c2e`,
+which contains that release (`cd8011d7c9965e1bcfc9c18d4272943f9c333b68`)
+plus subsequent Go and glibc security updates. Do not rewrite an upstream
+tag or track the branch by name. The 2026.11 series is still a release
+candidate and is not selected.
+
+| Component | Previous candidate | Combined candidate |
+| --- | --- | --- |
+| Linux LTS | 6.18.63 | 6.18.64 |
+| Buildroot | 2026.08.1 plus Go backport | 2026.08.2 plus pinned stable maintenance |
+| Go | 1.27.3 | 1.27.4 |
+| glibc | 2.44-57-g34106fee6 | 2.44-77-g438677ef4 |
+| systemd | 258.7 | 258.12 |
+| Python | 3.14.8 | 3.14.10 |
+| certifi | 2026.10.18 plus local restoration | 2026.10.23 |
+| pip | 26.1 plus CA backports | 26.2.2 |
+
+The upstream snapshot already includes the Go security update, so retire
+the local 1.27.3 patch. `tools/ci/prepare-buildroot.py` now verifies the exact
+revision and rejects tracked checkout changes without modifying recipes.
+The newer certifi, pip and ensurepip inputs also replace the old CA backports;
+retain the final installed-bundle refusal checks and private MQTT trust.
+See [the TLS provenance notes](public-tls-trust.md) for their different
+upstream CA snapshots and the retired restoration patch.
+
+These updates are appended to the existing storage/watchdog/build fixes in
+the same release PR. The preceding passing dev qualification remains evidence
+for its original source only. The combined candidate needs a new successful
+firmware/provider build, full six-worker E2E and hardware qualification before
+promotion. Source preparation performs no deployment or live storage change.
+
+Sources: [kernel releases](https://www.kernel.org/),
+[Buildroot releases](https://buildroot.org/download.html),
+[pinned stable history](https://gitlab.com/buildroot.org/buildroot/-/commits/bbbdab36565d4941b6b0449a0eedb5aac8a10c2e).
+
+## Earlier base-release migration
+
+The original base migration replaced 2025.11.3 with upstream 2026.08
+(`d5180309b1b66ef3b8eaccca70ad69be8e0729a1`).
 Buildroot now supplies python-varlink 32.1.0, so the duplicate external
 recipe is removed without changing the Varlink runtime version.
 Ansible stays at 2.20.3. Relax only its build metadata from
@@ -9,7 +57,7 @@ Ansible stays at 2.20.3. Relax only its build metadata from
 host dependencies explicitly. An isolated build with setuptools 80.9.0 and
 wheel 0.47.0 passes with normal dependency checks enabled. No private wheel
 package or global host-tool downgrade is used.
-Linux remains explicitly pinned to 6.18.54. Kernel/provider build identity
+That migration kept Linux explicitly pinned to 6.18.54. Kernel/provider build identity
 checks still apply; a toolchain change can change the kernel ABI digest even
 when the Linux version is unchanged.
 
@@ -61,12 +109,12 @@ Update the AMD driver and matching firmware to 31.60 through
 [the AMD update PR](https://github.com/reefyai/reefy-amd/pull/3), retaining
 Container Toolkit 1.3.0 and the current official AMD-SMI package. Package
 sizes and hashes match AMD's published Ubuntu 24.04 apt metadata. Validate
-the stock source against the pinned Linux 6.18.54 and the supported GPUs.
+the stock source against the candidate Linux 6.18.64 and the supported GPUs.
 
 ## Build cache and image versions
 
 Do not reuse a previous Buildroot release's output tree. The firmware
-workflow uses `/buildroot-cache/output-buildroot-2026.08`, retaining the
+workflow uses `/buildroot-cache/output-buildroot-2026.08.2-bbbdab36`, retaining the
 shared download and compiler caches. The old output directory is preserved
 for independent validation of the preceding release.
 
