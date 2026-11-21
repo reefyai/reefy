@@ -70,10 +70,28 @@ def timed(label, function):
     return result
 
 
-def compress_bundle(stage, destination):
-    # Keep the existing gzip archive contract and propagate tar/pigz failures.
-    subprocess.run(['tar', '-I', f'pigz -p {worker_count()}', '-cf',
-                    str(destination), '-C', str(stage), '.'], check=True)
+def compress_bundle(stage, destination, *, workers=None):
+    # GNU tar can exit on an input error before its -I compressor finishes.
+    # Own both sides of the streaming pipeline so failure cannot race cleanup.
+    tar_command = ['tar', '-cf', '-', '-C', str(stage), '.']
+    gzip_command = ['pigz', '-p', str(worker_count() if workers is None else workers)]
+    with open(destination, 'wb') as stream:
+        with subprocess.Popen(tar_command, stdout=subprocess.PIPE) as producer:
+            try:
+                with subprocess.Popen(gzip_command, stdin=producer.stdout,
+                                      stdout=stream) as compressor:
+                    # Only the compressor should hold the read end. Its failure
+                    # must give tar SIGPIPE instead of leaving a blocked writer.
+                    producer.stdout.close()
+                    gzip_status = compressor.wait()
+            finally:
+                # Also close/reap tar if starting the compressor failed.
+                producer.stdout.close()
+            tar_status = producer.wait()
+    for status, command in ((tar_status, tar_command),
+                            (gzip_status, gzip_command)):
+        if status:
+            raise subprocess.CalledProcessError(status, command)
 
 
 def main():

@@ -1,5 +1,10 @@
 import importlib.util
+from concurrent.futures import ThreadPoolExecutor
+import os
 from pathlib import Path
+import sys
+import threading
+import time
 import unittest
 import shutil
 import subprocess
@@ -84,6 +89,87 @@ class ParallelArchive(unittest.TestCase):
             return value
         with self.assertRaisesRegex(RuntimeError, 'module verification failed'):
             archive.parallel_map(verify, [1, 2, 3])
+
+    @unittest.skipUnless(shutil.which('tar'), 'requires tar')
+    def test_delayed_compressor_finishes_before_success_or_tar_failure_returns(self):
+        for missing in (False, True):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                stage = root / 'bundle'
+                stage.mkdir()
+                payload = stage / 'payload'
+                payload.write_bytes(b'synthetic debug bytes' * 1000)
+                spectator = root / 'unrelated'
+                spectator.write_bytes(b'preserve unrelated data')
+                tools = root / 'bin'
+                tools.mkdir()
+                shim = tools / 'pigz'
+                shim.write_text(
+                    '#!' + sys.executable + '\n'
+                    'import gzip,sys,time\nfrom pathlib import Path\n'
+                    f'root=Path({str(root)!r})\n'
+                    '(root/"started").touch()\n'
+                    'deadline=time.monotonic()+10\n'
+                    'while not (root/"release").exists():\n'
+                    ' if time.monotonic()>deadline: raise SystemExit(99)\n'
+                    ' time.sleep(.01)\n'
+                    'sys.stdout.buffer.write(gzip.compress(sys.stdin.buffer.read()))\n'
+                    'sys.stdout.buffer.flush()\n'
+                    '(root/"finished").touch()\n')
+                shim.chmod(0o755)
+                returned = threading.Event()
+
+                def compress():
+                    try:
+                        archive.compress_bundle(root / 'missing' if missing else stage,
+                                                root / 'debug.tar.gz')
+                    finally:
+                        returned.set()
+
+                with patch.dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH']):
+                    with ThreadPoolExecutor(max_workers=1) as pool:
+                        future = pool.submit(compress)
+                        try:
+                            deadline = time.monotonic() + 5
+                            while not (root / 'started').exists() and time.monotonic() < deadline:
+                                time.sleep(.01)
+                            self.assertTrue((root / 'started').exists(), 'compressor did not start')
+                            self.assertFalse(returned.wait(.1), 'returned while compressor was still running')
+                        finally:
+                            (root / 'release').touch()
+                            if missing:
+                                with self.assertRaises(subprocess.CalledProcessError):
+                                    future.result(timeout=10)
+                            else:
+                                future.result(timeout=10)
+                            # Drain the old implementation's orphan too when
+                            # running this regression against the baseline.
+                            deadline = time.monotonic() + 5
+                            while not (root / 'finished').exists() and time.monotonic() < deadline:
+                                time.sleep(.01)
+                        self.assertTrue((root / 'finished').exists())
+                self.assertEqual(payload.read_bytes(), b'synthetic debug bytes' * 1000)
+                self.assertEqual(spectator.read_bytes(), b'preserve unrelated data')
+
+    @unittest.skipUnless(shutil.which('tar'), 'requires tar')
+    def test_compressor_failure_is_propagated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stage = root / 'bundle'
+            stage.mkdir()
+            payload = stage / 'payload'
+            payload.write_bytes(b'preserve source bytes')
+            tools = root / 'bin'
+            tools.mkdir()
+            shim = tools / 'pigz'
+            shim.write_text('#!' + sys.executable + '\n'
+                            'import sys\nsys.stdin.buffer.read()\nraise SystemExit(37)\n')
+            shim.chmod(0o755)
+            with patch.dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH']):
+                with self.assertRaises(subprocess.CalledProcessError) as error:
+                    archive.compress_bundle(stage, root / 'debug.tar.gz')
+            self.assertEqual(error.exception.returncode, 37)
+            self.assertEqual(payload.read_bytes(), b'preserve source bytes')
 
     @unittest.skipUnless(shutil.which('pigz'), 'requires pigz')
     def test_parallel_gzip_preserves_payload_and_propagates_failure(self):

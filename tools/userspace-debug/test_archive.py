@@ -85,8 +85,13 @@ class NativeSymbolsTests(unittest.TestCase):
         release.parent.mkdir(parents=True, exist_ok=True)
         release.write_text('IMAGE_VERSION=2099.01.01-01\nREEFY_BUILD_ID=' + 'a' * 64 + '\n')
         bundle = self.root / 'debug.tar.gz'
-        with patch.object(archive.subprocess, 'check_output', return_value='synthetic-source\n'):
+        with patch.object(archive.subprocess, 'check_output', return_value='synthetic-source\n'), \
+                patch.object(archive._compression, 'compress_bundle',
+                             wraps=archive._compression.compress_bundle) as compress:
             archive.archive(self.root, bundle)
+        self.assertEqual(compress.call_count, 1)
+        self.assertEqual(compress.call_args.args[1], bundle)
+        self.assertEqual(compress.call_args.kwargs, {'workers': 8})
         unpacked = self.root / 'unpacked'
         unpacked.mkdir()
         with tarfile.open(bundle) as tar:
