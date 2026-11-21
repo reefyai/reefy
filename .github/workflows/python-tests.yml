@@ -8,6 +8,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'tools/build-storage/**'
       - 'configs/reefy_defconfig'
       - 'board/reefy/reefy/package-overrides/intel-wifi-firmware.json'
       - 'board/reefy/reefy/rootfs-overlay/usr/lib/reefy/**'
@@ -27,6 +28,7 @@ on:
       - 'board/reefy/reefy/scripts/calculate_build_id.sh'
   pull_request:
     paths:
+      - 'tools/build-storage/**'
       - 'configs/reefy_defconfig'
       - 'board/reefy/reefy/package-overrides/intel-wifi-firmware.json'
       - '.github/workflows/python-tests.yml'
@@ -91,3 +93,6 @@ jobs:
         run: |
           pip install paho-mqtt==2.1.0
           python -m unittest discover -s board/reefy/reefy/tests -p test_mqtt_network_loop.py -v
+
+      - name: Build storage isolation preparation regressions
+        run: python -m unittest discover -s tools/build-storage -v

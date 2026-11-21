@@ -3,12 +3,14 @@ import base64
 import difflib
 import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import ssl
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 spec = importlib.util.spec_from_file_location('ensurepip_ca', Path(__file__).with_name('patch-ensurepip-ca.py'))
@@ -28,13 +30,13 @@ class BootstrapCATests(unittest.TestCase):
         self.blocked = ssl.DER_cert_to_PEM_cert(b'synthetic blocked certificate').encode()
         self.kept = ssl.DER_cert_to_PEM_cert(b'synthetic retained certificate').encode()
         self.bundle.write_bytes(self.blocked + self.kept)
-        info = source / 'synthetic_pip-1.0.dist-info'
+        info = source / 'pip-1.0.dist-info'
         info.mkdir()
-        (info / 'METADATA').write_text('Metadata-Version: 2.1\nName: synthetic-pip\nVersion: 1.0\n')
+        (info / 'METADATA').write_text('Metadata-Version: 2.1\nName: pip\nVersion: 1.0\n')
         (info / 'WHEEL').write_text('Wheel-Version: 1.0\nGenerator: synthetic-fixture\nRoot-Is-Purelib: true\nTag: py3-none-any\n')
         (source / 'synthetic-local.txt').write_text('preserve synthetic payload')
         subprocess.run([sys.executable, '-m', 'wheel', 'pack', str(source), '-d', str(self.root)], check=True, capture_output=True)
-        self.wheel = self.root / 'synthetic_pip-1.0-py3-none-any.whl'
+        self.wheel = self.root / 'pip-1.0-py3-none-any.whl'
         self.patch = self.root / 'synthetic.patch'
         self.patch.write_text(''.join(difflib.unified_diff(
             (self.blocked + self.kept).decode().splitlines(True), self.kept.decode().splitlines(True),
@@ -47,7 +49,7 @@ class BootstrapCATests(unittest.TestCase):
         with zipfile.ZipFile(self.wheel) as archive:
             self.assertEqual(archive.read(module.BUNDLE), self.kept)
             self.assertEqual(archive.read('synthetic-local.txt'), b'preserve synthetic payload')
-            record = archive.read('synthetic_pip-1.0.dist-info/RECORD').decode()
+            record = archive.read('pip-1.0.dist-info/RECORD').decode()
             digest = base64.urlsafe_b64encode(hashlib.sha256(self.kept).digest()).rstrip(b'=').decode()
             self.assertIn(module.BUNDLE + ',sha256=' + digest + ',' + str(len(self.kept)), record)
         before = self.wheel.read_bytes()
@@ -64,6 +66,34 @@ class BootstrapCATests(unittest.TestCase):
         before = self.wheel.read_bytes()
         with self.assertRaises(subprocess.CalledProcessError):
             module.repack(self.wheel, [self.patch], self.fingerprint)
+        self.assertEqual(self.wheel.read_bytes(), before)
+
+    def test_fixed_upstream_wheel_accepts_retired_backports_without_changing_data(self):
+        destination = self.root / 'target'
+        wheel = destination / 'usr/lib/python3.14/ensurepip/_bundled' / self.wheel.name
+        wheel.parent.mkdir(parents=True)
+        wheel.write_bytes(self.wheel.read_bytes())
+        sentinel = destination / 'mnt/reefy/mqtt/ca.crt'
+        sentinel.parent.mkdir(parents=True)
+        sentinel.write_bytes(b'synthetic private CA sentinel')
+        report = self.root / 'report.json'
+        before = wheel.read_bytes()
+        subprocess.run([sys.executable, str(Path(module.__file__)), '--root', str(destination),
+                        '--patch-dir', str(self.root / 'retired-patches'),
+                        '--report', str(report)], check=True, capture_output=True)
+        result = json.loads(report.read_text())
+        self.assertEqual(result['patch_sha256'], {})
+        self.assertFalse(next(iter(result['wheels'].values()))['changed'])
+        self.assertEqual(wheel.read_bytes(), before)
+        self.assertEqual(sentinel.read_bytes(), b'synthetic private CA sentinel')
+
+    def test_unsafe_wheel_without_backports_fails_before_repacking(self):
+        before = self.wheel.read_bytes()
+        with patch.object(module.subprocess, 'run', side_effect=AssertionError(
+                'Unreviewed wheel must not reach subprocess tools')) as run:
+            with self.assertRaisesRegex(RuntimeError, 'no reviewed backports'):
+                module.repack(self.wheel, [], self.fingerprint)
+        run.assert_not_called()
         self.assertEqual(self.wheel.read_bytes(), before)
 
 
