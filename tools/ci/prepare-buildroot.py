@@ -1,24 +1,9 @@
 #!/usr/bin/env python3
-"""Apply the verbatim upstream Go security backport to pinned stable Buildroot."""
-import hashlib
+"""Verify the exact stable Buildroot snapshot without patching its recipes."""
 from pathlib import Path
 import subprocess
 
-REVISION = '7fdeadb3b9f12f78e5fccca914d7fef47090ab9a'
-PATCH_SHA256 = 'bf8c43c4dd774807071272ff1301c20bcf00f0e4653c5ac6efa9264a2c00547a'
-
-
-def apply_backport(tree, patch):
-    if hashlib.sha256(patch.read_bytes()).hexdigest() != PATCH_SHA256:
-        raise RuntimeError('upstream Go patch checksum mismatch')
-    command = ['git', 'apply', '--check', str(patch)]
-    if subprocess.run(command, cwd=tree, capture_output=True).returncode == 0:
-        subprocess.run(['git', 'apply', str(patch)], cwd=tree, check=True)
-        return
-    if subprocess.run(['git', 'apply', '--reverse', '--check', str(patch)],
-                      cwd=tree, capture_output=True).returncode == 0:
-        return
-    raise RuntimeError('Go backport neither applies cleanly nor is already applied')
+REVISION = 'bbbdab36565d4941b6b0449a0eedb5aac8a10c2e'
 
 
 def prepare(repo):
@@ -26,7 +11,8 @@ def prepare(repo):
     actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=tree, text=True).strip()
     if actual != REVISION:
         raise RuntimeError(f'Buildroot revision mismatch: expected {REVISION}, got {actual}')
-    apply_backport(tree, repo / 'support/buildroot/0001-go-security-1.27.3.patch')
+    if subprocess.run(['git', 'diff', '--quiet', 'HEAD', '--'], cwd=tree).returncode != 0:
+        raise RuntimeError('Pinned Buildroot has tracked changes; refusing unreviewed recipes')
 
 
 if __name__ == '__main__':

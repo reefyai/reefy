@@ -19,7 +19,7 @@ IDENTITY = 'a' * 64
 
 
 class RestartPostconditions(unittest.TestCase):
-    def exercise(self, before, after, healthy):
+    def exercise(self, before, after, healthy, expire_pending=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'reefy-proxy-failures').write_text('2')
@@ -56,6 +56,8 @@ class RestartPostconditions(unittest.TestCase):
                         run=run, TimeoutExpired=subprocess.TimeoutExpired)), \
                     contextlib.redirect_stdout(output):
                 watchdog.check_service(CHECK, directory, now=100)
+                if expire_pending and (root / 'reefy-proxy-pending.json').exists():
+                    watchdog.check_service(CHECK, directory, now=400)
             self.assertEqual(sentinel.read_bytes(), b'preserved')
             self.assertEqual(sum(a[1] == 'restart' for a in operations), 1)
             self.assertEqual((root / 'reefy-proxy-cooldown').read_text(), '400')
@@ -94,7 +96,7 @@ class RestartPostconditions(unittest.TestCase):
                 (before, None, True), (None, after, True),
                 (before, OSError('synthetic inspect failure'), True)):
             with self.subTest(old=old, new=new, healthy=healthy):
-                output, failed = self.exercise(old, new, healthy)
+                output, failed = self.exercise(old, new, healthy, expire_pending=True)
                 self.assertIn('restart failed or timed out', output)
                 self.assertNotIn('restart completed', output)
                 self.assertTrue(failed)

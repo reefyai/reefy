@@ -17,11 +17,12 @@ mounted from the host. Updating host firmware does not update their bundles.
 
 ## Fix
 
-Pin Buildroot to the upstream `2026.08.1` release,
-`7fdeadb3b9f12f78e5fccca914d7fef47090ab9a`. This advances the previous
-maintenance pin `d6061d653d7fb215c2409c59e4bfad1b9d677215` to a tagged
-release within the same stable series. It requires a fresh firmware build
-and lifecycle validation; it does not track a moving branch or master.
+Pin Buildroot to upstream stable maintenance snapshot
+`bbbdab36565d4941b6b0449a0eedb5aac8a10c2e`, which contains the 2026.08.2
+release and subsequent Go/glibc security fixes. This replaces the earlier
+2026.08.1 pin `7fdeadb3b9f12f78e5fccca914d7fef47090ab9a` and its local Go
+backport. It requires a fresh firmware build and lifecycle validation;
+it does not track a moving branch or master and rewrites no upstream tag.
 
 Upstream ca-certificates `20260816+nmu1` already blacklists
 "emSign ECC Root CA - G3" and "Comodo AAA Services root". The old local
@@ -29,13 +30,11 @@ blacklist patch is retired because it no longer applies. Warm-install cleanup
 and the actual TLS refusal/preservation regressions remain in place.
 
 Before configuring Buildroot, run `python3 tools/ci/prepare-buildroot.py`.
-It verifies the maintenance revision and patch checksum, then applies the
-verbatim upstream Go security commit
-`4e0cd646932be3631f87f37ee08e5d6c09e2565f`. That patch changes only the
-Go version to 1.27.3 and official download checksums. It can be run again
-on an already patched checkout and refuses conflicting package changes.
-The submodule remains pinned to an upstream commit; the applied recipe diff
-is intentional and reproducible from the tracked upstream patch.
+It verifies the exact maintenance revision and rejects tracked checkout
+changes. Go 1.27.4 and its official hashes are already upstream; the old
+1.27.3 backport is retired. Preparation is read-only and repeatable, including
+when no local backport files exist. Modified recipes or download hashes
+are refused without overwriting the operator's changes.
 
 Remove Reefy's Go version, GOROOT, compiler-path and hash overrides, plus
 the custom installation-link hook. Go now uses upstream's standard
@@ -65,15 +64,18 @@ preserves ordinary warm-cache reuse after a verified successful build.
 
 ## Bundled Python CA data
 
-The stable release includes certifi `2026.10.18`, which already removes the
-compromised root. Retire the duplicate removal patch and retain upstream
-restoration commit `662df63d7906df66f1f07c0751a3dfe9da14d914` for the unaffected
-emSign roots. The restoration patch applies directly to the new package.
+The selected snapshot includes certifi `2026.10.23`, which excludes the
+compromised root. Retire the older restoration patch as well as the already
+integrated removal patch. The new upstream release retains emSign G1 and
+its release commit deliberately removes C1 and C3 after the earlier
+three-root restoration. Do not reinsert these roots through a stale patch.
+Pip's upstream bundle has a different snapshot; the source audit found 118
+roots in certifi and 120 in pip/ensurepip, all excluding the compromised G3.
 Refresh target and host certifi packages so cached patch/install stamps cannot
 bypass the selected upstream data. Python pip and ensurepip retain their
 independent CA-data remediation below.
 
-The companion source-package regression verifies the original certifi tarball
+The earlier companion source-package regression verified the original certifi tarball
 SHA-256 `8d455352a37b71bf76a79caa83a3d6c25afee4a385d632127b6afb3963f1c580`.
 With a fixed OS store but the old certifi bundle, six of 12 certifi refusal
 checks fail (30/36 total refusals). After both upstream patches, all 36 checks
@@ -83,18 +85,16 @@ The QEMU scenario resolves the actual Requests/certifi default bundle and
 requires all three stores to be checked. JSON reports and patch logs are
 retained in the existing service E2E results directory and CI artifacts.
 
-Pip 26.1 has another vendored certifi bundle. Apply the same upstream data
-hunks with only paths adapted to `src/pip/_vendor/certifi/cacert.pem`.
-Its 137 original roots become 136; all other certificate bytes remain intact.
-Python 3.14.8 additionally ships pip 26.2.1 inside an ensurepip wheel. That
-wheel is byte-identical to the official PyPI wheel (SHA-256
-`71138adf1f4ca900cdb7d289c21b7494329f2332b6d85f0e1c42108c0384ed3e`).
+Pip 26.2.2 and Python 3.14.10's bundled pip 26.2.2 already exclude G3.
+Retire both old pip CA-data backports. Source tarballs are verified against
+the upstream Buildroot hashes before auditing their actual bundles.
 
-`patch-ensurepip-ca.py` uses the standard wheel unpack/pack commands to verify
-original RECORD hashes, apply those same upstream data hunks, and regenerate
-RECORD. It preserves the version and every other wheel file's payload bytes.
-The CA data changes from 118 roots to 117. Repeated finalization reuses the
-already-fixed wheel; corrupt input hashes stop without overwriting it.
+`patch-ensurepip-ca.py` accepts an empty backport set only for safe input.
+It leaves the fixed upstream wheel byte-identical. If the compromised root
+returns without reviewed patches, fail before unpacking or repacking.
+The existing backport path still verifies original RECORD hashes through
+standard wheel tools and preserves unrelated payloads. Partial patch sets
+remain invalid. Repeated finalization reuses safe wheel bytes.
 A final inventory rejects any remaining installed Python cacert.pem containing
 the affected root. CI retains the wheel and bundle hashes in
 `firmware-python-ca-provenance`.
@@ -105,7 +105,8 @@ fixed bundle. The firmware scenario also seeds an offline virtual environment
 and verifies its actual pip bundle. It requires at least 72 refusal checks
 across system bundle, hashed directory, Requests, pip, bootstrap and seeded pip.
 Positive and negative controls and private MQTT CA preservation stay enabled.
-No Python or pip version changes are introduced by these data backports.
+The earlier CA-only backports changed no Python or pip version; the combined
+release upgrade now explicitly updates those packages.
 
 Retire these external patches when adopting an upstream package that includes
 the fixed certifi CA data. Keep the regression to verify future package updates.
@@ -174,8 +175,10 @@ python3 -m unittest discover -s tools/ci -p 'test_*.py'
 ```
 
 Build-tool unit tests cover the actual stable Go recipe before and after the
-verbatim backport, repeat application, a conflicting recipe, a modified patch,
-and an incorrect submodule revision. Cache regressions cover stale compiler
+integrated upstream security update, repeat read-only preparation, modified
+recipes/hashes and an incorrect submodule revision. Wheel regressions cover
+safe input without retired patches, early rejection of unsafe input, corrupt
+RECORD data and private CA preservation. Cache regressions cover stale compiler
 source removal, consumer invalidation, unchanged-cache reuse and stale binary
 rejection. Synthetic local host files and private MQTT CA sentinels verify
 preservation. Run the preparation step before these tests so the Buildroot

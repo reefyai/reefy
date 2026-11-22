@@ -30,6 +30,18 @@ KASAN, lockdep or other high-overhead debugging instrumentation.
 Archive module verification and bundle hashing use up to 16 workers. Compression
 uses pigz with the same gzip archive format. Timings for indexing, verification,
 hashing, and compression are printed in CI; failures still block publication.
+Both debug collectors use an explicitly owned tar-to-pigz pipeline. They wait
+for both processes, including when tar fails on an input, before staging cleanup.
+The pipe streams without buffering the archive in Python; compressor failure
+also closes tar's read end so a producer cannot remain blocked on a full pipe.
+The existing kernel worker limit and eight userspace compression workers remain.
+
+Regression command: `python3 -m unittest discover -s tools/kernel-debug -p 'test_*.py' -v`.
+The delayed-compressor regression holds the real compressor boundary open on
+success and missing-input failure, then verifies completion before return and
+preservation of source and unrelated bytes. It fails against the old helper and
+passes against the fix with identical test bytes on Linux. Native userspace
+archive tests also verify the shared pipeline, ELF identity and extracted bytes.
 
 The cache key conservatively covers tracked board/config/package/tool inputs
 and the pinned Buildroot revision, excluding runtime rootfs-overlay files and

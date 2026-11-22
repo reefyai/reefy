@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import time
+import tempfile
 
 
 def run_pair(commands, logs, cpus):
@@ -51,7 +52,8 @@ def run_pair(commands, logs, cpus):
             'cpu_budget': len(cpus), 'archives_verified': sorted(commands)}
 
 
-def main():
+def archive_main():
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
     output = Path(os.environ['BR_OUTPUT'])
     cpus = sorted(os.sched_getaffinity(0))[:16]
     commands = {
@@ -62,9 +64,18 @@ def main():
     }
     Path('archive-pair-logs/summary.json').unlink(missing_ok=True)
     result = run_pair(commands, Path('archive-pair-logs'), cpus)
+    scratch = os.statvfs(tempfile.gettempdir())
+    result['scratch_limit_bytes'] = scratch.f_blocks * scratch.f_frsize
+    result['scratch_kind'] = 'private-unswappable-tmpfs'
     Path('archive-pair-logs/summary.json').write_text(json.dumps(result) + '\n')
     print(json.dumps(result), flush=True)
 
 
 if __name__ == '__main__':
-    main()
+    from bounded_ram import GIB, run_in_ram
+    # An admission failure must never publish a stale success receipt.
+    Path('archive-pair-logs/summary.json').unlink(missing_ok=True)
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
+    run_in_ram([sys.executable, '-c',
+                "import runpy; runpy.run_path('tools/ci/archive-pair.py')['archive_main']()"],
+               32 * GIB)

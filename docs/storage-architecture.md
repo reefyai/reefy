@@ -71,8 +71,18 @@ Fresh volume groups reserve `reefy_state` before the thin pool consumes the
 remaining space. Its size is:
 
 ```text
-min(4 GiB, 10 percent of VG size), with a 256 MiB floor
+min(4 GiB, 10 percent of VG size), with a 512 MiB floor
 ```
+
+The floor exceeds XFS's minimum filesystem size, including on small
+provisioning media. It applies only when creating a new state LV; existing
+state volumes are neither resized nor reformatted.
+
+Fresh state and default LV creation share a bounded 60-second command
+allowance. Formatting requires the creator's successful exit, including its
+device and udev synchronization. If creation times out, committed or unknown
+metadata is preserved without formatting; metadata existence alone is not
+completion proof. Adoption readiness limits are unchanged.
 
 It is a thick XFS LV outside the thin pool and mounts at
 `/mnt/reefy-data/state`. This keeps device identity, MQTT configuration,

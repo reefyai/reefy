@@ -134,13 +134,13 @@ def _container_state(container, timeout=STATE_INSPECT_TIMEOUT_SECONDS):
         return None
 
 
-def _completed_restart(check, container, before):
+def _completed_restart(check, container, before, observation_seconds=RESTART_OBSERVATION_SECONDS):
     if before is None:
         return False
     # Docker inspection can briefly block behind the restart's daemon lock.
     # Observe the one submitted restart, without replaying it or extending the
     # watchdog service or end-to-end recovery deadlines. Unknown stays failure.
-    deadline = time.monotonic() + RESTART_OBSERVATION_SECONDS
+    deadline = time.monotonic() + observation_seconds
     while (remaining := deadline - time.monotonic()) > 0:
         after = _container_state(container, min(STATE_INSPECT_TIMEOUT_SECONDS, remaining))
         if after and after['id'] != before['id']:
@@ -149,7 +149,8 @@ def _completed_restart(check, container, before):
                 and after['running'] and not after['restarting']):
             remaining = deadline - time.monotonic()
             if remaining > 0 and probe(check['url'], check['kind'],
-                                       timeout=min(PROBE_TIMEOUT_SECONDS, remaining)):
+                                       timeout=min(PROBE_TIMEOUT_SECONDS, remaining)) \
+                    and time.monotonic() < deadline:
                 return True
         remaining = deadline - time.monotonic()
         if remaining > 0:
@@ -157,11 +158,56 @@ def _completed_restart(check, container, before):
     return False
 
 
+def _write_restart_intent(path, before, expires):
+    receipt = {'id': before['id'], 'started': before['started'].isoformat(),
+               'expires': expires}
+    temporary = path + '.tmp'
+    with open(temporary, 'w') as stream:
+        json.dump(receipt, stream)
+    os.replace(temporary, path)
+
+
+def _observe_pending(check, path, failure_file, now):
+    """Resolve one submitted restart across ticks, never submit it again."""
+    try:
+        with open(path) as stream:
+            receipt = json.load(stream)
+        if (not isinstance(receipt, dict) or set(receipt) != {'id', 'started', 'expires'}
+                or not isinstance(receipt['id'], str)
+                or not re.fullmatch(r'[0-9a-f]{64}', receipt['id'])
+                or type(receipt['expires']) is not int or receipt['expires'] <= 0):
+            raise ValueError('invalid restart intent')
+        started = datetime.fromisoformat(receipt['started'].replace('Z', '+00:00'))
+        if started.tzinfo is None or started.year <= 1:
+            raise ValueError('invalid restart baseline')
+    except (OSError, ValueError, TypeError, AttributeError):
+        log(f'{check["service"]}: pending restart receipt unavailable; no restart submitted')
+        return
+    if now >= receipt['expires']:
+        _clear(path)
+        log(f'{check["service"]}: restart failed or timed out (pending completion expired)')
+        return
+    before = {'id': receipt['id'], 'started': started}
+    if _completed_restart(check, receipt['id'], before,
+                          min(RESTART_OBSERVATION_SECONDS, receipt['expires'] - now)):
+        _clear(failure_file)
+        _clear(path)
+        log(f'{check["service"]}: restart completed')
+
+
 def check_service(check, state_dir=STATE_DIR, now=None):
     """Probe one service and perform bounded recovery when it stays wedged."""
     service = check['service']
     failure_file = os.path.join(state_dir, f'{service}-failures')
     cooldown_file = os.path.join(state_dir, f'{service}-cooldown')
+    pending_file = os.path.join(state_dir, f'{service}-pending.json')
+    # A healthy endpoint alone cannot acknowledge an ambiguous mutation.
+    # Require the same exact container, a newer start and real liveness.
+    # Leave the existing 300s cooldown and 120s oneshot budget unchanged.
+    if os.path.lexists(pending_file):
+        current = int(time.time()) if now is None else now
+        _observe_pending(check, pending_file, failure_file, current)
+        return False
     container = find_container(service)
 
     if not container:
@@ -188,6 +234,12 @@ def check_service(check, state_dir=STATE_DIR, now=None):
 
     log(f'{service}: restarting unresponsive container {container[:12]}')
     before = _container_state(container)
+    if before is not None:
+        _write_restart_intent(pending_file, before, now + COOLDOWN_SECONDS)
+    # Persist the cooldown before submission, including daemon interruption
+    # after Docker accepts the command but before its acknowledgment returns.
+    _write_int(cooldown_file, now + COOLDOWN_SECONDS)
+    pending = False
     try:
         result = subprocess.run(
             ['docker', 'restart', '--time', '5', container],
@@ -201,14 +253,18 @@ def check_service(check, state_dir=STATE_DIR, now=None):
         # replay it: require the same container to have a newer start, be
         # running and answer its real liveness probe. Unknown state fails closed.
         restarted = _completed_restart(check, container, before)
+        pending = not restarted and before is not None
     except OSError:
         restarted = False
 
-    _write_int(cooldown_file, now + COOLDOWN_SECONDS)
     if restarted:
+        _clear(pending_file)
         _clear(failure_file)
         log(f'{service}: restart completed')
+    elif pending:
+        log(f'{service}: restart completion pending; observing without replay')
     else:
+        _clear(pending_file)
         log(f'{service}: restart failed or timed out')
     return False
 
